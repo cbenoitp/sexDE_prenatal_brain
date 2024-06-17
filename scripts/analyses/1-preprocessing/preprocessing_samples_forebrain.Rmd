@@ -1,0 +1,415 @@
+---
+title: "Preprocessing of samples and counts used in DREAM/limma analysis"
+author: "Clara Benoit-Pilven"
+date: "1/29/2020"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+---
+
+```{r load_library, echo=FALSE}
+suppressPackageStartupMessages( library(rtracklayer) )
+suppressPackageStartupMessages( library(data.table) )
+suppressPackageStartupMessages( library(dplyr) )
+suppressPackageStartupMessages( library(edgeR) )
+suppressPackageStartupMessages( library(DESeq2) )
+suppressPackageStartupMessages( library(ggplot2) )
+suppressPackageStartupMessages( library(RColorBrewer) )
+suppressPackageStartupMessages( library(pheatmap) )
+```
+
+```{r, setup, include=FALSE, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+```{r load_utils, echo=FALSE}
+source("scripts/analyses/1-preprocessing/utils.R")
+```
+
+
+# Preprocess counts from HDBR
+
+## Load full data
+
+First load the annotation file.
+
+```{r load_annotation, echo=FALSE}
+gencode28_annot_transcript <- loadGTFfile("data/0-input/gencode.v28.annotation.gtf.gz", type = "transcript")
+```
+
+Then, load the counts outputed by Salmon.
+
+```{r load_count, echo=FALSE}
+counts <- fread(file="data/1-preprocessing/counts_PRJEB14594.txt", sep = "\t", fill = TRUE)
+# reformat
+rownames(counts) <- counts$Name
+counts2 <- setNames(data.frame(t(counts[,-1])), rownames(counts))
+# modify the names of the transcript: keep anly the EnsEMBL transcript id
+counts2$transcript_id <- sapply(strsplit(rownames(counts2), "\\|"), function(x){x[1]})
+rownames(counts2) <- counts2$transcript_id
+# summarize counts by gene
+counts3 <- merge(gencode28_annot_transcript, counts2)
+counts4 <- counts3 %>% group_by(gene_id, gene_name, gene_type, chr) %>% summarise_if(is.numeric, sum)
+```
+
+And also load and reformat the phenotypes.
+
+```{r load_phenotypes, echo=FALSE}
+samples <- read.table("data/1-preprocessing/PRJEB14954_samples_with_counts_info.txt", 
+                      header = FALSE, sep = "\t", fill = TRUE)
+names(samples) <- c("experiment_name", "ind", "dev_stage", "brain_region", "karyotype", "batch", "sample_name")
+# reformat batch column
+samples$batch <- sub("sequencing batch:", "", samples$batch)
+# order the df to match the counts df
+samples <- samples[match(names(counts4[, -c(1:4)]), samples$sample_name),]
+# number of experiment
+length(unique(samples$experiment_name))
+# number of samples
+length(unique(samples$sample_name))
+# number of individuals
+length(unique(samples$ind))
+```
+
+```{r reformat_phenotypes_sex, echo=FALSE}
+# transform the karyotype column into a sex column
+samples$sex <- ifelse(grepl("xx", samples$karyotype, ignore.case = TRUE), 
+                      2, 
+                      ifelse(grepl("xy", samples$karyotype, ignore.case = TRUE), 
+                             1,
+                             0))
+```
+
+```{r correct_phenotypes, echo=FALSE}
+# for some samples, there is a problem in the annotation (1 sample have a different sex or dev stage then all others samples from the same individual)
+# correct these annotations
+samples$sex[which(samples$ind == 11820 & samples$sex == 1)] <- 2
+samples$dev_stage[which(samples$ind == 11947 & samples$dev_stage == "16 post conception weeks")] <- "13 post conception weeks"
+```
+
+```{r reformat_phenotypes_dev_stages, echo=FALSE}
+# reorder dev stage factor
+newLevels <- levels(as.factor(samples$dev_stage))
+newLevels <- newLevels[c(12:23, 11, 1:10)]
+samples$dev_stage <- factor(samples$dev_stage, levels = newLevels)
+
+# Replace, rename & reorder the different developmental stages
+samples$new_devStage <- samples$dev_stage
+levels(samples$new_devStage) <- list("10PCW" = "10 post conception weeks", "11PCW" = "11 post conception weeks", "12PCW" = "12 post conception weeks", 
+                                     "13PCW" = "13 post conception weeks", "14PCW" = "14 post conception weeks", "15PCW" = "15 post conception weeks", 
+                                     "16PCW" = "16 post conception weeks", "17PCW" = "17 post conception weeks", "19PCW" = "19 post conception weeks", 
+                                     "20PCW" = "20 post conception weeks", "9PCW" = "9 post conception weeks", "4PCW" = "Carnegie Stage 13", 
+                                     "5PCW" = "Carnegie Stage 14", "5PCW" = "Carnegie Stage 15", "6PCW" = "Carnegie Stage 16", "6PCW" = "Carnegie Stage 17", 
+                                     "7PCW" = "Carnegie Stage 18", "7PCW" = "Carnegie Stage 19", "8PCW" = "Carnegie Stage 20", "8PCW" = "Carnegie Stage 21", 
+                                     "8PCW" = "Carnegie Stage 22", "8PCW" = "Carnegie Stage 23", "8PCW" = "Late 8 post conception weeks")
+newLevels <- levels(samples$new_devStage)
+newLevels <- newLevels[c(12:16, 11, 1:10)]
+samples$new_devStage <- factor(samples$new_devStage, levels = newLevels)
+
+# also add a new version of the dev stage variable
+samples$newDevStage <- samples$new_devStage
+levels(samples$newDevStage) <- list("4-7PCW" = "4PCW", "4-7PCW" = "5PCW", "4-7PCW" = "6PCW", "4-7PCW" = "7PCW", "8PCW" = "8PCW", 
+                         "9PCW" = "9PCW", "10PCW" = "10PCW", "11PCW" = "11PCW", "12PCW" = "12PCW", "13PCW" = "13PCW", 
+                         "14-17PCW" = "14PCW", "14-17PCW" = "15PCW", "14-17PCW" = "16PCW", "14-17PCW" = "17PCW", 
+                         "18-20PCW" = "19PCW", "18-20PCW" = "20PCW")
+
+# reformat the newDevStage variable
+samples$newDevStage <- samples$new_devStage
+levels(samples$newDevStage) <- list("5-7PCW" = "5PCW", "5-7PCW" = "6PCW", "5-7PCW" = "7PCW", "8PCW" = "8PCW", 
+                                       "9PCW" = "9PCW", "10PCW" = "10PCW", "11PCW" = "11PCW", "12PCW" = "12PCW", "13PCW" = "13PCW", 
+                                       "14-17PCW" = "14PCW", "14-17PCW" = "15PCW", "14-17PCW" = "16PCW", "14-17PCW" = "17PCW")
+```
+
+```{r reformat_phenotypes_brain_region, echo=FALSE}
+# Replace, rename & reorder the different brain regions
+samples$new_brainRegion <- as.factor(samples$brain_region)
+levels(samples$new_brainRegion) <- list("Forebrain" = "forebrain", "Forebrain" = "forebrain fragment", "Forebrain" = "temporal lobe", 
+                                "Forebrain" = "telencephalon", "Forebrain" = "cerebral cortex", "Forebrain" = "diencephalon", 
+                                "Forebrain" = "pituitary and diencephalon", "Forebrain" = "hippocampus", "Midbrain" = "midbrain", 
+                                "Hindbrain" = "hindbrain", "Hindbrain" = "hindbrain fragment", "Hindbrain" = "hindbrain without cerebellum", 
+                                "Hindbrain" = "cerebellum", "Brain fragment" = "brain fragment", "Brain fragment" = "diencephalon and midbrain", 
+                                "Brain fragment" = "forebrain and midbrain", "Spinal cord" = "spinal cord")
+newLevels <- levels(samples$new_brainRegion)
+newLevels <- newLevels[c(4, 1:3, 6, 5)]
+samples$new_brainRegion <- factor(samples$new_brainRegion, levels = newLevels)
+
+# add a new version of the brain region variable
+samples$newBrainRegion <- as.factor(samples$brain_region)
+levels(samples$newBrainRegion) <- list("telencephalon" = "cerebral cortex", "diencephalon" = "diencephalon", "forebrain fragment" = "forebrain", 
+                               "forebrain fragment" = "forebrain fragment", "telencephalon" = "hippocampus", 
+                               "diencephalon" = "pituitary and diencephalon", "telencephalon" = "telencephalon", 
+                               "telencephalon" = "temporal lobe")
+```
+
+```{r reformat_phenotypes_batch, echo=FALSE}
+# For samples, with reads coming from 2 batch, remove FC2014_117 & FC2014_151 batchs
+samples$new_batch <- samples$batch
+samples$new_batch <- sub(", FC2014_117", "", samples$new_batch)
+samples$new_batch <- sub(", FC2014_151", "", samples$new_batch)
+samples$new_batch <- as.factor(samples$new_batch)
+```
+
+
+## Merge the samples which have the same experiment name
+
+Some samples were sequenced twice (most probably because of lack of depth). They have 2 sample names but their experiment name is the same. We add the count of these 2 samples.
+
+```{r merge_genesCount_experiment, echo=FALSE}
+counts5 <- as.data.frame(t(as.matrix(counts4[-c(1:4)])))
+counts5$experiment <- samples$experiment_name
+# compute mean of the counts for each experiment
+countsMean <- counts5 %>% group_by(experiment) %>% summarise_all(mean)
+countsMean2 <- cbind(data.frame(counts4[c(1:4)]), data.frame(t(countsMean[-1])))
+colnames(countsMean2)[-c(1:4)] <- as.character(countsMean$experiment)
+```
+
+Reformat the samples data frame to match the count data frame.
+
+```{r reformat_samples_phenotypes, echo=FALSE}
+samples2 <- samples[, -7]
+samples2 <- unique(samples2[order(samples2$experiment_name), ])
+samples2 <- samples2[match(names(countsMean2[, -c(1:4)]), samples2$experiment_name), ]
+```
+
+Check the colnames of the average counts for the genes and the names of the samples in the phenotype data match.
+
+```{r check_sampleNames, echo=FALSE}
+all(names(countsMean2)[-c(1:4)] == samples2$experiment_name)
+```
+
+
+## Reannotate the sex of the samples
+
+Get expression of XIST and of the chrY protein-coding genes
+
+```{r gene_expression, echo=FALSE}
+xist <- as.vector(t(countsMean2[countsMean2$chr == "chrX" & countsMean2$gene_name == "XIST", -c(1:4)]))
+chry <- countsMean2[countsMean2$chr == "chrY" & countsMean2$gene_type == "protein_coding", -c(1:4)]
+chry_sum <- as.vector(t(colSums(chry, na.rm = TRUE)))
+```
+
+Assign sex using expression of XIST and chrY protein-coding genes as filters.
+
+```{r assign_sex, echo=FALSE}
+# the threshold used is 7000
+samples2$assigned_sex <- assignSexFromExpression(xist, chry_sum, threshold = 7000)
+```
+
+Contingency table.
+
+```{r contingency_table, echo=FALSE}
+table(samples2$assigned_sex, samples2$sex)
+```
+
+Out of the 558 initial samples 40 had an unknown sex. After assigning sex from gene expression only 7 samples had an unknown sex.
+All samples with sex from metadata and sex from gene expression had matching sex.
+
+Plot the sex and the assigned sex (from the gene expression) on the sex genes expression.
+
+```{r plot_known_sex, echo=FALSE}
+## Plot the chrY expression against xist expression coloring by known sex
+p <- plotSexOnExpression(xist, chry_sum, samples2$sex, threshold = 7000)
+p
+# save plot
+namePlot <- 'images/1-preprocessing/sex_identification/known_sex_forebrain_dream.png'
+ggsave(namePlot, plot = p, width = 10, height = 10, units = "cm")
+```
+
+```{r plot_assigned_sex, echo=FALSE}
+## Plot the chrY expression against xist expression coloring by assigned sex
+p <- plotSexOnExpression(xist, chry_sum, samples2$assigned_sex, threshold = 7000)
+p
+# save plot
+namePlot <- 'images/1-preprocessing/sex_identification/assigned_sex_forebrain_dream.png'
+ggsave(namePlot, plot = p, width = 10, height = 10, units = "cm")
+```
+
+
+## Filter and reformat the phenotypes and counts
+
+Filter and reformat phenotypes.
+
+```{r final_phenotype, echo=FALSE}
+# create the final data frame of phenotypes
+phenotypes <- samples2
+# remove the samples with unknown sex, from the first and the 2 last developmental stages and from all brain region other than forebrain
+phenotypes <- phenotypes[(phenotypes$assigned_sex>0 & phenotypes$new_devStage != "4PCW" & phenotypes$new_brainRegion == "Forebrain"),]
+phenotypes$brain_region <- droplevels(as.factor(phenotypes$brain_region))
+phenotypes$new_brainRegion <- droplevels(as.factor(phenotypes$new_brainRegion))
+phenotypes$newBrainRegion <- droplevels(as.factor(phenotypes$newBrainRegion))
+phenotypes$new_devStage <- droplevels(as.factor(phenotypes$new_devStage))
+phenotypes$newDevStage <- droplevels(as.factor(phenotypes$newDevStage))
+phenotypes$dev_stage <- droplevels(as.factor(phenotypes$dev_stage))
+phenotypes$batch <- droplevels(as.factor(phenotypes$batch))
+phenotypes$new_batch <- droplevels(as.factor(phenotypes$new_batch))
+```
+
+
+Filter and reformat counts.
+
+```{r final_count, echo=FALSE}
+# get index of the samples with unknown sex and the dev stage to remove
+toRemove <- which(samples2$assigned_sex==0 | (samples2$new_devStage == "4PCW") | (samples2$new_brainRegion != "Forebrain"))+4
+# DGE object
+x <- DGEList(counts = countsMean2[,-c(1:4, toRemove)], genes = countsMean2[c(1:4)])
+# TMM normalization
+xnorm <- calcNormFactors(x)
+# Filter genes that are too lowly expressed
+# Compute Counts per million
+ccpm <- rowSums(cpm(xnorm) > 1)
+# Keep genes with CPM higher than 1 in 10 samples or more.
+keep <- which(ccpm>=10)
+x <- xnorm[keep,]
+# Remove other than protein-coding and lincRNA genes
+keep <- which((x$genes$gene_type=='protein_coding'|x$genes$gene_type=='lincRNA'))
+x <- x[keep,]
+```
+
+
+## Pearson correlation  between samples
+
+```{r TMM_norm_PCA_forebrain, echo=FALSE}
+dataPCA <- countsMean2[,-c(1:4, toRemove)]
+genesPCA <- countsMean2[,c(1:4, toRemove)]
+# DGE object
+xPCA <- DGEList(counts = dataPCA, genes = genesPCA, group = phenotypes$assigned_sex)
+# Filter genes that are too lowly expressed
+# Compute Counts per million
+ccpm <- rowSums(cpm(xPCA) > 1)
+# Keep genes with CPM higher than 1 in 10 samples or more.
+keep <- which(ccpm>=10)
+xPCA <- xPCA[keep,]
+# TMM normalization
+xPCAnorm <- calcNormFactors(xPCA)
+```
+
+```{r compute_dist_matrix, echo=FALSE}
+sampleDists <- dist(t(xPCAnorm$counts))
+```
+
+```{r heatmap_plot, echo=FALSE}
+sampleDistMatrix <- as.matrix(sampleDists)
+colors <- colorRampPalette( rev(brewer.pal(9, "Blues")) )(255)
+annotationRow <- data.frame(brainRegion = phenotypes$newBrainRegion, 
+                            devStage = phenotypes$newDevStage, 
+                            sex = as.factor(phenotypes$assigned_sex),
+                            batch = as.factor(phenotypes$new_batch))
+rownames(annotationRow) <- phenotypes$experiment_name
+my_heatmap <- pheatmap(sampleDistMatrix,
+                       clustering_distance_rows=sampleDists,
+                       clustering_distance_cols=sampleDists,
+                       annotation_row = annotationRow,
+                       show_rownames = TRUE,
+                       show_colnames = FALSE,
+                       fontsize = 6,
+                       col=colors)
+save_pheatmap_png <- function(x, filename, width=1200, height=1000, res = 150) {
+  png(filename, width = width, height = height, res = res)
+  grid::grid.newpage()
+  grid::grid.draw(x$gtable)
+  dev.off()
+}
+save_pheatmap_png(my_heatmap, "images/1-preprocessing/heatmap/forebrain_samples_dist.png",
+                  width = 3600, height = 3000, res = 150)
+```
+
+From this analysis sample HDBR253 should be removed...
+
+Redo the heatmap after removing this sample:
+
+```{r compute_dist_matrix_filtered, echo=FALSE}
+filtered_NormCounts <- xPCAnorm$counts[,which(colnames(xPCAnorm$counts) != "HDBR253")]
+sampleDists_filtered <- dist(t(filtered_NormCounts))
+```
+
+```{r heatmap_plot_filtered, echo=FALSE}
+phenotypes_filtered <- phenotypes[which(phenotypes$experiment_name != "HDBR253"), ]
+sampleDistMatrix_filtered <- as.matrix(sampleDists_filtered)
+colors <- colorRampPalette( rev(brewer.pal(9, "Blues")) )(255)
+annotationRow_filtered <- data.frame(brainRegion = phenotypes_filtered$newBrainRegion, 
+                                     devStage = phenotypes_filtered$newDevStage, 
+                                     sex = as.factor(phenotypes_filtered$assigned_sex),
+                                     batch = as.factor(phenotypes_filtered$new_batch))
+rownames(annotationRow_filtered) <- phenotypes_filtered$experiment_name
+my_heatmap <- pheatmap(sampleDistMatrix_filtered,
+                       clustering_distance_rows=sampleDists_filtered,
+                       clustering_distance_cols=sampleDists_filtered,
+                       annotation_row = annotationRow_filtered,
+                       show_rownames = TRUE,
+                       show_colnames = FALSE,
+                       fontsize = 6,
+                       col=colors)
+save_pheatmap_png <- function(x, filename, width=1200, height=1000, res = 150) {
+  png(filename, width = width, height = height, res = res)
+  grid::grid.newpage()
+  grid::grid.draw(x$gtable)
+  dev.off()
+}
+save_pheatmap_png(my_heatmap, "images/1-preprocessing/heatmap/forebrain_samples_filtered_dist.png",
+                  width = 3600, height = 3000, res = 150)
+```
+
+
+## Filter and reformat the phenotypes and counts removing the outlier...
+
+Filter and reformat phenotypes.
+
+```{r final_phenotype_withoutOutlier, echo=FALSE}
+# create the final data frame of phenotypes
+phenotypes <- samples2
+# remove the samples with unknown sex, from the first and the 2 last developmental stages and from all brain region other than forebrain
+phenotypes <- phenotypes[(phenotypes$assigned_sex>0 & phenotypes$new_devStage != "4PCW" & phenotypes$new_brainRegion == "Forebrain" & phenotypes$experiment_name!= "HDBR253"),]
+phenotypes$brain_region <- droplevels(as.factor(phenotypes$brain_region))
+phenotypes$new_brainRegion <- droplevels(as.factor(phenotypes$new_brainRegion))
+phenotypes$newBrainRegion <- droplevels(as.factor(phenotypes$newBrainRegion))
+phenotypes$new_devStage <- droplevels(as.factor(phenotypes$new_devStage))
+phenotypes$newDevStage <- droplevels(as.factor(phenotypes$newDevStage))
+phenotypes$dev_stage <- droplevels(as.factor(phenotypes$dev_stage))
+phenotypes$batch <- droplevels(as.factor(phenotypes$batch))
+phenotypes$new_batch <- droplevels(as.factor(phenotypes$new_batch))
+
+# write these phenotypes in a file
+write.table(phenotypes, "data/1-preprocessing/phenotypes/phenotypes_forebrain.txt",
+            col.names = TRUE, row.names = FALSE, quote = FALSE, sep = "\t")
+```
+
+
+Filter and reformat genes counts.
+
+```{r final_genes_count_withoutOutlier, echo=FALSE}
+# get index of the samples with unknown sex and the dev stage to remove
+toRemove <- which(samples2$assigned_sex==0 | (samples2$new_devStage == "4PCW") | (samples2$new_brainRegion != "Forebrain") | (samples2$experiment_name == "HDBR253"))+4
+# DGE object
+x <- DGEList(counts = countsMean2[,-c(1:4, toRemove)], genes = countsMean2[c(1:4)])
+# TMM normalization
+xnorm <- calcNormFactors(x)
+# Filter genes that are too lowly expressed
+# Compute Counts per million
+ccpm <- rowSums(cpm(xnorm) > 1)
+# Keep genes with CPM higher than 1 in 10 samples or more.
+keep <- which(ccpm>=10)
+x <- xnorm[keep,]
+# Remove other than protein-coding and lincRNA genes
+keep <- which((x$genes$gene_type=='protein_coding'|x$genes$gene_type=='lincRNA'))
+x <- x[keep,]
+
+# save in RData
+save(x, phenotypes, file = "data/1-preprocessing/counts_forebrain_phenotypes.RData")
+```
+
+Also save the genes raw counts of only the samples we want to keep for the DE analysis.
+
+```{r save_raw_counts_genes, echo=FALSE}
+raw_counts_HDBR <- countsMean2[,-c(toRemove)]
+phenotypes_HDBR <- phenotypes
+save(raw_counts_HDBR, phenotypes_HDBR,
+     file = "data/1-preprocessing/raw_counts_genes_forebrain_HDBR_phenotypes.RData")
+```
+
+
+# Session Info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```
+

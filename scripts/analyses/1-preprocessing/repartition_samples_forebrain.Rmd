@@ -1,0 +1,88 @@
+---
+title: "Sample repartition"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r load_library, echo=FALSE}
+suppressPackageStartupMessages( library(tidyverse) )
+```
+
+```{r, setup, include=FALSE, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+```{r load_utils, echo=FALSE}
+source("scripts/analyses/1-preprocessing/utils.R")
+```
+
+# Load data and format it
+
+```{r load_data, echo=FALSE}
+phenotypes <- read.table("data/1-preprocessing/phenotypes/phenotypes_forebrain.txt", header = TRUE, sep = "\t")
+phenotypes$newBrainRegion <- as.factor(phenotypes$newBrainRegion)
+phenotypes$newDevStage <- as.factor(phenotypes$newDevStage)
+```
+
+
+# Repartition of the samples from HDBR
+
+## Some numbers
+
+In the selected samples, the number of samples is:
+
+```{r number_samples_perSex_forebrain, echo=FALSE}
+summary(as.factor(phenotypes$assigned_sex))
+```
+
+136 male samples, and 130 female samples.
+
+In the selected samples, the number of individuals is:
+
+```{r number_individuals_perSex_forebrain, echo=FALSE}
+length(unique(phenotypes$ind[which(phenotypes$assigned_sex == 1)]))
+length(unique(phenotypes$ind[which(phenotypes$assigned_sex == 2)]))
+```
+
+35 male individuals and 37 female individuals
+
+
+## Repartition plots 
+
+First, plot the repartition of the samples per sex for the developmental stage covariate.
+
+```{r plot_sex_devStage_forebrain, echo=FALSE}
+p <- PlotSexRepartition(phenotypes$assigned_sex, phenotypes$newDevStage, "Developmental stage")
+p
+# save plot
+namePlot <- 'images/1-preprocessing/repartition_samples/samples_new_dev_stage_forebrain.png'
+ggsave(namePlot, plot = p, width = 15, height = 10, units = "cm")
+```
+
+Then, plot the repartition of the samples per sex for the brain region covariate.
+
+```{r plot_sex_brainRegion_forebrain, echo=FALSE}
+p <- PlotSexRepartition(phenotypes$assigned_sex, phenotypes$newBrainRegion, "Brain region")
+p
+# save plot
+namePlot <- 'images/1-preprocessing/repartition_samples/samples_brain_region_forebrain.png'
+ggsave(namePlot, plot = p, width = 10, height = 8, units = "cm")
+```
+
+Finally, plot the repartition of the samples per sex for each association brain region - developmental stage.
+
+```{r plot_sex_brainRegion_devStage_forebrain, echo=FALSE}
+p <- PlotSexRepartition(phenotypes$assigned_sex, phenotypes$newDevStage, "Developmental stage", covariate2 = phenotypes$newBrainRegion, covariate2Name = "Brain region")
+p
+# save plot
+namePlot <- 'images/1-preprocessing/repartition_samples/samples_newDevStage_and_brainRegion_forebrain.png'
+ggsave(namePlot, plot = p, width = 10, height = 12, units = "cm")
+```
+
+
+# Session Info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```

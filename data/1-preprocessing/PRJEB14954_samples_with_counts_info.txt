@@ -1,0 +1,558 @@
+HDBR815	11160	Late 8 post conception weeks	brain fragment	46, XX	sequencing batch:FC2014_050	ERR1473052
+HDBR490	11800	Late 8 post conception weeks	brain fragment	46, XX	sequencing batch:FC2014_073	ERR1473004
+HDBR816	11144	Late 8 post conception weeks	brain fragment	46, XY	sequencing batch:FC2014_050	ERR1473053
+HDBR491	11492	Late 8 post conception weeks	brain fragment	46, XY	sequencing batch:FC2014_073	ERR1473005
+HDBR810	11832	Late 8 post conception weeks	cerebellum	46, XX	sequencing batch:FC2014_050	ERR1473106
+HDBR811	11830	Late 8 post conception weeks	cerebellum	46, XX	sequencing batch:FC2014_050	ERR1473107
+HDBR480	11830	Late 8 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_071	ERR1473171
+HDBR470	11832	Late 8 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_150	ERR1473169
+HDBR475	11832	Late 8 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_150	ERR1473170
+HDBR474	11832	Late 8 post conception weeks	diencephalon	46, xx	sequencing batch:FC2014_065, FC2014_117	ERR1473300
+HDBR474	11832	Late 8 post conception weeks	diencephalon	46, xx	sequencing batch:FC2014_065, FC2014_117	ERR1473301
+HDBR478	11832	Late 8 post conception weeks	diencephalon	46, xx	sequencing batch:FC2014_071	ERR1473302
+HDBR484	11830	Late 8 post conception weeks	diencephalon	46, xx	sequencing batch:FC2014_071	ERR1473303
+HDBR485	11830	Late 8 post conception weeks	diencephalon	46, xx	sequencing batch:FC2014_071	ERR1473304
+HDBR489	11869	Late 8 post conception weeks	hindbrain	46, xx	sequencing batch:FC2014_073	ERR1473360
+HDBR471	11832	Late 8 post conception weeks	midbrain	46, xx	sequencing batch:FC2014_065	ERR1473446
+HDBR481	11830	Late 8 post conception weeks	midbrain	46, xx	sequencing batch:FC2014_071	ERR1473447
+HDBR488	11869	Late 8 post conception weeks	midbrain	46, xx	sequencing batch:FC2014_073	ERR1473448
+HDBR812	11869	Late 8 post conception weeks	spinal cord	46, xx	sequencing batch:FC2014_050	ERR1473506
+HDBR813	11800	Late 8 post conception weeks	spinal cord	46, xx	sequencing batch:FC2014_050	ERR1473507
+HDBR814	11492	Late 8 post conception weeks	spinal cord	46, xy	sequencing batch:FC2014_050	ERR1473508
+HDBR401	11903	Carnegie Stage 13	forebrain	46, xx	sequencing batch:FC2014_037	ERR1473334
+HDBR796	11903	Carnegie Stage 13	midbrain	46, xx	sequencing batch:FC2014_045	ERR1473461
+HDBR396	11840	Carnegie Stage 14	forebrain	46, xx	sequencing batch:FC2014_037	ERR1473332
+HDBR399	11837	Carnegie Stage 14	forebrain	46, xy	sequencing batch:FC2014_037	ERR1473333
+HDBR794	11840	Carnegie Stage 14	hindbrain	46, xx	sequencing batch:FC2014_045	ERR1473373
+HDBR795	11837	Carnegie Stage 14	hindbrain	46, xy	sequencing batch:FC2014_045	ERR1473374
+HDBR397	11840	Carnegie Stage 14	midbrain	46, xx	sequencing batch:FC2014_037	ERR1473437
+HDBR400	11837	Carnegie Stage 14	midbrain	46, xy	sequencing batch:FC2014_037	ERR1473438
+HDBR398	11840	Carnegie Stage 14	spinal cord	46, xx	sequencing batch:FC2014_037	ERR1473478
+HDBR793	11405	Carnegie Stage 15	brain fragment	46, XX	sequencing batch:FC2014_045	ERR1473049
+HDBR792	11397	Carnegie Stage 15	brain fragment	46, XX	sequencing batch:FC2014_049	ERR1473048
+HDBR791	11334	Carnegie Stage 16	brain fragment	46, XX	sequencing batch:FC2014_049	ERR1473047
+HDBR790	11513	Carnegie Stage 16	spinal cord	46, xy	sequencing batch:FC2014_049	ERR1473502
+HDBR785	11395	Carnegie Stage 17	brain fragment	46, XY	sequencing batch:FC2014_049	ERR1473045
+HDBR786	11321	Carnegie Stage 17	brain fragment	46, XY	sequencing batch:FC2014_049	ERR1473046
+HDBR392	11931	Carnegie Stage 17	forebrain	unknown	sequencing batch:FC2014_037	ERR1473331
+HDBR394	11931	Carnegie Stage 17	hindbrain	unknown	sequencing batch:FC2014_037	ERR1473358
+HDBR788	11748	Carnegie Stage 17	hindbrain	unknown	sequencing batch:FC2014_049	ERR1473372
+HDBR393	11931	Carnegie Stage 17	midbrain	unknown	sequencing batch:FC2014_037	ERR1473436
+HDBR787	11931	Carnegie Stage 17	spinal cord	unknown	sequencing batch:FC2014_049	ERR1473501
+HDBR389	11770	Carnegie Stage 18	brain fragment	46, XX	sequencing batch:FC2014_037	ERR1473001
+HDBR390	11627	Carnegie Stage 18	brain fragment	46, XX	sequencing batch:FC2014_037	ERR1473002
+HDBR391	11456	Carnegie Stage 18	brain fragment	46, XX	sequencing batch:FC2014_037	ERR1473003
+HDBR701	11122	Carnegie Stage 18	brain fragment	46, XX	sequencing batch:FC2014_045	ERR1473014
+HDBR779	11469	Carnegie Stage 18	brain fragment	46, XX	sequencing batch:FC2014_049	ERR1473041
+HDBR784	11234	Carnegie Stage 18	brain fragment	46, XX	sequencing batch:FC2014_049	ERR1473044
+HDBR776	11859	Carnegie Stage 18	brain fragment	46, XY	sequencing batch:FC2014_049	ERR1473040
+HDBR781	11438	Carnegie Stage 18	brain fragment	46, XY	sequencing batch:FC2014_049	ERR1473042
+HDBR782	11322	Carnegie Stage 18	brain fragment	46, XY	sequencing batch:FC2014_049	ERR1473043
+HDBR387	11904	Carnegie Stage 18	forebrain	46, xy	sequencing batch:FC2014_037	ERR1473330
+HDBR774	11904	Carnegie Stage 18	hindbrain	46, xy	sequencing batch:FC2014_049	ERR1473370
+HDBR783	11288	Carnegie Stage 18	hindbrain	unknown	sequencing batch:FC2014_049	ERR1473371
+HDBR388	11904	Carnegie Stage 18	midbrain	46, xy	sequencing batch:FC2014_037	ERR1473435
+HDBR777	11770	Carnegie Stage 18	spinal cord	46, xx	sequencing batch:FC2014_049	ERR1473498
+HDBR778	11627	Carnegie Stage 18	spinal cord	46, xx	sequencing batch:FC2014_049	ERR1473499
+HDBR780	11456	Carnegie Stage 18	spinal cord	46, xx	sequencing batch:FC2014_049	ERR1473500
+HDBR775	1038	Carnegie Stage 18	spinal cord	46, xy	sequencing batch:FC2014_049	ERR1473497
+HDBR383	11566	Carnegie Stage 19	brain fragment	46, XX	sequencing batch:FC2014_037	ERR1472999
+HDBR384	11514	Carnegie Stage 19	brain fragment	46, XX	sequencing batch:FC2014_037	ERR1473000
+HDBR702	11238	Carnegie Stage 19	brain fragment	46, XX	sequencing batch:FC2014_045	ERR1473015
+HDBR766	11470	Carnegie Stage 19	brain fragment	46, XX	sequencing batch:FC2014_049	ERR1473033
+HDBR767	11363	Carnegie Stage 19	brain fragment	46, XX	sequencing batch:FC2014_049	ERR1473034
+HDBR768	11323	Carnegie Stage 19	brain fragment	46, XX	sequencing batch:FC2014_049	ERR1473035
+HDBR703	11286	Carnegie Stage 19	brain fragment	46, XY	sequencing batch:FC2014_045	ERR1473016
+HDBR762	11894	Carnegie Stage 19	brain fragment	46, XY	sequencing batch:FC2014_049	ERR1473032
+HDBR769	11320	Carnegie Stage 19	brain fragment	46, XY	sequencing batch:FC2014_049	ERR1473036
+HDBR770	11318	Carnegie Stage 19	brain fragment	46, XY	sequencing batch:FC2014_049	ERR1473037
+HDBR771	11317	Carnegie Stage 19	brain fragment	46, XY	sequencing batch:FC2014_049	ERR1473038
+HDBR772	11300	Carnegie Stage 19	brain fragment	46, XY	sequencing batch:FC2014_049	ERR1473039
+HDBR760	1319	Carnegie Stage 19	hindbrain	46, xx	sequencing batch:FC2014_049	ERR1473369
+HDBR382	11856	Carnegie Stage 19	hindbrain	46, xy	sequencing batch:FC2014_037	ERR1473357
+HDBR704	11284	Carnegie Stage 19	spinal cord	46, xx	sequencing batch:FC2014_045	ERR1473480
+HDBR759	1039	Carnegie Stage 19	spinal cord	46, xx	sequencing batch:FC2014_049	ERR1473494
+HDBR765	11514	Carnegie Stage 19	spinal cord	46, xx	sequencing batch:FC2014_049	ERR1473496
+HDBR763	11856	Carnegie Stage 19	spinal cord	46, xy	sequencing batch:FC2014_049	ERR1473495
+HDBR752	11245	Carnegie Stage 20	brain fragment	46, XX	sequencing batch:FC2014_048	ERR1473029
+HDBR753	11241	Carnegie Stage 20	brain fragment	46, XX	sequencing batch:FC2014_048	ERR1473030
+HDBR706	11237	Carnegie Stage 20	brain fragment	46, XY	sequencing batch:FC2014_045	ERR1473017
+HDBR707	11382	Carnegie Stage 20	brain fragment	46, XY	sequencing batch:FC2014_045	ERR1473018
+HDBR751	11354	Carnegie Stage 20	brain fragment	46, XY	sequencing batch:FC2014_048	ERR1473028
+HDBR754	11156	Carnegie Stage 20	brain fragment	46, XY	sequencing batch:FC2014_048	ERR1473031
+HDBR803	11143	Carnegie Stage 20	brain fragment	46, XY	sequencing batch:FC2014_050	ERR1473050
+HDBR757	11121	Carnegie Stage 20	cerebral cortex	46, xy	sequencing batch:FC2014_049	ERR1473177
+HDBR758	11118	Carnegie Stage 20	forebrain	46, xx	sequencing batch:FC2014_049	ERR1473345
+HDBR755	11149	Carnegie Stage 20	hindbrain	46, xx	sequencing batch:FC2014_048	ERR1473368
+HDBR705	11287	Carnegie Stage 20	hindbrain	46, xy	sequencing batch:FC2014_045	ERR1473365
+HDBR381	11811	Carnegie Stage 21	brain fragment	46, XX	sequencing batch:FC2014_037	ERR1472998
+HDBR714	11304	Carnegie Stage 21	brain fragment	46, XX	sequencing batch:FC2014_045	ERR1473022
+HDBR715	11165	Carnegie Stage 21	brain fragment	46, XX	sequencing batch:FC2014_045	ERR1473023
+HDBR380	11849	Carnegie Stage 21	brain fragment	46, XY	sequencing batch:FC2014_037	ERR1472997
+HDBR708	11254	Carnegie Stage 21	brain fragment	46, XY	sequencing batch:FC2014_045	ERR1473019
+HDBR709	11471	Carnegie Stage 21	brain fragment	46, XY	sequencing batch:FC2014_045	ERR1473020
+HDBR819	11876	Carnegie Stage 21	brain fragment	46, XY	sequencing batch:FC2014_050	ERR1473055
+HDBR378	11882	Carnegie Stage 21	forebrain	46, xx	sequencing batch:FC2014_037	ERR1473352
+HDBR379	11882	Carnegie Stage 21	hindbrain	46, xx	sequencing batch:FC2014_037	ERR1473356
+HDBR713	11882	Carnegie Stage 21	midbrain	46, xx	sequencing batch:FC2014_045	ERR1473460
+HDBR710	11811	Carnegie Stage 21	spinal cord	46, xx	sequencing batch:FC2014_045	ERR1473481
+HDBR711	11849	Carnegie Stage 21	spinal cord	46, xy	sequencing batch:FC2014_045	ERR1473482
+HDBR374	11868	Carnegie Stage 22	brain fragment	46, XX	sequencing batch:FC2014_037	ERR1472993
+HDBR376	11443	Carnegie Stage 22	brain fragment	46, XX	sequencing batch:FC2014_037	ERR1472995
+HDBR727	1707	Carnegie Stage 22	brain fragment	46, XX	sequencing batch:FC2014_048	ERR1473024
+HDBR375	11793	Carnegie Stage 22	brain fragment	46, XY	sequencing batch:FC2014_037	ERR1472994
+HDBR377	11410	Carnegie Stage 22	brain fragment	46, XY	sequencing batch:FC2014_037	ERR1472996
+HDBR718	11815	Carnegie Stage 22	cerebellum	46, XX	sequencing batch:FC2014_045	ERR1473087
+HDBR720	11828	Carnegie Stage 22	cerebellum	46, XX	sequencing batch:FC2014_045	ERR1473089
+HDBR725	11871	Carnegie Stage 22	cerebellum	46, XX	sequencing batch:FC2014_048	ERR1473094
+HDBR726	11878	Carnegie Stage 22	cerebellum	46, XX	sequencing batch:FC2014_048	ERR1473095
+HDBR717	11814	Carnegie Stage 22	cerebellum	46, XY	sequencing batch:FC2014_045	ERR1473086
+HDBR721	11829	Carnegie Stage 22	cerebellum	46, XY	sequencing batch:FC2014_048	ERR1473090
+HDBR722	11831	Carnegie Stage 22	cerebellum	46, XY	sequencing batch:FC2014_048	ERR1473091
+HDBR723	11858	Carnegie Stage 22	cerebellum	46, XY	sequencing batch:FC2014_048	ERR1473092
+HDBR724	11865	Carnegie Stage 22	cerebellum	46, XY	sequencing batch:FC2014_048	ERR1473093
+HDBR348	11831	Carnegie Stage 22	cerebral cortex	46, xy	sequencing batch:FC2014_035	ERR1473159
+HDBR352	11831	Carnegie Stage 22	cerebral cortex	46, xy	sequencing batch:FC2014_035	ERR1473160
+HDBR358	11858	Carnegie Stage 22	cerebral cortex	46, xy	sequencing batch:FC2014_037	ERR1473161
+HDBR372	11878	Carnegie Stage 22	diencephalon	46, xx	sequencing batch:FC2014_037	ERR1473294
+HDBR356	11831	Carnegie Stage 22	diencephalon	46, xy	sequencing batch:FC2014_030	ERR1473293
+HDBR351	11831	Carnegie Stage 22	diencephalon	46, xy	sequencing batch:FC2014_035, FC2014_117	ERR1473291
+HDBR351	11831	Carnegie Stage 22	diencephalon	46, xy	sequencing batch:FC2014_035, FC2014_117	ERR1473292
+HDBR325	11815	Carnegie Stage 22	forebrain	46, xx	sequencing batch:FC2014_032	ERR1473329
+HDBR366	11871	Carnegie Stage 22	forebrain fragment	46, xx	sequencing batch:FC2014_035	ERR1473347
+HDBR327	11815	Carnegie Stage 22	hindbrain without cerebellum	46, xx	sequencing batch:FC2014_032	ERR1473387
+HDBR321	11814	Carnegie Stage 22	hindbrain without cerebellum	46, xy	sequencing batch:FC2014_032	ERR1473386
+HDBR342	11828	Carnegie Stage 22	midbrain	46, xx	sequencing batch:FC2014_035	ERR1473429
+HDBR370	11878	Carnegie Stage 22	midbrain	46, xx	sequencing batch:FC2014_035	ERR1473434
+HDBR326	11815	Carnegie Stage 22	midbrain	46, xx	sequencing batch:FC2014_038	ERR1473427
+HDBR320	11814	Carnegie Stage 22	midbrain	46, xy	sequencing batch:FC2014_032	ERR1473426
+HDBR344	11829	Carnegie Stage 22	midbrain	46, xy	sequencing batch:FC2014_035	ERR1473430
+HDBR350	11831	Carnegie Stage 22	midbrain	46, xy	sequencing batch:FC2014_035	ERR1473431
+HDBR359	11858	Carnegie Stage 22	midbrain	46, xy	sequencing batch:FC2014_037	ERR1473432
+HDBR361	11865	Carnegie Stage 22	midbrain	46, xy	sequencing batch:FC2014_043	ERR1473433
+HDBR323	11814	Carnegie Stage 22	pituitary and diencephalon	46, xy	sequencing batch:FC2014_032	ERR1473473
+HDBR728	1092	Carnegie Stage 22	spinal cord	46, xx	sequencing batch:FC2014_048	ERR1473484
+HDBR729	11868	Carnegie Stage 22	spinal cord	46, xx	sequencing batch:FC2014_048	ERR1473485
+HDBR731	11443	Carnegie Stage 22	spinal cord	46, xx	sequencing batch:FC2014_048	ERR1473487
+HDBR324	11814	Carnegie Stage 22	spinal cord	46, xy	sequencing batch:FC2014_032	ERR1473477
+HDBR730	11793	Carnegie Stage 22	spinal cord	46, xy	sequencing batch:FC2014_048	ERR1473486
+HDBR732	11410	Carnegie Stage 22	spinal cord	46, xy	sequencing batch:FC2014_048	ERR1473488
+HDBR343	11828	Carnegie Stage 22	telencephalon	46, xx	sequencing batch:FC2014_035	ERR1473529
+HDBR364	11871	Carnegie Stage 22	telencephalon	46, xx	sequencing batch:FC2014_035	ERR1473533
+HDBR365	11871	Carnegie Stage 22	telencephalon	46, xx	sequencing batch:FC2014_035	ERR1473534
+HDBR369	11878	Carnegie Stage 22	telencephalon	46, xx	sequencing batch:FC2014_035	ERR1473535
+HDBR341	11828	Carnegie Stage 22	telencephalon	46, xx	sequencing batch:FC2014_035, FC2014_117	ERR1473527
+HDBR341	11828	Carnegie Stage 22	telencephalon	46, xx	sequencing batch:FC2014_035, FC2014_117	ERR1473528
+HDBR373	11878	Carnegie Stage 22	telencephalon	46, xx	sequencing batch:FC2014_037	ERR1473536
+HDBR319	11814	Carnegie Stage 22	telencephalon	46, xy	sequencing batch:FC2014_032	ERR1473526
+HDBR345	11829	Carnegie Stage 22	telencephalon	46, xy	sequencing batch:FC2014_035	ERR1473530
+HDBR347	11829	Carnegie Stage 22	telencephalon	46, xy	sequencing batch:FC2014_035	ERR1473531
+HDBR362	11865	Carnegie Stage 22	telencephalon	46, xy	sequencing batch:FC2014_043	ERR1473532
+HDBR284	11827	Carnegie Stage 23	brain fragment	46, XX	sequencing batch:FC2014_030	ERR1472989
+HDBR314	11860	Carnegie Stage 23	brain fragment	46, XX	sequencing batch:FC2014_030	ERR1472990
+HDBR315	11843	Carnegie Stage 23	brain fragment	46, XX	sequencing batch:FC2014_030	ERR1472991
+HDBR274	11826	Carnegie Stage 23	brain fragment	46, XX	sequencing batch:FC2014_038	ERR1472988
+HDBR734	1607	Carnegie Stage 23	brain fragment	46, XX	sequencing batch:FC2014_048	ERR1473025
+HDBR317	11444	Carnegie Stage 23	brain fragment	46, XY	sequencing batch:FC2014_030	ERR1472992
+HDBR260	11823	Carnegie Stage 23	brain fragment	46, XY	sequencing batch:FC2014_038	ERR1472986
+HDBR262	11823	Carnegie Stage 23	brain fragment	46, XY	sequencing batch:FC2014_038	ERR1472987
+HDBR743	2193	Carnegie Stage 23	brain fragment	46, XY	sequencing batch:FC2014_048	ERR1473026
+HDBR750	11120	Carnegie Stage 23	brain fragment	46, XY	sequencing batch:FC2014_048	ERR1473027
+HDBR736	11826	Carnegie Stage 23	cerebellum	46, XX	sequencing batch:FC2014_048	ERR1473097
+HDBR737	11827	Carnegie Stage 23	cerebellum	46, XX	sequencing batch:FC2014_048	ERR1473098
+HDBR738	11846	Carnegie Stage 23	cerebellum	46, XX	sequencing batch:FC2014_048	ERR1473099
+HDBR740	11884	Carnegie Stage 23	cerebellum	46, XX	sequencing batch:FC2014_048	ERR1473100
+HDBR744	11918	Carnegie Stage 23	cerebellum	46, XX	sequencing batch:FC2014_048	ERR1473101
+HDBR735	11823	Carnegie Stage 23	cerebellum	46, XY	sequencing batch:FC2014_048	ERR1473096
+HDBR283	11827	Carnegie Stage 23	cerebral cortex	46, xx	sequencing batch:FC2014_030	ERR1473154
+HDBR285	11846	Carnegie Stage 23	cerebral cortex	46, xx	sequencing batch:FC2014_030	ERR1473155
+HDBR288	11846	Carnegie Stage 23	cerebral cortex	46, xx	sequencing batch:FC2014_030	ERR1473156
+HDBR308	11918	Carnegie Stage 23	cerebral cortex	46, xx	sequencing batch:FC2014_030	ERR1473157
+HDBR311	11918	Carnegie Stage 23	cerebral cortex	46, xx	sequencing batch:FC2014_030	ERR1473158
+HDBR265	11826	Carnegie Stage 23	cerebral cortex	46, xx	sequencing batch:FC2014_038	ERR1473151
+HDBR273	11826	Carnegie Stage 23	cerebral cortex	46, xx	sequencing batch:FC2014_038	ERR1473152
+HDBR275	11827	Carnegie Stage 23	cerebral cortex	46, xx	sequencing batch:FC2014_038	ERR1473153
+HDBR522	11920	Carnegie Stage 23	cerebral cortex	46, xy	sequencing batch:FC2014_054, FC2014_117	ERR1473172
+HDBR522	11920	Carnegie Stage 23	cerebral cortex	46, xy	sequencing batch:FC2014_054, FC2014_117	ERR1473173
+HDBR289	11846	Carnegie Stage 23	diencephalon	46, xx	sequencing batch:FC2014_030	ERR1473284
+HDBR290	11846	Carnegie Stage 23	diencephalon	46, xx	sequencing batch:FC2014_030	ERR1473285
+HDBR304	11884	Carnegie Stage 23	diencephalon	46, xx	sequencing batch:FC2014_030, FC2014_117	ERR1473286
+HDBR304	11884	Carnegie Stage 23	diencephalon	46, xx	sequencing batch:FC2014_030, FC2014_117	ERR1473287
+HDBR313	11918	Carnegie Stage 23	diencephalon	46, xx	sequencing batch:FC2014_030, FC2014_151	ERR1473288
+HDBR313	11918	Carnegie Stage 23	diencephalon	46, xx	sequencing batch:FC2014_030, FC2014_151	ERR1473289
+HDBR279	11827	Carnegie Stage 23	diencephalon	46, xx	sequencing batch:FC2014_032, FC2014_117	ERR1473282
+HDBR279	11827	Carnegie Stage 23	diencephalon	46, xx	sequencing batch:FC2014_032, FC2014_117	ERR1473283
+HDBR254	1406	Carnegie Stage 23	diencephalon	46, xx	sequencing batch:FC2014_038	ERR1473275
+HDBR268	11826	Carnegie Stage 23	diencephalon	46, xx	sequencing batch:FC2014_038	ERR1473279
+HDBR269	11826	Carnegie Stage 23	diencephalon	46, xx	sequencing batch:FC2014_038	ERR1473280
+HDBR278	11827	Carnegie Stage 23	diencephalon	46, xx	sequencing batch:FC2014_038	ERR1473281
+HDBR263	11823	Carnegie Stage 23	diencephalon	46, xy	sequencing batch:FC2014_038	ERR1473276
+HDBR264	11823	Carnegie Stage 23	diencephalon	46, xy	sequencing batch:FC2014_038, FC2014_117	ERR1473277
+HDBR264	11823	Carnegie Stage 23	diencephalon	46, xy	sequencing batch:FC2014_038, FC2014_117	ERR1473278
+HDBR756	11920	Carnegie Stage 23	diencephalon	46, xy	sequencing batch:FC2014_048	ERR1473319
+HDBR295	11848	Carnegie Stage 23	forebrain	46, xy	sequencing batch:FC2014_035	ERR1473326
+HDBR298	11848	Carnegie Stage 23	forebrain	46, xy	sequencing batch:FC2014_035, FC2014_117	ERR1473327
+HDBR298	11848	Carnegie Stage 23	forebrain	46, xy	sequencing batch:FC2014_035, FC2014_117	ERR1473328
+HDBR733	1406	Carnegie Stage 23	hindbrain	46, xx	sequencing batch:FC2014_048	ERR1473366
+HDBR316	11824	Carnegie Stage 23	hindbrain	46, xy	sequencing batch:FC2014_030	ERR1473354
+HDBR296	11848	Carnegie Stage 23	hindbrain	46, xy	sequencing batch:FC2014_035	ERR1473353
+HDBR739	11848	Carnegie Stage 23	hindbrain	46, xy	sequencing batch:FC2014_048	ERR1473367
+HDBR519	11920	Carnegie Stage 23	hindbrain	46, xy	sequencing batch:FC2014_054	ERR1473361
+HDBR286	11846	Carnegie Stage 23	midbrain	46, xx	sequencing batch:FC2014_030	ERR1473421
+HDBR302	11884	Carnegie Stage 23	midbrain	46, xx	sequencing batch:FC2014_030	ERR1473424
+HDBR306	11918	Carnegie Stage 23	midbrain	46, xx	sequencing batch:FC2014_030	ERR1473425
+HDBR252	1406	Carnegie Stage 23	midbrain	46, xx	sequencing batch:FC2014_038	ERR1473417
+HDBR266	11826	Carnegie Stage 23	midbrain	46, xx	sequencing batch:FC2014_038	ERR1473419
+HDBR276	11827	Carnegie Stage 23	midbrain	46, xx	sequencing batch:FC2014_038	ERR1473420
+HDBR299	11848	Carnegie Stage 23	midbrain	46, xy	sequencing batch:FC2014_030	ERR1473423
+HDBR297	11848	Carnegie Stage 23	midbrain	46, xy	sequencing batch:FC2014_035	ERR1473422
+HDBR255	11823	Carnegie Stage 23	midbrain	46, xy	sequencing batch:FC2014_038	ERR1473418
+HDBR520	11920	Carnegie Stage 23	midbrain	46, xy	sequencing batch:FC2014_054	ERR1473449
+HDBR749	11402	Carnegie Stage 23	spinal cord	46, xx	sequencing batch:FC2014_048	ERR1473493
+HDBR745	11860	Carnegie Stage 23	spinal cord	46, xx	sequencing batch:FC2014_050	ERR1473489
+HDBR746	11843	Carnegie Stage 23	spinal cord	46, xx	sequencing batch:FC2014_050	ERR1473490
+HDBR747	11824	Carnegie Stage 23	spinal cord	46, xy	sequencing batch:FC2014_050	ERR1473491
+HDBR748	11444	Carnegie Stage 23	spinal cord	46, xy	sequencing batch:FC2014_050	ERR1473492
+HDBR301	11884	Carnegie Stage 23	telencephalon	46, xx	sequencing batch:FC2014_030	ERR1473524
+HDBR303	11884	Carnegie Stage 23	telencephalon	46, xx	sequencing batch:FC2014_030	ERR1473525
+HDBR251	1406	Carnegie Stage 23	telencephalon	46, xx	sequencing batch:FC2014_038	ERR1473520
+HDBR253	1406	Carnegie Stage 23	telencephalon	46, xx	sequencing batch:FC2014_038	ERR1473521
+HDBR256	11823	Carnegie Stage 23	telencephalon	46, xy	sequencing batch:FC2014_038	ERR1473522
+HDBR259	11823	Carnegie Stage 23	telencephalon	46, xy	sequencing batch:FC2014_038	ERR1473523
+HDBR741	1851	Carnegie Stage 23	temporal lobe	unknown	sequencing batch:FC2014_048	ERR1473569
+HDBR613	1047	12 post conception weeks	brain fragment	46, XX	sequencing batch:FC2014_047	ERR1473009
+HDBR614	11429	12 post conception weeks	brain fragment	46, XX	sequencing batch:FC2014_047	ERR1473010
+HDBR651	11806	11 post conception weeks	brain fragment	46, XX	sequencing batch:FC2014_047	ERR1473012
+HDBR809	11312	9 post conception weeks	brain fragment	46, XX	sequencing batch:FC2014_050	ERR1473051
+HDBR824	11464	17 post conception weeks	brain fragment	46, XX	sequencing batch:FC2014_050	ERR1473059
+HDBR827	11819	16 post conception weeks	brain fragment	46, XX	sequencing batch:FC2014_050	ERR1473060
+HDBR829	11801	15 post conception weeks	brain fragment	46, XX	sequencing batch:FC2014_050	ERR1473061
+HDBR839	11457	14 post conception weeks	brain fragment	46, XX	sequencing batch:FC2014_053	ERR1473067
+HDBR846	11817	13 post conception weeks	brain fragment	46, XX	sequencing batch:FC2014_053	ERR1473071
+HDBR848	11654	13 post conception weeks	brain fragment	46, XX	sequencing batch:FC2014_053	ERR1473073
+HDBR537	11819	16 post conception weeks	brain fragment	46, XX	sequencing batch:FC2014_054	ERR1473006
+HDBR557	11794	14 post conception weeks	brain fragment	46, XX	sequencing batch:FC2014_055	ERR1473007
+HDBR854	11349	13 post conception weeks	brain fragment	46, XX	sequencing batch:FC2014_058	ERR1473079
+HDBR855	11309	13 post conception weeks	brain fragment	46, XX	sequencing batch:FC2014_058	ERR1473080
+HDBR856	11305	13 post conception weeks	brain fragment	46, XX	sequencing batch:FC2014_058	ERR1473081
+HDBR853	11423	13 post conception weeks	brain fragment	46, XX	sequencing batch:FC2014_058, FC2014_117	ERR1473077
+HDBR853	11423	13 post conception weeks	brain fragment	46, XX	sequencing batch:FC2014_058, FC2014_117	ERR1473078
+HDBR842	11424	14 post conception weeks	brain fragment	46, XX	sequencing batch:FC2014_065	ERR1473070
+HDBR865	1047	12 post conception weeks	brain fragment	46, XX	sequencing batch:FC2014_065	ERR1473082
+HDBR869	11373	12 post conception weeks	brain fragment	46, XX	sequencing batch:FC2014_065	ERR1473083
+HDBR852	11489	13 post conception weeks	brain fragment	46, XX	sequencing batch:FC2014_081	ERR1473076
+HDBR836	11794	14 post conception weeks	brain fragment	46, XX	sequencing batch:FC2014_081, FC2014_117	ERR1473063
+HDBR836	11794	14 post conception weeks	brain fragment	46, XX	sequencing batch:FC2014_081, FC2014_117	ERR1473064
+HDBR885	11769	11 post conception weeks	brain fragment	46, XX	sequencing batch:FC2014_089	ERR1473085
+HDBR679	11880	10 post conception weeks	brain fragment	46, XY	sequencing batch:FC2014_044	ERR1473013
+HDBR712	11875	19 post conception weeks	brain fragment	46, XY	sequencing batch:FC2014_045	ERR1473021
+HDBR618	11798	11 post conception weeks	brain fragment	46, XY	sequencing batch:FC2014_047	ERR1473011
+HDBR818	11589	20 post conception weeks	brain fragment	46, XY	sequencing batch:FC2014_050	ERR1473054
+HDBR820	11581	19 post conception weeks	brain fragment	46, XY	sequencing batch:FC2014_050	ERR1473056
+HDBR822	11808	17 post conception weeks	brain fragment	46, XY	sequencing batch:FC2014_050	ERR1473057
+HDBR823	11580	17 post conception weeks	brain fragment	46, XY	sequencing batch:FC2014_050	ERR1473058
+HDBR831	11446	15 post conception weeks	brain fragment	46, XY	sequencing batch:FC2014_050	ERR1473062
+HDBR837	11511	14 post conception weeks	brain fragment	46, XY	sequencing batch:FC2014_053	ERR1473065
+HDBR838	11494	14 post conception weeks	brain fragment	46, XY	sequencing batch:FC2014_053	ERR1473066
+HDBR840	11451	14 post conception weeks	brain fragment	46, XY	sequencing batch:FC2014_053	ERR1473068
+HDBR847	11775	13 post conception weeks	brain fragment	46, XY	sequencing batch:FC2014_053	ERR1473072
+HDBR571	11501	13 post conception weeks	brain fragment	46, XY	sequencing batch:FC2014_055	ERR1473008
+HDBR851	11496	13 post conception weeks	brain fragment	46, XY	sequencing batch:FC2014_065	ERR1473075
+HDBR871	11798	11 post conception weeks	brain fragment	46, XY	sequencing batch:FC2014_065	ERR1473084
+HDBR841	11449	14 post conception weeks	brain fragment	46, XY	sequencing batch:FC2014_089	ERR1473069
+HDBR849	11572	13 post conception weeks	brain fragment	unknown	sequencing batch:FC2014_055	ERR1473074
+HDBR719	11820	9 post conception weeks	cerebellum	46, XX	sequencing batch:FC2014_045	ERR1473088
+HDBR799	11851	9 post conception weeks	cerebellum	46, XX	sequencing batch:FC2014_045	ERR1473103
+HDBR800	11873	9 post conception weeks	cerebellum	46, XX	sequencing batch:FC2014_045	ERR1473104
+HDBR826	11907	16 post conception weeks	cerebellum	46, XX	sequencing batch:FC2014_050	ERR1473108
+HDBR850	11947	13 post conception weeks	cerebellum	46, XX	sequencing batch:FC2014_058	ERR1473110
+HDBR862	1102	12 post conception weeks	cerebellum	46, XX	sequencing batch:FC2014_065	ERR1473113
+HDBR891	1308	10 post conception weeks	cerebellum	46, XX	sequencing batch:FC2014_065	ERR1473119
+HDBR878	11833	11 post conception weeks	cerebellum	46, XX	sequencing batch:FC2014_075	ERR1473116
+HDBR843	1923	13 post conception weeks	cerebellum	46, XX	sequencing batch:FC2014_089	ERR1473109
+HDBR886	11930	11 post conception weeks	cerebellum	46, XX	sequencing batch:FC2014_089	ERR1473117
+HDBR887	11942	11 post conception weeks	cerebellum	46, XX	sequencing batch:FC2014_089	ERR1473118
+HDBR798	11845	9 post conception weeks	cerebellum	46, XY	sequencing batch:FC2014_045	ERR1473102
+HDBR860	11854	12 post conception weeks	cerebellum	46, XY	sequencing batch:FC2014_058	ERR1473111
+HDBR861	11834	12 post conception weeks	cerebellum	46, XY	sequencing batch:FC2014_065	ERR1473112
+HDBR864	11885	12 post conception weeks	cerebellum	46, XY	sequencing batch:FC2014_065	ERR1473114
+HDBR870	11602	11 post conception weeks	cerebellum	46, XY	sequencing batch:FC2014_065	ERR1473115
+HDBR894	11841	10 post conception weeks	cerebellum	46, XY	sequencing batch:FC2014_065	ERR1473120
+HDBR900	11921	17 post conception weeks	cerebellum	46, XY	sequencing batch:FC2014_073	ERR1473121
+HDBR804	11912	9 post conception weeks	cerebellum	46, XY	sequencing batch:FC2014_081	ERR1473105
+HDBR328	11820	9 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_032	ERR1473183
+HDBR332	11820	9 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_032	ERR1473184
+HDBR333	11820	9 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_032	ERR1473237
+HDBR335	11820	9 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_035	ERR1473222
+HDBR336	11820	9 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_035	ERR1473238
+HDBR423	11851	9 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_043	ERR1473162
+HDBR424	11851	9 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_043	ERR1473163
+HDBR647	11833	11 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_043	ERR1473229
+HDBR645	11833	11 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_044	ERR1473195
+HDBR660	11942	11 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_044	ERR1473197
+HDBR646	11833	11 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_044	ERR1473211
+HDBR626	11656	11 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_047	ERR1473175
+HDBR648	11833	11 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_047	ERR1473246
+HDBR649	11833	11 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_047	ERR1473262
+HDBR532	11907	16 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_054	ERR1473190
+HDBR533	11907	16 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_054	ERR1473208
+HDBR534	11907	16 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_054	ERR1473227
+HDBR535	11907	16 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_054	ERR1473242
+HDBR536	11907	16 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_054	ERR1473256
+HDBR563	1923	13 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_055	ERR1473180
+HDBR558	1923	13 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_055	ERR1473181
+HDBR568	1923	13 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_055	ERR1473204
+HDBR561	1923	13 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_058	ERR1473205
+HDBR562	1923	13 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_058	ERR1473220
+HDBR434	11851	9 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_066	ERR1473164
+HDBR435	11851	9 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_066	ERR1473165
+HDBR438	11851	9 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_066	ERR1473166
+HDBR439	11851	9 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_066	ERR1473167
+HDBR440	11851	9 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_066	ERR1473168
+HDBR441	11873	9 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_066	ERR1473188
+HDBR451	11873	9 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_066	ERR1473226
+HDBR452	11873	9 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_066	ERR1473241
+HDBR442	11873	9 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_066	ERR1473254
+HDBR453	11873	9 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_066	ERR1473255
+HDBR450	11873	9 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_075	ERR1473189
+HDBR652	11930	11 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_075	ERR1473196
+HDBR653	11930	11 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_075	ERR1473263
+HDBR913	11851	9 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_080	ERR1473214
+HDBR912	11851	9 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_080	ERR1473230
+HDBR914	11851	9 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_080	ERR1473247
+HDBR908	11942	11 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_080	ERR1473267
+HDBR940	11930	11 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_080	ERR1473269
+HDBR957	11930	11 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_081	ERR1473201
+HDBR953	11930	11 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_081	ERR1473216
+HDBR954	11930	11 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_081	ERR1473217
+HDBR946	11930	11 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_081	ERR1473232
+HDBR955	11930	11 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_081	ERR1473233
+HDBR952	11930	11 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_081	ERR1473249
+HDBR956	11930	11 post conception weeks	cerebral cortex	46, xx	sequencing batch:FC2014_081	ERR1473250
+HDBR405	11845	9 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_040	ERR1473186
+HDBR406	11845	9 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_040	ERR1473252
+HDBR421	11845	9 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_043	ERR1473187
+HDBR608	11885	12 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_043	ERR1473210
+HDBR414	11845	9 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_043	ERR1473225
+HDBR609	11885	12 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_043	ERR1473228
+HDBR415	11845	9 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_043	ERR1473240
+HDBR610	11885	12 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_043	ERR1473245
+HDBR422	11845	9 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_043	ERR1473253
+HDBR603	11885	12 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_043	ERR1473261
+HDBR673	11841	10 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_044	ERR1473176
+HDBR668	11841	10 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_044	ERR1473198
+HDBR696	11921	17 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_044	ERR1473199
+HDBR678	11841	10 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_044	ERR1473212
+HDBR700	11921	17 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_044	ERR1473213
+HDBR669	11841	10 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_044	ERR1473264
+HDBR697	11921	17 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_044, FC2014_117	ERR1473265
+HDBR697	11921	17 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_044, FC2014_117	ERR1473266
+HDBR569	11892	13 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_055	ERR1473174
+HDBR578	11834	12 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_055	ERR1473182
+HDBR572	1835	12 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_055	ERR1473185
+HDBR556	11900	14 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_055	ERR1473191
+HDBR573	1835	12 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_055	ERR1473207
+HDBR555	11900	14 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_055	ERR1473209
+HDBR574	1835	12 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_055	ERR1473223
+HDBR554	11900	14 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_055	ERR1473243
+HDBR553	11900	14 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_055	ERR1473257
+HDBR583	11834	12 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_058	ERR1473192
+HDBR599	11885	12 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_058	ERR1473193
+HDBR602	11885	12 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_058	ERR1473194
+HDBR587	11834	12 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_058	ERR1473206
+HDBR588	11834	12 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_058	ERR1473221
+HDBR857	1835	12 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_058	ERR1473239
+HDBR589	11834	12 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_058	ERR1473244
+HDBR584	11834	12 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_058	ERR1473258
+HDBR600	11885	12 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_058	ERR1473260
+HDBR591	11834	12 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_069	ERR1473259
+HDBR917	12007	12 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_080	ERR1473215
+HDBR918	12007	12 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_080	ERR1473231
+HDBR930	12007	12 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_080	ERR1473248
+HDBR916	12007	12 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_080	ERR1473268
+HDBR948	12007	12 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_081	ERR1473200
+HDBR965	11820	9 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_081	ERR1473224
+HDBR949	12007	12 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_081	ERR1473270
+HDBR969	12007	12 post conception weeks	cerebral cortex	46, xy	sequencing batch:FC2014_089	ERR1473202
+HDBR538	1117	15 post conception weeks	cerebral cortex	unknown	sequencing batch:FC2014_054	ERR1473179
+HDBR539	1117	15 post conception weeks	cerebral cortex	unknown	sequencing batch:FC2014_054	ERR1473203
+HDBR517	1107	16 post conception weeks	cerebral cortex	unknown	sequencing batch:FC2014_054	ERR1473218
+HDBR541	1117	15 post conception weeks	cerebral cortex	unknown	sequencing batch:FC2014_054	ERR1473219
+HDBR518	1107	16 post conception weeks	cerebral cortex	unknown	sequencing batch:FC2014_054	ERR1473235
+HDBR542	1117	15 post conception weeks	cerebral cortex	unknown	sequencing batch:FC2014_054	ERR1473236
+HDBR543	1117	15 post conception weeks	cerebral cortex	unknown	sequencing batch:FC2014_054	ERR1473251
+HDBR544	1117	15 post conception weeks	cerebral cortex	unknown	sequencing batch:FC2014_054	ERR1473271
+HDBR545	1117	15 post conception weeks	cerebral cortex	unknown	sequencing batch:FC2014_054	ERR1473272
+HDBR515	1107	16 post conception weeks	cerebral cortex	unknown	sequencing batch:FC2014_054	ERR1473273
+HDBR546	1117	15 post conception weeks	cerebral cortex	unknown	sequencing batch:FC2014_054	ERR1473274
+HDBR504	1107	16 post conception weeks	cerebral cortex	unknown	sequencing batch:FC2014_073	ERR1473178
+HDBR507	1107	16 post conception weeks	cerebral cortex	unknown	sequencing batch:FC2014_073	ERR1473234
+HDBR339	11820	9 post conception weeks	diencephalon	46, xx	sequencing batch:FC2014_035	ERR1473290
+HDBR655	11930	11 post conception weeks	diencephalon	46, xx	sequencing batch:FC2014_044	ERR1473313
+HDBR658	11942	11 post conception weeks	diencephalon	46, xx	sequencing batch:FC2014_044	ERR1473314
+HDBR692	11947	13 post conception weeks	diencephalon	46, xx	sequencing batch:FC2014_045	ERR1473318
+HDBR633	11833	11 post conception weeks	diencephalon	46, xx	sequencing batch:FC2014_047	ERR1473311
+HDBR642	11833	11 post conception weeks	diencephalon	46, xx	sequencing batch:FC2014_047	ERR1473312
+HDBR529	11907	16 post conception weeks	diencephalon	46, xx	sequencing batch:FC2014_054, FC2014_117	ERR1473305
+HDBR529	11907	16 post conception weeks	diencephalon	46, xx	sequencing batch:FC2014_054, FC2014_117	ERR1473306
+HDBR566	1923	13 post conception weeks	diencephalon	46, xx	sequencing batch:FC2014_055	ERR1473307
+HDBR567	1923	13 post conception weeks	diencephalon	46, xx	sequencing batch:FC2014_055, FC2014_117	ERR1473308
+HDBR567	1923	13 post conception weeks	diencephalon	46, xx	sequencing batch:FC2014_055, FC2014_117	ERR1473309
+HDBR892	1046	10 post conception weeks	diencephalon	46, xx	sequencing batch:FC2014_065	ERR1473321
+HDBR455	11873	9 post conception weeks	diencephalon	46, xx	sequencing batch:FC2014_066	ERR1473299
+HDBR447	11873	9 post conception weeks	diencephalon	46, xx	sequencing batch:FC2014_075	ERR1473298
+HDBR911	11942	11 post conception weeks	diencephalon	46, xx	sequencing batch:FC2014_080	ERR1473322
+HDBR410	11845	9 post conception weeks	diencephalon	46, xy	sequencing batch:FC2014_043	ERR1473295
+HDBR412	11845	9 post conception weeks	diencephalon	46, xy	sequencing batch:FC2014_043	ERR1473296
+HDBR416	11845	9 post conception weeks	diencephalon	46, xy	sequencing batch:FC2014_043	ERR1473297
+HDBR675	11841	10 post conception weeks	diencephalon	46, xy	sequencing batch:FC2014_044	ERR1473316
+HDBR677	11841	10 post conception weeks	diencephalon	46, xy	sequencing batch:FC2014_044	ERR1473317
+HDBR612	11885	12 post conception weeks	diencephalon	46, xy	sequencing batch:FC2014_047	ERR1473310
+HDBR832	1290	14 post conception weeks	diencephalon	46, xy	sequencing batch:FC2014_050	ERR1473320
+HDBR920	12007	12 post conception weeks	diencephalon	46, xy	sequencing batch:FC2014_080	ERR1473323
+HDBR931	12007	12 post conception weeks	diencephalon	46, xy	sequencing batch:FC2014_080	ERR1473324
+HDBR661	1890	10 post conception weeks	diencephalon	unknown	sequencing batch:FC2014_044	ERR1473315
+HDBR550	11900	14 post conception weeks	diencephalon and midbrain	46, xy	sequencing batch:FC2014_055	ERR1473325
+HDBR402	11810	9 post conception weeks	forebrain	46, xx	sequencing batch:FC2014_037	ERR1473335
+HDBR594	1102	12 post conception weeks	forebrain	46, xx	sequencing batch:FC2014_069	ERR1473338
+HDBR596	1558	12 post conception weeks	forebrain	46, xx	sequencing batch:FC2014_069	ERR1473339
+HDBR597	1558	12 post conception weeks	forebrain	46, xx	sequencing batch:FC2014_069	ERR1473340
+HDBR663	1281	10 post conception weeks	forebrain	46, xy	sequencing batch:FC2014_044	ERR1473343
+HDBR664	1281	10 post conception weeks	forebrain	46, xy	sequencing batch:FC2014_044	ERR1473344
+HDBR615	11602	11 post conception weeks	forebrain	46, xy	sequencing batch:FC2014_047	ERR1473341
+HDBR616	11602	11 post conception weeks	forebrain	46, xy	sequencing batch:FC2014_047	ERR1473342
+HDBR458	11606	9 post conception weeks	forebrain	46, xy	sequencing batch:FC2014_066	ERR1473336
+HDBR459	11606	9 post conception weeks	forebrain	46, xy	sequencing batch:FC2014_066	ERR1473337
+HDBR665	1308	10 post conception weeks	forebrain and midbrain	46, xx	sequencing batch:FC2014_044	ERR1473346
+HDBR650	11893	11 post conception weeks	forebrain fragment	46, xx	sequencing batch:FC2014_047	ERR1473351
+HDBR469	11626	9 post conception weeks	forebrain fragment	46, xx	sequencing batch:FC2014_150	ERR1473349
+HDBR570	11844	13 post conception weeks	forebrain fragment	46, xy	sequencing batch:FC2014_055	ERR1473350
+HDBR465	11874	9 post conception weeks	forebrain fragment	46, xy	sequencing batch:FC2014_066	ERR1473348
+HDBR330	11820	9 post conception weeks	hindbrain	46, xx	sequencing batch:FC2014_032	ERR1473355
+HDBR797	11810	9 post conception weeks	hindbrain	46, xx	sequencing batch:FC2014_045	ERR1473375
+HDBR808	11626	9 post conception weeks	hindbrain	46, xx	sequencing batch:FC2014_050	ERR1473377
+HDBR863	1558	12 post conception weeks	hindbrain	46, xx	sequencing batch:FC2014_065	ERR1473378
+HDBR876	11656	11 post conception weeks	hindbrain	46, xx	sequencing batch:FC2014_065	ERR1473379
+HDBR877	11609	11 post conception weeks	hindbrain	46, xx	sequencing batch:FC2014_075	ERR1473380
+HDBR928	11683	12 post conception weeks	hindbrain	46, xx	sequencing batch:FC2014_080	ERR1473382
+HDBR606	11885	12 post conception weeks	hindbrain	46, xy	sequencing batch:FC2014_043	ERR1473364
+HDBR802	11606	9 post conception weeks	hindbrain	46, xy	sequencing batch:FC2014_050	ERR1473376
+HDBR548	11900	14 post conception weeks	hindbrain	46, xy	sequencing batch:FC2014_055	ERR1473362
+HDBR549	11900	14 post conception weeks	hindbrain	46, xy	sequencing batch:FC2014_055	ERR1473363
+HDBR890	1281	10 post conception weeks	hindbrain	46, xy	sequencing batch:FC2014_065	ERR1473381
+HDBR934	11666	12 post conception weeks	hindbrain	46, xy	sequencing batch:FC2014_080	ERR1473383
+HDBR935	11666	12 post conception weeks	hindbrain	46, xy	sequencing batch:FC2014_080	ERR1473384
+HDBR468	11881	9 post conception weeks	hindbrain	46, xy	sequencing batch:FC2014_150	ERR1473359
+HDBR595	1102	12 post conception weeks	hindbrain fragment	46, xx	sequencing batch:FC2014_069	ERR1473385
+HDBR580	11834	12 post conception weeks	hindbrain without cerebellum	46, xy	sequencing batch:FC2014_055	ERR1473388
+HDBR821	1115	17 post conception weeks	hippocampus	unknown	sequencing batch:FC2014_050	ERR1473389
+HDBR825	1107	16 post conception weeks	hippocampus	unknown	sequencing batch:FC2014_050	ERR1473390
+HDBR338	11820	9 post conception weeks	midbrain	46, xx	sequencing batch:FC2014_035	ERR1473428
+HDBR403	11810	9 post conception weeks	midbrain	46, xx	sequencing batch:FC2014_040	ERR1473439
+HDBR628	11656	11 post conception weeks	midbrain	46, xx	sequencing batch:FC2014_047	ERR1473456
+HDBR632	11609	11 post conception weeks	midbrain	46, xx	sequencing batch:FC2014_047	ERR1473457
+HDBR634	11833	11 post conception weeks	midbrain	46, xx	sequencing batch:FC2014_047	ERR1473458
+HDBR526	11907	16 post conception weeks	midbrain	46, xx	sequencing batch:FC2014_054	ERR1473450
+HDBR559	1923	13 post conception weeks	midbrain	46, xx	sequencing batch:FC2014_058	ERR1473451
+HDBR427	11851	9 post conception weeks	midbrain	46, xx	sequencing batch:FC2014_065	ERR1473441
+HDBR883	11893	11 post conception weeks	midbrain	46, xx	sequencing batch:FC2014_065	ERR1473464
+HDBR446	11873	9 post conception weeks	midbrain	46, xx	sequencing batch:FC2014_066	ERR1473442
+HDBR598	1558	12 post conception weeks	midbrain	46, xx	sequencing batch:FC2014_069	ERR1473454
+HDBR919	11683	12 post conception weeks	midbrain	46, xx	sequencing batch:FC2014_080	ERR1473465
+HDBR929	11683	12 post conception weeks	midbrain	46, xx	sequencing batch:FC2014_080	ERR1473467
+HDBR968	11683	12 post conception weeks	midbrain	46, xx	sequencing batch:FC2014_089	ERR1473472
+HDBR409	11845	9 post conception weeks	midbrain	46, xy	sequencing batch:FC2014_043	ERR1473440
+HDBR605	11885	12 post conception weeks	midbrain	46, xy	sequencing batch:FC2014_043	ERR1473455
+HDBR671	11841	10 post conception weeks	midbrain	46, xy	sequencing batch:FC2014_044	ERR1473459
+HDBR845	11844	13 post conception weeks	midbrain	46, xy	sequencing batch:FC2014_053	ERR1473463
+HDBR577	11854	12 post conception weeks	midbrain	46, xy	sequencing batch:FC2014_055	ERR1473452
+HDBR579	11834	12 post conception weeks	midbrain	46, xy	sequencing batch:FC2014_055	ERR1473453
+HDBR460	11606	9 post conception weeks	midbrain	46, xy	sequencing batch:FC2014_066	ERR1473443
+HDBR463	11912	9 post conception weeks	midbrain	46, xy	sequencing batch:FC2014_066	ERR1473444
+HDBR466	11874	9 post conception weeks	midbrain	46, xy	sequencing batch:FC2014_066	ERR1473445
+HDBR927	12007	12 post conception weeks	midbrain	46, xy	sequencing batch:FC2014_080	ERR1473466
+HDBR947	11653	10 post conception weeks	midbrain	46, xy	sequencing batch:FC2014_081	ERR1473469
+HDBR966	11653	10 post conception weeks	midbrain	46, xy	sequencing batch:FC2014_081	ERR1473470
+HDBR967	11666	12 post conception weeks	midbrain	46, xy	sequencing batch:FC2014_081	ERR1473471
+HDBR844	11892	13 post conception weeks	midbrain	46, xy	sequencing batch:FC2014_089	ERR1473462
+HDBR936	11666	12 post conception weeks	midbrain	46, xy	sequencing batch:FC2014_089	ERR1473468
+HDBR593	11834	12 post conception weeks	pituitary and diencephalon	46, xy	sequencing batch:FC2014_069	ERR1473474
+HDBR404	11810	9 post conception weeks	spinal cord	46, xx	sequencing batch:FC2014_040	ERR1473479
+HDBR805	849	9 post conception weeks	spinal cord	46, xx	sequencing batch:FC2014_050	ERR1473503
+HDBR866	1650	12 post conception weeks	spinal cord	46, xx	sequencing batch:FC2014_065	ERR1473509
+HDBR867	898	12 post conception weeks	spinal cord	46, xx	sequencing batch:FC2014_065	ERR1473510
+HDBR868	11429	12 post conception weeks	spinal cord	46, xx	sequencing batch:FC2014_065	ERR1473511
+HDBR882	1210	11 post conception weeks	spinal cord	46, xx	sequencing batch:FC2014_065	ERR1473513
+HDBR884	11806	11 post conception weeks	spinal cord	46, xx	sequencing batch:FC2014_065	ERR1473514
+HDBR896	1263	10 post conception weeks	spinal cord	46, xx	sequencing batch:FC2014_065	ERR1473515
+HDBR899	11573	10 post conception weeks	spinal cord	46, xx	sequencing batch:FC2014_073	ERR1473518
+HDBR716	11501	13 post conception weeks	spinal cord	46, xy	sequencing batch:FC2014_045	ERR1473483
+HDBR806	11881	9 post conception weeks	spinal cord	46, xy	sequencing batch:FC2014_050	ERR1473504
+HDBR807	11874	9 post conception weeks	spinal cord	46, xy	sequencing batch:FC2014_050	ERR1473505
+HDBR881	11787	11 post conception weeks	spinal cord	46, xy	sequencing batch:FC2014_065	ERR1473512
+HDBR898	11880	10 post conception weeks	spinal cord	46, xy	sequencing batch:FC2014_073	ERR1473517
+HDBR897	1874	10 post conception weeks	spinal cord	unknown	sequencing batch:FC2014_073	ERR1473516
+HDBR395	11947	16 post conception weeks	telencephalon	46, xx	sequencing batch:FC2014_037	ERR1473537
+HDBR630	11609	11 post conception weeks	telencephalon	46, xx	sequencing batch:FC2014_047	ERR1473542
+HDBR926	11683	12 post conception weeks	telencephalon	46, xx	sequencing batch:FC2014_080	ERR1473546
+HDBR938	11683	12 post conception weeks	telencephalon	46, xx	sequencing batch:FC2014_089	ERR1473555
+HDBR939	11683	12 post conception weeks	telencephalon	46, xx	sequencing batch:FC2014_089	ERR1473556
+HDBR547	1290	14 post conception weeks	telencephalon	46, xy	sequencing batch:FC2014_055	ERR1473541
+HDBR462	11912	9 post conception weeks	telencephalon	46, xy	sequencing batch:FC2014_066	ERR1473540
+HDBR461	11912	9 post conception weeks	telencephalon	46, xy	sequencing batch:FC2014_066, FC2014_117	ERR1473538
+HDBR461	11912	9 post conception weeks	telencephalon	46, xy	sequencing batch:FC2014_066, FC2014_117	ERR1473539
+HDBR922	11666	12 post conception weeks	telencephalon	46, xy	sequencing batch:FC2014_080	ERR1473544
+HDBR923	11666	12 post conception weeks	telencephalon	46, xy	sequencing batch:FC2014_080	ERR1473545
+HDBR944	11653	10 post conception weeks	telencephalon	46, xy	sequencing batch:FC2014_080	ERR1473547
+HDBR909	11666	12 post conception weeks	telencephalon	46, xy	sequencing batch:FC2014_080	ERR1473551
+HDBR924	11666	12 post conception weeks	telencephalon	46, xy	sequencing batch:FC2014_080	ERR1473552
+HDBR925	11666	12 post conception weeks	telencephalon	46, xy	sequencing batch:FC2014_080	ERR1473553
+HDBR943	11653	10 post conception weeks	telencephalon	46, xy	sequencing batch:FC2014_080	ERR1473557
+HDBR945	11653	10 post conception weeks	telencephalon	46, xy	sequencing batch:FC2014_081	ERR1473548
+HDBR937	11653	10 post conception weeks	telencephalon	46, xy	sequencing batch:FC2014_089	ERR1473554
+HDBR620	1123	11 post conception weeks	telencephalon	unknown	sequencing batch:FC2014_047	ERR1473543
+HDBR623	1123	11 post conception weeks	telencephalon	unknown	sequencing batch:FC2014_047	ERR1473549
+HDBR621	1123	11 post conception weeks	telencephalon	unknown	sequencing batch:FC2014_047	ERR1473550
+HDBR624	1123	11 post conception weeks	telencephalon	unknown	sequencing batch:FC2014_047	ERR1473558
+HDBR625	1123	11 post conception weeks	telencephalon	unknown	sequencing batch:FC2014_047	ERR1473559
+HDBR622	1123	11 post conception weeks	telencephalon	unknown	sequencing batch:FC2014_047	ERR1473560
+HDBR329	11820	9 post conception weeks	temporal lobe	46, xx	sequencing batch:FC2014_032	ERR1473573
+HDBR337	11820	9 post conception weeks	temporal lobe	46, xx	sequencing batch:FC2014_035	ERR1473561
+HDBR425	11851	9 post conception weeks	temporal lobe	46, xx	sequencing batch:FC2014_043	ERR1473576
+HDBR643	11833	11 post conception weeks	temporal lobe	46, xx	sequencing batch:FC2014_044	ERR1473568
+HDBR691	11947	13 post conception weeks	temporal lobe	46, xx	sequencing batch:FC2014_045	ERR1473586
+HDBR527	11907	16 post conception weeks	temporal lobe	46, xx	sequencing batch:FC2014_054	ERR1473578
+HDBR528	11907	16 post conception weeks	temporal lobe	46, xx	sequencing batch:FC2014_054	ERR1473595
+HDBR443	11873	9 post conception weeks	temporal lobe	46, xx	sequencing batch:FC2014_066	ERR1473577
+HDBR431	11851	9 post conception weeks	temporal lobe	46, xx	sequencing batch:FC2014_066	ERR1473592
+HDBR436	11851	9 post conception weeks	temporal lobe	46, xx	sequencing batch:FC2014_066	ERR1473593
+HDBR454	11873	9 post conception weeks	temporal lobe	46, xx	sequencing batch:FC2014_066	ERR1473594
+HDBR654	11930	11 post conception weeks	temporal lobe	46, xx	sequencing batch:FC2014_075	ERR1473584
+HDBR910	11942	11 post conception weeks	temporal lobe	46, xx	sequencing batch:FC2014_080	ERR1473588
+HDBR915	11942	11 post conception weeks	temporal lobe	46, xx	sequencing batch:FC2014_080	ERR1473589
+HDBR604	11885	12 post conception weeks	temporal lobe	46, xy	sequencing batch:FC2014_043	ERR1473566
+HDBR407	11845	9 post conception weeks	temporal lobe	46, xy	sequencing batch:FC2014_043	ERR1473574
+HDBR417	11845	9 post conception weeks	temporal lobe	46, xy	sequencing batch:FC2014_043	ERR1473575
+HDBR607	11885	12 post conception weeks	temporal lobe	46, xy	sequencing batch:FC2014_043	ERR1473582
+HDBR411	11845	9 post conception weeks	temporal lobe	46, xy	sequencing batch:FC2014_043	ERR1473590
+HDBR418	11845	9 post conception weeks	temporal lobe	46, xy	sequencing batch:FC2014_043	ERR1473591
+HDBR670	11841	10 post conception weeks	temporal lobe	46, xy	sequencing batch:FC2014_044	ERR1473585
+HDBR698	11921	17 post conception weeks	temporal lobe	46, xy	sequencing batch:FC2014_044	ERR1473587
+HDBR676	11841	10 post conception weeks	temporal lobe	46, xy	sequencing batch:FC2014_044	ERR1473599
+HDBR611	11885	12 post conception weeks	temporal lobe	46, xy	sequencing batch:FC2014_047	ERR1473583
+HDBR551	11900	14 post conception weeks	temporal lobe	46, xy	sequencing batch:FC2014_055	ERR1473564
+HDBR552	11900	14 post conception weeks	temporal lobe	46, xy	sequencing batch:FC2014_055	ERR1473565
+HDBR581	11834	12 post conception weeks	temporal lobe	46, xy	sequencing batch:FC2014_055	ERR1473580
+HDBR582	11834	12 post conception weeks	temporal lobe	46, xy	sequencing batch:FC2014_055	ERR1473596
+HDBR585	11834	12 post conception weeks	temporal lobe	46, xy	sequencing batch:FC2014_058	ERR1473581
+HDBR586	11834	12 post conception weeks	temporal lobe	46, xy	sequencing batch:FC2014_058	ERR1473597
+HDBR601	11885	12 post conception weeks	temporal lobe	46, xy	sequencing batch:FC2014_058	ERR1473598
+HDBR619	1110	11 post conception weeks	temporal lobe	unknown	sequencing batch:FC2014_047	ERR1473567
+HDBR828	1117	15 post conception weeks	temporal lobe	unknown	sequencing batch:FC2014_050	ERR1473570
+HDBR540	1117	15 post conception weeks	temporal lobe	unknown	sequencing batch:FC2014_054, FC2014_151	ERR1473562
+HDBR540	1117	15 post conception weeks	temporal lobe	unknown	sequencing batch:FC2014_054, FC2014_151	ERR1473563
+HDBR575	1118	12 post conception weeks	temporal lobe	unknown	sequencing batch:FC2014_055	ERR1473579
+HDBR858	1118	12 post conception weeks	temporal lobe	unknown	sequencing batch:FC2014_058	ERR1473600
+HDBR873	1123	11 post conception weeks	temporal lobe	unknown	sequencing batch:FC2014_065	ERR1473571
+HDBR874	1111	11 post conception weeks	temporal lobe	unknown	sequencing batch:FC2014_065	ERR1473572
+HDBR872	1110	11 post conception weeks	temporal lobe	unknown	sequencing batch:FC2014_065	ERR1473601
