@@ -1,0 +1,167 @@
+---
+title: "Pseudotime analysis in prenatal forebrain"
+author: "Clara Benoit-Pilven"
+date: "5/12/2021"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+---
+
+```{r library, echo=FALSE}
+suppressPackageStartupMessages(library(GenomicFeatures))
+suppressPackageStartupMessages(library(edgeR))
+suppressPackageStartupMessages(library(limma))
+suppressPackageStartupMessages(library(SummarizedExperiment))
+suppressPackageStartupMessages(library(phenopath))
+suppressPackageStartupMessages(library(ade4))
+suppressPackageStartupMessages(library(factoextra))
+suppressPackageStartupMessages(library(ggplot2))
+#suppressPackageStartupMessages(library(ggpubr))
+#suppressPackageStartupMessages(library(dplyr))
+#suppressPackageStartupMessages(library(tidyr))
+```
+
+```{r, setup, include=FALSE, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+# Load and prepare data
+
+## Load the counts and the phenotype data
+
+```{r load_data, echo=FALSE}
+load("data/1-preprocessing/counts_forebrain_phenotypes.RData")
+```
+
+
+## Prepare metadata
+
+```{r prepare_metadata, echo=FALSE}
+Sex <- as.factor(phenotypes$assigned_sex)
+DevStage <- phenotypes$newDevStage
+Individual <- as.factor(phenotypes$ind)
+ForebrainRegion <- phenotypes$newBrainRegion
+Batch <- phenotypes$batch
+# metadata
+metadata <- data.frame(Sex = Sex, DevStage = DevStage, Individual = Individual, ForebrainRegion = ForebrainRegion, Batch = Batch)
+rownames(metadata) <- phenotypes$experiment_name
+```
+
+
+
+## Convert counts in TPM values
+
+Load the annotation file.
+
+```{r load_annotation, echo=FALSE}
+# First, import the GTF-file that you have also used as input for htseq-count
+txdb <- makeTxDbFromGFF("data/0-input/gencode.v28.annotation.gff3",format="gff")
+
+# then collect the exons per gene id
+exons.list.per.gene <- exonsBy(txdb,by="gene")
+
+# then for each gene, reduce all the exons to a set of non overlapping exons, calculate their lengths (widths) and sum them
+exonic.gene.sizes <-  sum(width(reduce(exons.list.per.gene)))
+#names(exonic.gene.sizes)=matrix(unlist(strsplit(as.character(names(exonic.gene.sizes)),"\\.")),ncol=2,byrow=T)[,1]
+names(exonic.gene.sizes) <- names(exonic.gene.sizes)
+
+gtf.gene.length_df <- cbind(data.frame(names(exonic.gene.sizes)),as.numeric(exonic.gene.sizes))
+names(gtf.gene.length_df) <- c("gene_id","size")
+gtf.gene.length_df <- unique(gtf.gene.length_df)
+
+# Merge gene size with gene metadata
+gene_metadata <- merge(x$genes, gtf.gene.length_df)
+x$genes <- gene_metadata
+```
+
+Transform the counts data in log(TPM+1).
+
+```{r transform_counts, echo=FALSE}
+counts2tpm <- function(counts, genes){
+  # RPK = count/geneLength(kb)
+  counts <- counts/(genes$size*1e-3)
+  # Sum of RPK for each sample
+  library_depth <- colSums(counts)
+  # TPM = RPK/(sum(RPK)/1e6)
+  counts <- sweep(counts, 2, library_depth/1e6,`/`)
+  return(counts)
+}
+tpm <- counts2tpm(x$counts, x$genes)
+logTpm <- log2(tpm+1)
+rownames(logTpm) <- x$genes$gene_name
+```
+
+
+
+## Format data in a SummarizedExperiment object
+
+Select the genes to use in the phenopath analysis.
+
+```{r select_genes, echo=FALSE}
+# select higly variable genes
+variance <- rowVars(logTpm)
+ntop <- min(2000, dim(logTpm)[1])
+selectntop <- order(variance, decreasing=TRUE)[seq_len(ntop)]
+selectedCounts <- logTpm[selectntop,]
+```
+
+Create the SummarizedExperiment object
+
+```{r summarizedExperiment_obj, echo=FALSE}
+# initialize sce object
+sce <- SummarizedExperiment(assays = list(exprs = selectedCounts), 
+                            colData = metadata)
+sce
+```
+
+# Phenopath analysis
+
+## With Sex only
+
+```{r fit_phenopath_model, echo=FALSE}
+x_mat <- model.matrix(~ Sex)
+fit <- phenopath(sce, x_mat, elbo_tol = 1e-6, thin = 20)
+```
+
+Elbo plot
+
+```{r elbo_plot, echo=FALSE}
+p <- plot_elbo(fit)
+p
+# save plot
+ggsave("Elbo_plot.png",
+       path = "images/2-pseudotime/",
+       plot = p, width = 12, height = 10, units = "cm")
+```
+
+Summary of the pseudotime.
+
+```{r summary_pseudotime, echo=FALSE}
+summary(trajectory(fit))
+```
+
+
+
+Add pseudotime to metadata.
+
+```{r infered_pseudotime, echo=FALSE}
+metadata$pseudotime <- trajectory(fit)
+```
+
+## Save the pseudotime results in a RData
+
+```{r save_pseudotime_res, echo=FALSE}
+save(fit, sce, x_mat, selectedCounts, metadata, file = "data/2-pseudotime/forebrain_pseudotime_analysis.RData")
+```
+
+```{r save_metadata, echo=FALSE}
+save(metadata, file = "data/2-pseudotime/forebrain_metadata_pseudotime.RData")
+```
+
+
+# Session Info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```
