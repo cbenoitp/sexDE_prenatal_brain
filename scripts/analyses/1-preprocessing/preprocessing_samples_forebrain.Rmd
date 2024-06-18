@@ -19,7 +19,7 @@ suppressPackageStartupMessages( library(RColorBrewer) )
 suppressPackageStartupMessages( library(pheatmap) )
 ```
 
-```{r, setup, include=FALSE, echo=FALSE}
+```{r setup, echo=FALSE}
 knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
 ```
 
