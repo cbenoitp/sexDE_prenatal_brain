@@ -17,9 +17,6 @@ suppressPackageStartupMessages(library(phenopath))
 suppressPackageStartupMessages(library(ade4))
 suppressPackageStartupMessages(library(factoextra))
 suppressPackageStartupMessages(library(ggplot2))
-#suppressPackageStartupMessages(library(ggpubr))
-#suppressPackageStartupMessages(library(dplyr))
-#suppressPackageStartupMessages(library(tidyr))
 ```
 
 ```{r, setup, include=FALSE, echo=FALSE}
