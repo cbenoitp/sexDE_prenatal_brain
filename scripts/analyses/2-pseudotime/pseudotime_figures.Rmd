@@ -18,9 +18,6 @@ suppressPackageStartupMessages(library(ggplot2))
 suppressPackageStartupMessages(library(ggpubr))
 suppressPackageStartupMessages(library(dplyr))
 suppressPackageStartupMessages(library(tidyr))
-#suppressPackageStartupMessages(library(forcats))
-#suppressPackageStartupMessages(library(ltm))
-#suppressPackageStartupMessages(library(Kendall))
 ```
 
 ```{r setup, echo=FALSE}
