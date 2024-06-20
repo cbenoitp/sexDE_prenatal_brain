@@ -1,0 +1,138 @@
+---
+title: "Differential analysis in prenatal forebrain using developmental stages as covariates"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+---
+
+```{r load_libraries, echo=FALSE}
+suppressPackageStartupMessages( library(edgeR) )
+suppressPackageStartupMessages( library(limma) )
+suppressPackageStartupMessages( library(qvalue) )
+suppressPackageStartupMessages( library(sva) )
+suppressPackageStartupMessages( library(doParallel) )
+suppressPackageStartupMessages( library(variancePartition) )
+suppressPackageStartupMessages( library(ggplot2) )
+```
+
+```{r parallel_processing_param, echo=FALSE}
+# Specify parallel processing parameters
+# this is used implicitly by dream() to run in parallel
+param <- SnowParam(4, "SOCK", progressbar=TRUE)
+register(param)
+```
+
+```{r setup, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+
+# Prepare data
+
+## Load the counts and the phenotype data
+
+```{r load_data, echo=FALSE}
+load("data/1-preprocessing/counts_forebrain_phenotypes.RData")
+```
+
+## Prepare metadata
+
+```{r prepare_metadata, echo=FALSE}
+Sex <- as.factor(phenotypes$assigned_sex)
+DevStage <- phenotypes$newDevStage
+Individual <- as.factor(phenotypes$ind)
+# metadata
+metadata <- data.frame(Sex = Sex, DevStage = DevStage, Individual = Individual)
+rownames(metadata) <- phenotypes$experiment_name
+# design for voomDream (the variable to be tested must be a fixed effect)
+form <- ~ Sex + (1|DevStage) + (1|Individual)
+# design for sva computation
+design <- model.matrix(~Sex+DevStage)
+```
+
+## Prepare counts for DE analysis
+
+Estimate weights using linear mixed model of dream
+
+```{r voom_norm, echo=FALSE}
+png('images/3-DE/analysis_devStage/trendplot/trendplot_VoomDream_forebrain_dev_region_ind.png')
+vobjDream <- voomWithDreamWeights(x, form, metadata, plot = TRUE)
+dev.off()
+```
+
+Estimate surrogates variables (svas) and add them to the model.
+
+```{r estimate_sva, echo=FALSE}
+n.sv <- num.sv(vobjDream$E, design, method = "be")
+sva.obj <- sva(vobjDream$E, design, method = "irw", n.sv = n.sv)
+# add svas to metadata
+metadata <- cbind(metadata, sva.obj$sv)
+names(metadata) <- c("Sex", "DevStage", "Individual", paste0("X", 1:n.sv))
+# include svas in formula
+form <- reformulate(c("Sex", "(1|DevStage)", "(1|Individual)", paste0("X", 1:n.sv)))
+```
+
+Redo voom normalization with new design matrix (containing svas).
+
+```{r voom_norm_svas, echo=FALSE}
+y <- voomWithDreamWeights(x, form, metadata, plot = TRUE)
+```
+
+
+## Sex-Differential Expression (sex-DE) analysis
+
+Fit the dream model on each gene.
+
+```{r sexDE_analysis, echo=FALSE}
+# By default, uses the Satterthwaite approximation for the hypothesis test
+fitmm <- dream(y, form, metadata)
+fitmm2 <- topTable(fitmm, coef = 2, number = 30000, sort.by = "none") 
+fitmm2$qvalue <- qvalue(fitmm2$P.Value)$qvalues
+```
+
+Compute the mean expression of each genes for male and female.
+
+```{r compute_mean_expr, echo=FALSE}
+fitmm2$Male <- rowMeans(y$E[which(y$genes$gene_id %in% fitmm2$gene_id), which(Sex==1)]) # for male samples
+fitmm2$VarMale <- rowVars(y$E[which(y$genes$gene_id %in% fitmm2$gene_id), which(Sex==1)])
+fitmm2$Female <- rowMeans(y$E[which(y$genes$gene_id %in% fitmm2$gene_id), which(Sex==2)]) # for female samples
+fitmm2$VarFemale <- rowVars(y$E[which(y$genes$gene_id %in% fitmm2$gene_id), which(Sex==2)])
+```
+
+Save results.
+
+```{r write_output, echo=FALSE}
+write.table(fitmm2, 
+            "data/3-DE/analysis_devStage/VoomDream_topTable_forebrain_dev_sva_ind.txt", 
+            col.names = TRUE, row.names = FALSE, quote = FALSE)
+```
+
+
+## Variance partition plot
+
+```{r compute_variance_explained, echo=FALSE}
+# compute the variance explained by each variable in the model
+form <- reformulate(c("(1|Sex)", "(1|DevStage)", "(1|Individual)", paste0("X", 1:n.sv)))
+vp <- fitExtractVarPartModel(y, form, metadata)
+```
+
+
+```{r plot_variance_explained, echo=FALSE}
+# variance partition violin plot
+p <- plotVarPart(sortCols(vp))
+p
+ggsave("violinPlot_forebrain_VoomDream_dev_sva_ind.png", plot = p, 
+       path = "images/3-DE/analysis_devStage/variancePartition/",
+       width = 25, height = 12, units = "cm", create.dir = TRUE)
+```
+
+
+
+# Session info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```
