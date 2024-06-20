@@ -637,6 +637,7 @@ Format the data for the upset plot from the ComplexHeatmap package.
 
 ```{r format_data_upset, echo=FALSE}
 combination_matrix <- make_comb_mat(merged_data[c(10, 11, 13, 14)])
+combination_matrix <- combination_matrix[comb_degree(combination_matrix) > 0]
 ```
 
 
