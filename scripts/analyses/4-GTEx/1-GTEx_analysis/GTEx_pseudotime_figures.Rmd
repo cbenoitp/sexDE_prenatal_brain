@@ -1,0 +1,397 @@
+---
+title: "Pseudotime analysis in adult forebrain"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+---
+
+```{r library, echo=FALSE}
+suppressPackageStartupMessages(library(edgeR))
+suppressPackageStartupMessages(library(limma))
+suppressPackageStartupMessages(library(SummarizedExperiment))
+suppressPackageStartupMessages(library(ade4))
+suppressPackageStartupMessages(library(factoextra))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(ggpubr))
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(tidyr))
+```
+
+```{r setup, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+
+# Load and prepare data
+
+## Load the counts and the phenotype data
+
+```{r load_data, echo=FALSE}
+load("data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_dream_counts_phenotypes.RData")
+```
+
+## Load pseudotime results
+
+```{r load_pseudotime, echo=FALSE}
+load("data/4-GTEx/1-GTEx_analysis/GTEx_v8_forebrain_pseudotime_analysis.RData")
+```
+
+## Add age information
+
+We  also need to load the table containing the age of the individuals.
+
+```{r load_age, echo=FALSE}
+phenoAge <- read.table("data/4-GTEx/1-GTEx_analysis/GTEx_Analysis_v8_Annotations_SubjectPhenotypesDS.txt",
+                       sep = "\t", header = TRUE)
+```
+
+And then merge the age information in the phenotype data frame.
+
+```{r merge_pheno, echo=FALSE}
+metadata$sample <- rownames(metadata)
+metadata <- merge(metadata, phenoAge[, c(1,3)], by = "SUBJID", all.x = TRUE)
+names(metadata) <- c("SUBJID", "SEX", "DTHHRDY", "TISSUE", "pseudotime", "Sample", "AGE")
+metadata$AGE <- as.factor(metadata$AGE)
+```
+
+
+# Plots
+
+## Histogram
+
+Plot the distribution of the pseudotime.
+
+```{r distrib_pseudotime, echo=FALSE}
+hist(metadata$pseudotime, main = "Histogram of pseudotime", xlab = "Pseudotime")
+png("images/4-GTEx/1-GTEx_analysis/pseudotime_analysis/distrib_pseudotime.png",
+    width = 900, height = 800)
+hist(metadata$pseudotime, main = "Histogram of pseudotime", xlab = "Pseudotime")
+dev.off() 
+```
+
+## PCA plots
+
+Next, we plot the samples in a PCA plot coloring by pseudotime for both sexes together and for each sex separatly
+
+```{r select_counts_PCA, echo=FALSE}
+# select higly variable genes
+variance <- rowVars(x$counts)
+ntop <- min(2000, dim(x$counts)[1])
+selectntop <- order(variance, decreasing=TRUE)[seq_len(ntop)]
+selectedCounts_PCA <- x$counts[selectntop,]
+```
+
+```{r do_PCA, echo=FALSE}
+pcaHVG <- dudi.pca(t(selectedCounts_PCA), scannf = FALSE, nf = 10)
+varExplained <- pcaHVG$eig/sum(pcaHVG$eig)*100
+pcaHVG.ind <- get_pca_ind(pcaHVG)
+pcaHVG.var <- get_pca_var(pcaHVG)
+```
+
+```{r plot_PCA_pseudotime_color, echo=FALSE}
+p <- ggplot(pcaHVG.ind$coord, aes(x = Dim.1, y = Dim.2))
+p <- p + geom_point(aes(color = metadata$pseudotime))
+p <- p + labs(title = "PCA" , 
+              x = sprintf("PC%s (%s %%)", 1, round(varExplained[1])), 
+              y = sprintf("PC%s (%s %%)", 2, round(varExplained[2])))
+p <- p + theme_minimal()
+p <- p + scale_color_gradient(low = "blueviolet", high = "gold", name = "pseudotime")
+p
+# save plot
+ggsave("PCA_1vs2.png",
+       path = "images/4-GTEx/1-GTEx_analysis/PCA/",
+       plot = p, width = 12, height = 10, units = "cm", create.dir = TRUE)
+```
+
+```{r plot_PCA_pseudotime_color_2vs3, echo=FALSE}
+p <- ggplot(pcaHVG.ind$coord, aes(x = Dim.2, y = Dim.3))
+p <- p + geom_point(aes(color = metadata$pseudotime))
+p <- p + labs(title = "PCA" , 
+              x = sprintf("PC%s (%s %%)", 2, round(varExplained[2])), 
+              y = sprintf("PC%s (%s %%)", 3, round(varExplained[3])))
+p <- p + theme_minimal()
+p <- p + scale_color_gradient(low = "blueviolet", high = "gold", name = "pseudotime")
+p
+# save plot
+ggsave("PCA_2vs3.png",
+       path = "images/4-GTEx/1-GTEx_analysis/PCA/",
+       plot = p, width = 12, height = 10, units = "cm")
+```
+
+
+Faceting using the sex of the samples.
+
+```{r plot_PCA_pseudotime_color_sex_facet, echo=FALSE}
+dfPlot <- merge(pcaHVG.ind$coord, metadata, by.x = 0, by.y = "Sample")
+p <- ggplot(dfPlot, aes(x = Dim.1, y = Dim.2))
+p <- p + geom_point(aes(color = pseudotime))
+p <- p + labs(title = "PCA" , 
+              x = sprintf("PC%s (%s %%)", 1, round(varExplained[1])), 
+              y = sprintf("PC%s (%s %%)", 2, round(varExplained[2])))
+p <- p + theme_minimal()
+p <- p + scale_color_gradient(low = "blueviolet", high = "gold", name = "pseudotime")
+p <- p + facet_grid(. ~ dfPlot$SEX)
+p
+# save plot
+ggsave("PCA_1vs2_sex.png",
+       path = "images/4-GTEx/1-GTEx_analysis/PCA/",
+       plot = p, width = 15, height = 10, units = "cm")
+```
+
+```{r plot_PCA_pseudotime_color_sex_facet_2vs3, echo=FALSE}
+dfPlot <- merge(pcaHVG.ind$coord, metadata, by.x = 0, by.y = "Sample")
+p <- ggplot(dfPlot, aes(x = Dim.2, y = Dim.3))
+p <- p + geom_point(aes(color = pseudotime))
+p <- p + labs(title = "PCA" , 
+              x = sprintf("PC%s (%s %%)", 2, round(varExplained[2])), 
+              y = sprintf("PC%s (%s %%)", 3, round(varExplained[3])))
+p <- p + theme_minimal()
+p <- p + scale_color_gradient(low = "blueviolet", high = "gold", name = "pseudotime")
+p <- p + facet_grid(. ~ dfPlot$SEX)
+p
+# save plot
+ggsave("PCA_2vs3_sex.png",
+       path = "images/4-GTEx/1-GTEx_analysis/PCA/",
+       plot = p, width = 15, height = 10, units = "cm")
+```
+
+Faceting using the tissue of origin of the samples.
+
+```{r plot_PCA_pseudotime_color_tissue_facet, echo=FALSE}
+dfPlot <- merge(pcaHVG.ind$coord, metadata, by.x = 0, by.y = "Sample")
+p <- ggplot(dfPlot, aes(x = Dim.1, y = Dim.2))
+p <- p + geom_point(aes(color = pseudotime))
+p <- p + labs(title = "PCA" , 
+              x = sprintf("PC%s (%s %%)", 1, round(varExplained[1])), 
+              y = sprintf("PC%s (%s %%)", 2, round(varExplained[2])))
+p <- p + theme_minimal()
+p <- p + scale_color_gradient(low = "blueviolet", high = "gold", name = "pseudotime")
+p <- p + facet_grid(. ~ dfPlot$TISSUE)
+p
+# save plot
+ggsave("PCA_1vs2_tissue.png",
+       path = "images/4-GTEx/1-GTEx_analysis/PCA/",
+       plot = p, width = 30, height = 10, units = "cm")
+```
+
+Faceting using the cause of death of the individuals.
+
+```{r plot_PCA_pseudotime_color_causeDeath_facet, echo=FALSE}
+dfPlot <- merge(pcaHVG.ind$coord, metadata, by.x = 0, by.y = "Sample")
+p <- ggplot(dfPlot, aes(x = Dim.1, y = Dim.2))
+p <- p + geom_point(aes(color = pseudotime))
+p <- p + labs(title = "PCA" , 
+              x = sprintf("PC%s (%s %%)", 1, round(varExplained[1])), 
+              y = sprintf("PC%s (%s %%)", 2, round(varExplained[2])))
+p <- p + theme_minimal()
+p <- p + scale_color_gradient(low = "blueviolet", high = "gold", name = "pseudotime")
+p <- p + facet_grid(. ~ dfPlot$DTHHRDY)
+p
+# save plot
+ggsave("PCA_1vs2_causeDeath.png",
+       path = "images/4-GTEx/1-GTEx_analysis/PCA/",
+       plot = p, width = 30, height = 10, units = "cm")
+```
+
+Do PCA plots colored by the different covariates available: sex, brain subregion, cause of death and age group.
+
+```{r PCA_sex, echo=FALSE}
+p <- ggplot(pcaHVG.ind$coord, aes(x = Dim.1, y = Dim.2))
+p <- p + geom_point(aes(color = SEX))
+p <- p + labs(title = "PCA" , 
+              x = sprintf("PC%s (%s %%)", 1, round(varExplained[1])), 
+              y = sprintf("PC%s (%s %%)", 2, round(varExplained[2])))
+p <- p + theme_minimal()
+p
+# save plot
+ggsave("PCA_sex_1vs2.png",
+       path = "images/4-GTEx/1-GTEx_analysis/PCA/",
+       plot = p, width = 12, height = 10, units = "cm")
+```
+
+```{r PCA_tissue, echo=FALSE}
+p <- ggplot(pcaHVG.ind$coord, aes(x = Dim.1, y = Dim.2))
+p <- p + geom_point(aes(color = TISSUE))
+p <- p + labs(title = "PCA" , 
+              x = sprintf("PC%s (%s %%)", 1, round(varExplained[1])), 
+              y = sprintf("PC%s (%s %%)", 2, round(varExplained[2])))
+p <- p + theme_minimal()
+p
+# save plot
+ggsave("PCA_tissue_1vs2.png",
+       path = "images/4-GTEx/1-GTEx_analysis/PCA/",
+       plot = p, width = 12, height = 10, units = "cm")
+```
+
+```{r PCA_causeDeath, echo=FALSE}
+p <- ggplot(pcaHVG.ind$coord, aes(x = Dim.1, y = Dim.2))
+p <- p + geom_point(aes(color = DTHHRDY))
+p <- p + labs(title = "PCA" , 
+              x = sprintf("PC%s (%s %%)", 1, round(varExplained[1])), 
+              y = sprintf("PC%s (%s %%)", 2, round(varExplained[2])))
+p <- p + theme_minimal()
+p
+# save plot
+ggsave("PCA_causeDeath_1vs2.png",
+       path = "images/4-GTEx/1-GTEx_analysis/PCA/",
+       plot = p, width = 12, height = 10, units = "cm")
+```
+
+```{r PCA_age, echo=FALSE}
+p <- ggplot(pcaHVG.ind$coord, aes(x = Dim.1, y = Dim.2))
+p <- p + geom_point(aes(color = metadata$AGE))
+p <- p + labs(title = "PCA" , 
+              x = sprintf("PC%s (%s %%)", 1, round(varExplained[1])), 
+              y = sprintf("PC%s (%s %%)", 2, round(varExplained[2])))
+p <- p + theme_minimal()
+p
+# save plot
+ggsave("PCA_age_1vs2.png",
+       path = "images/4-GTEx/1-GTEx_analysis/PCA/",
+       plot = p, width = 12, height = 10, units = "cm")
+```
+
+
+# Test pseudotime consistency per individuals
+
+Check that for each individual, the pseudotimes of the different samples are similar.
+
+```{r check_pseudotime_individuals, echo=FALSE}
+sdPseudotime_ind <- metadata %>% group_by(SUBJID) %>% summarise(sd = sd(pseudotime))
+meanSdPseudotime <- mean(sdPseudotime_ind$sd, na.rm = TRUE)
+# Is the sd as big if we permute the pseudotimes?
+meanSdPseudotime_permut <- c()
+for (i in 1:1000){
+  permutated_pseudotime <- sample(metadata$pseudotime)
+  tmp_df <- data.frame(SUBJID = metadata$SUBJID, pseudotime = permutated_pseudotime)
+  tmp_sdPseudotime_ind <- tmp_df %>% group_by(SUBJID) %>% summarise(sd = sd(pseudotime))
+  meanSdPseudotime_permut <- c(meanSdPseudotime_permut, mean(tmp_sdPseudotime_ind$sd, na.rm = TRUE))
+}
+meanSdPseudotime_permut <- as.data.frame(meanSdPseudotime_permut)
+# pvalue
+(1 + sum(meanSdPseudotime_permut<meanSdPseudotime))/1000
+# Plot
+p <- ggplot(meanSdPseudotime_permut, aes(x = meanSdPseudotime_permut))
+p <- p + geom_histogram(binwidth = 0.01, fill = "grey", color = "black")
+p <- p + geom_vline(xintercept = meanSdPseudotime,
+                    color = "red")
+p <- p + labs(x = "SD of the pseudotime per individuals")
+p <- p + theme_minimal()
+p
+# save plot
+ggsave("permutation_sd_pseudotime.png",
+       path = "images/4-GTEx/1-GTEx_analysis/pseudotime_analysis/",
+       plot = p, width = 15, height = 10, units = "cm", create.dir = TRUE)
+```
+
+
+# Correlation of pseudotime with age group
+
+Convert the developmental stages to a continuous variable.
+
+```{r convert2continuous, echo=FALSE}
+metadata$AgeCont <- as.integer(metadata$AGE)
+```
+
+### For both sexes
+
+Compute Kendall correlation between the pseudotime and the new continuous developmental stage.
+
+```{r correlation_kendall, echo=FALSE}
+corTestRes_Kendall <- cor.test(metadata$AgeCont, metadata$pseudotime, method = "kendall")
+corTestRes_Kendall
+```
+
+And also do a scatter plot of the pseudotime and the continuous developmental stage.
+
+```{r scatter_plot, echo=FALSE}
+p <- ggplot(metadata, aes(AGE, pseudotime))
+p <- p + geom_boxplot(fill = "#DCDCDC", outlier.shape = NA)
+p <- p + theme_minimal() + xlab("Age groups")
+p <- p + geom_jitter(aes(color = SEX), position=position_jitter(0.2), show.legend = FALSE)
+p <- p + annotate("text", x = 1.5, y = 1.1, label = sprintf("tau = %.2f\n p-value = %.2e", corTestRes_Kendall$estimate, corTestRes_Kendall$p.value))
+p <- p + scale_color_manual(values = c("1" = "darkblue", "2" = "darkred"))
+p
+# save plot
+ggsave("boxplot_age_vs_pseudotime.png", 
+       path = "images/4-GTEx/1-GTEx_analysis/pseudotime_analysis/",
+       plot = p, width = 15, height = 10, units = "cm")
+```
+
+Test difference in pseudotime variance between males and females.
+
+```{r test_variance_sex, echo=FALSE}
+var.test(pseudotime ~ SEX, metadata, 
+         alternative = "two.sided")
+```
+
+### For males only
+
+Select only male samples.
+
+```{r select_males, echo=FALSE}
+metadata_males <- metadata[which(metadata$SEX == 1),]
+```
+
+Compute Kendall correlation between the pseudotime and the new continuous age groups.
+
+```{r correlation_kendall_males, echo=FALSE}
+corTestRes_Kendall <- cor.test(metadata$AgeCont, metadata$pseudotime, method = "kendall")
+corTestRes_Kendall
+```
+
+
+And also do a scatter plot of the pseudotime and the continuous developmental stage.
+
+```{r scatter_plot_males, echo=FALSE}
+p <- ggplot(metadata_males, aes(AGE, pseudotime))
+p <- p + geom_boxplot(fill = "#a1c1e6")
+p <- p + theme_minimal()
+p <- p + geom_jitter(position=position_jitter(0.2))
+p <- p + annotate("text", x = 1.5, y = 1.1, label = sprintf("tau = %.2f\n p-value = %.2e", corTestRes_Kendall$estimate, corTestRes_Kendall$p.value))
+p
+# save plot
+ggsave("boxplot_age_vs_pseudotime_males.png",
+       path = "images/4-GTEx/1-GTEx_analysis/pseudotime_analysis/",
+       plot = p, width = 15, height = 10, units = "cm")
+```
+
+### For females only
+
+Select only female samples.
+
+```{r select_females, echo=FALSE}
+metadata_females <- metadata[which(metadata$SEX == 2),]
+```
+
+Compute Kendall correlation between the pseudotime and the new continuous age groups.
+
+```{r correlation_kendall_females, echo=FALSE}
+corTestRes_Kendall <- cor.test(metadata$AgeCont, metadata$pseudotime, method = "kendall")
+corTestRes_Kendall
+```
+
+And also do a scatter plot of the pseudotime and the continuous developmental stage.
+
+```{r scatter_plot_females, echo=FALSE}
+p <- ggplot(metadata_females, aes(AGE, pseudotime))
+p <- p + geom_boxplot(fill = "#e0a3aa")
+p <- p + theme_minimal()
+p <- p + geom_jitter(position=position_jitter(0.2))
+p <- p + annotate("text", x = 1.5, y = 1.1, label = sprintf("tau = %.2f\n p-value = %.2e", corTestRes_Kendall$estimate, corTestRes_Kendall$p.value))
+p
+# save plot
+ggsave("boxplot_devStages_vs_pseudotime_females.png",
+       path = "images/4-GTEx/1-GTEx_analysis/pseudotime_analysis/",
+       plot = p, width = 15, height = 10, units = "cm")
+```
+
+
+# Session Info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```

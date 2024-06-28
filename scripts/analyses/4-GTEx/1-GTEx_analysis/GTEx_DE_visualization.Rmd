@@ -1,0 +1,544 @@
+---
+title: "Visualize GTEx DE results"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+---
+
+```{r load_libraries, echo=FALSE}
+suppressPackageStartupMessages( library(edgeR) )
+suppressPackageStartupMessages( library(limma) )
+suppressPackageStartupMessages( library(SummarizedExperiment) )
+suppressPackageStartupMessages( library(EnhancedVolcano) )
+suppressPackageStartupMessages( library(tidyverse) )
+suppressPackageStartupMessages( library(ggpubr) )
+suppressPackageStartupMessages( library(matrixStats) )
+suppressPackageStartupMessages( library(ComplexHeatmap) )
+suppressPackageStartupMessages( library(variancePartition) )
+```
+
+```{r setup, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+Parameters
+```{r thresholds, echo=FALSE}
+threshold_qvalue <- 0.01
+```
+
+
+# Load and prepare DE results
+
+## Load DE results
+
+```{r load_sexDE_results, echo=FALSE}
+# load pseudotime data
+load("data/4-GTEx/1-GTEx_analysis/GTEx_v8_forebrain_pseudotime_analysis.RData")
+de_results <- read.table("data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_VoomDream_topTable_with_sva_ind_pseudotime_interaction.txt",
+                         header = TRUE)
+de_results_interaction <- read.table("data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_VoomDream_topTable_with_sva_ind_pseudotime_interaction_term.txt", 
+                                     header = TRUE)
+de_results_pseudotime <- read.table("data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_VoomDream_topTable_with_sva_ind_pseudotime_interaction_pseudotime.txt", 
+                                           header = TRUE)
+```
+
+## Filter DE results
+
+From the full list of sex-DE genes, remove XIST and the protein-coding genes on the Y-chromosome.
+
+```{r remove_training_genes, echo=FALSE}
+genes2remove <- c("XIST", as.character(de_results$gene_name[which(de_results$chr == "chrY" & de_results$gene_type == "protein_coding")]))
+de_results_filtered <- de_results[which(!de_results$gene_name %in% genes2remove),]
+genes2remove <- c("XIST", as.character(de_results_interaction$gene_name[which(de_results_interaction$chr == "chrY" & de_results_interaction$gene_type == "protein_coding")]))
+de_results_interaction_filtered <- de_results_interaction[which(!de_results_interaction$gene_name %in% genes2remove),]
+genes2remove <- c("XIST", as.character(de_results_pseudotime$gene_name[which(de_results_pseudotime$chr == "chrY" & de_results_pseudotime$gene_type == "protein_coding")]))
+de_results_pseudotime_filtered <- de_results_pseudotime[which(!de_results_pseudotime$gene_name %in% genes2remove),]
+```
+
+From the pseudotime and interaction-DE genes remove the genes used to compute the pseudotime.
+
+```{r remove_pseudotime_genes, echo=FALSE}
+genes2remove <- rownames(selectedCounts)
+de_results_interaction_filtered <- de_results_interaction_filtered[which(!de_results_interaction_filtered$gene_name %in% genes2remove),]
+de_results_pseudotime_filtered <- de_results_pseudotime_filtered[which(!de_results_pseudotime_filtered$gene_name %in% genes2remove),]
+```
+
+Create a data frame containing only the results for the autosomes.
+
+```{r autosomes, echo=FALSE}
+chrNonAuto <- c("chrY", "chrX", "chrM")
+de_results_autosomes <- de_results_filtered[which(!de_results_filtered$chr %in% chrNonAuto),]
+de_results_interaction_autosomes <- de_results_interaction_filtered[which(!de_results_interaction_filtered$chr %in% chrNonAuto),]
+de_results_pseudotime_autosomes <- de_results_pseudotime_filtered[which(!de_results_pseudotime_filtered$chr %in% chrNonAuto),]
+```
+
+# Statistics
+
+## Number of DE genes
+
+Number of sex-DE significant genes:
+
+```{r nbr_sexDE, echo=FALSE}
+nbr_sexDE_signif <- sum(de_results_filtered$qvalue < threshold_qvalue & abs(de_results_filtered$logFC) > 0)
+percent_sexDE_signif <- nbr_sexDE_signif/length(de_results_filtered$gene_name)*100
+print(sprintf("Number of sex-DE genes = %s (representing %.3f %% of the genes)", nbr_sexDE_signif, percent_sexDE_signif))
+# male-biased genes
+nbr_maleBiased_signif <- length(de_results_filtered$gene_name[which(de_results_filtered$logFC < 0 & de_results_filtered$qvalue < threshold_qvalue)])
+percent_maleBiased_signif <- nbr_maleBiased_signif/nbr_sexDE_signif*100
+print(sprintf("Number of male-biased genes = %s (%.3f %% of sex-DE genes)", nbr_maleBiased_signif, percent_maleBiased_signif))
+# female_biased genes
+nbr_femaleBiased_signif <- length(de_results_filtered$gene_name[which(de_results_filtered$logFC > 0 & de_results_filtered$qvalue < threshold_qvalue)])
+percent_femaleBiased_signif <- nbr_femaleBiased_signif/nbr_sexDE_signif*100
+print(sprintf("Number of female-biased genes = %s (%.3f %% of sex-DE genes)", nbr_femaleBiased_signif, percent_femaleBiased_signif))
+```
+
+```{r nbr_sexDE_auto, echo=FALSE}
+nbr_sexDE_auto_signif <- sum(de_results_autosomes$qvalue < threshold_qvalue & abs(de_results_autosomes$logFC) > 0)
+percent_sexDE_auto_signif <- nbr_sexDE_auto_signif/length(de_results_autosomes$gene_name)*100
+print(sprintf("Number of autosomal sex-DE genes = %s (representing %.3f %% of the genes)", nbr_sexDE_auto_signif, percent_sexDE_auto_signif))
+# male-biased genes
+nbr_maleBiased_auto_signif <- length(de_results_autosomes$gene_name[which(de_results_autosomes$logFC < 0 & de_results_autosomes$qvalue < threshold_qvalue)])
+percent_maleBiased_auto_signif <- nbr_maleBiased_auto_signif/nbr_sexDE_auto_signif*100
+print(sprintf("Number of autosomal male-biased genes = %s (%.3f %% of sex-DE genes)", nbr_maleBiased_auto_signif, percent_maleBiased_auto_signif))
+# female_biased genes
+nbr_femaleBiased_auto_signif <- length(de_results_autosomes$gene_name[which(de_results_autosomes$logFC > 0 & de_results_autosomes$qvalue < threshold_qvalue)])
+percent_femaleBiased_auto_signif <- nbr_femaleBiased_auto_signif/nbr_sexDE_auto_signif*100
+print(sprintf("Number of autosomal female-biased genes = %s (%.3f %% of sex-DE genes)", nbr_femaleBiased_auto_signif, percent_femaleBiased_auto_signif))
+```
+
+Number of interaction-DE significant genes:
+
+```{r nbr_interactionDE, echo=FALSE}
+nbr_sexDE_interaction_signif <- sum(de_results_interaction_filtered$qvalue < threshold_qvalue & abs(de_results_interaction_filtered$logFC) > 0)
+percent_sexDE_interaction_signif <- nbr_sexDE_interaction_signif/length(de_results_interaction_filtered$gene_name)*100
+print(sprintf("Number of interaction-DE genes = %s (representing %.3f %% of the genes)", nbr_sexDE_interaction_signif, percent_sexDE_interaction_signif))
+# male-biased genes
+nbr_maleBiased_interaction_signif <- length(de_results_interaction_filtered$gene_name[which(de_results_interaction_filtered$logFC < 0 & de_results_interaction_filtered$qvalue < threshold_qvalue)])
+percent_maleBiased_interaction_signif <- nbr_maleBiased_interaction_signif/nbr_sexDE_interaction_signif*100
+print(sprintf("Number of down interaction genes = %s (%.3f %% of sex-DE genes)", nbr_maleBiased_interaction_signif, percent_maleBiased_interaction_signif))
+# female_biased genes
+nbr_femaleBiased_interaction_signif <- length(de_results_interaction_filtered$gene_name[which(de_results_interaction_filtered$logFC > 0 & de_results_interaction_filtered$qvalue < threshold_qvalue)])
+percent_femaleBiased_interaction_signif <- nbr_femaleBiased_interaction_signif/nbr_sexDE_interaction_signif*100
+print(sprintf("Number of up interaction genes = %s (%.3f %% of sex-DE genes)", nbr_femaleBiased_interaction_signif, percent_femaleBiased_interaction_signif))
+```
+
+```{r nbr_interactionDE_auto, echo=FALSE}
+nbr_sexDE_interaction_auto_signif <- sum(de_results_interaction_autosomes$qvalue < threshold_qvalue & abs(de_results_interaction_autosomes$logFC) > 0)
+percent_sexDE_interaction_auto_signif <- nbr_sexDE_interaction_auto_signif/length(de_results_interaction_autosomes$gene_name)*100
+print(sprintf("Number of autosomal interaction-DE genes = %s (representing %.3f %% of the genes)", nbr_sexDE_interaction_auto_signif, percent_sexDE_interaction_auto_signif))
+# male-biased genes
+nbr_maleBiased_interaction_auto_signif <- length(de_results_interaction_autosomes$gene_name[which(de_results_interaction_autosomes$logFC < 0 & de_results_interaction_autosomes$qvalue < threshold_qvalue)])
+percent_maleBiased_interaction_auto_signif <- nbr_maleBiased_interaction_auto_signif/nbr_sexDE_interaction_auto_signif*100
+print(sprintf("Number of autosomal down interaction genes = %s (%.3f %% of sex-DE genes)", nbr_maleBiased_interaction_auto_signif, percent_maleBiased_interaction_auto_signif))
+# female_biased genes
+nbr_femaleBiased_interaction_auto_signif <- length(de_results_interaction_autosomes$gene_name[which(de_results_interaction_autosomes$logFC > 0 & de_results_interaction_autosomes$qvalue < threshold_qvalue)])
+percent_femaleBiased_interaction_auto_signif <- nbr_femaleBiased_interaction_auto_signif/nbr_sexDE_interaction_auto_signif*100
+print(sprintf("Number of autosomal up interaction genes = %s (%.3f %% of sex-DE genes)", nbr_femaleBiased_interaction_auto_signif, percent_femaleBiased_interaction_auto_signif))
+```
+
+Number of genes DE with pseudotime:
+
+```{r nbr_pseudotimeDE, echo=FALSE}
+nbr_sexDE_pseudotime_signif <- sum(de_results_pseudotime_filtered$qvalue < threshold_qvalue & abs(de_results_pseudotime_filtered$logFC) > 0)
+percent_sexDE_pseudotime_signif <- nbr_sexDE_pseudotime_signif/length(de_results_pseudotime_filtered$gene_name)*100
+print(sprintf("Number of pseudotime-DE genes = %s (representing %.3f %% of the genes)", nbr_sexDE_pseudotime_signif, percent_sexDE_pseudotime_signif))
+# up-regulated genes
+nbr_up_pseudotime_signif <- length(de_results_pseudotime_filtered$gene_name[which(de_results_pseudotime_filtered$logFC < 0 & de_results_pseudotime_filtered$qvalue < threshold_qvalue)])
+percent_up_pseudotime_signif <- nbr_up_pseudotime_signif/nbr_sexDE_pseudotime_signif*100
+print(sprintf("Number of up-regulated genes = %s (%.3f %% of pseudotime-DE genes)", nbr_up_pseudotime_signif, percent_up_pseudotime_signif))
+# down-regulated genes
+nbr_down_pseudotime_signif <- length(de_results_pseudotime_filtered$gene_name[which(de_results_pseudotime_filtered$logFC > 0 & de_results_pseudotime_filtered$qvalue < threshold_qvalue)])
+percent_down_pseudotime_signif <- nbr_down_pseudotime_signif/nbr_sexDE_pseudotime_signif*100
+print(sprintf("Number of down-regulated genes = %s (%.3f %% of pseudotime-DE genes)", nbr_down_pseudotime_signif, percent_down_pseudotime_signif))
+```
+
+```{r nbr_pseudotimeDE_auto, echo=FALSE}
+nbr_sexDE_pseudotime_auto_signif <- sum(de_results_pseudotime_autosomes$qvalue < threshold_qvalue & abs(de_results_pseudotime_autosomes$logFC) > 0)
+percent_sexDE_pseudotime_auto_signif <- nbr_sexDE_pseudotime_auto_signif/length(de_results_pseudotime_autosomes$gene_name)*100
+print(sprintf("Number of autosomal pseudotime-DE genes = %s (representing %.3f %% of the genes)", nbr_sexDE_pseudotime_signif, percent_sexDE_pseudotime_signif))
+```
+
+
+
+# Plots
+
+## Barplot representing the number of DE genes
+
+Create a barplot of each of the 3 analysis representing the number of DE genes (up and down regulated separatly).
+
+```{r function_barplot, echo=FALSE}
+barplot <- function(data, legend = TRUE, nrowLegend = 4, myTitle = "Nbr sex-DE genes",
+                    colors = c("Male-other" = "#053061", "Male-sex" = "#99b3ff", 
+                               "Female-other" = "#B2182B", "Female-sex" = "#f3a5ae"),
+                    labels = c("Female-other" = "Female autosomal genes", "Female-sex" = "Female sex chr. genes",
+                               "Male-other" = "Male autosomal genes", "Male-sex" = "Male sex chr. genes")){
+  p <- ggplot(data, aes(x = variable, y = nbr_genes, fill = coloring))
+  p <- p + geom_bar(stat = "identity")
+  p <- p + scale_fill_manual(values = colors, labels = labels)
+  p <- p + theme_bw() + labs(x = "", y = "")
+  p <- p + ggtitle(myTitle)
+  p <- p + theme(legend.position="bottom", legend.title = element_blank()) 
+  p <- p + guides(fill = guide_legend(nrow=nrowLegend, byrow=TRUE))
+  if (!legend){
+    p <- p +  guides(fill = "none")
+  }
+  return(p)
+}
+```
+
+### Sex-DE genes
+
+```{r barplot_sexDE, echo=FALSE}
+# prepare data
+sexChr <- c("chrY", "chrX")
+barplot_data_sexDE <- data.frame(variable = c("Female", "Female", "Male", "Male"), 
+                           chr = c("other", "sex", "other", "sex"), 
+                           nbr_genes = c(length(de_results_autosomes$gene_name[which(de_results_autosomes$qvalue < threshold_qvalue & de_results_autosomes$logFC > 0)]),
+                                         length(de_results_filtered$gene_name[which((de_results_filtered$chr %in% sexChr) & de_results_filtered$qvalue < threshold_qvalue & de_results_filtered$logFC > 0)]),
+                                         length(de_results_autosomes$gene_name[which(de_results_autosomes$qvalue < threshold_qvalue & de_results_autosomes$logFC < -0)]),
+                                         length(de_results_filtered$gene_name[which((de_results_filtered$chr %in% sexChr) & de_results_filtered$qvalue < threshold_qvalue & de_results_filtered$logFC < 0)]))
+)
+
+barplot_data_sexDE$coloring <- paste(barplot_data_sexDE$variable, barplot_data_sexDE$chr, sep = "-")
+barplot_data_sexDE <- barplot_data_sexDE[order(barplot_data_sexDE$nbr_genes, decreasing = TRUE),] # order data
+barplot_data_sexDE$coloring <- factor(barplot_data_sexDE$coloring, levels = c("Male-sex", "Female-sex", "Male-other" , "Female-other"))
+barplot_data_sexDE$variable <- factor(barplot_data_sexDE$variable, levels = c("Male", "Female"))
+
+# barplot
+p <- barplot(barplot_data_sexDE)
+p
+# save plot
+namePlot <- "barplot_nbr_sexDE_genes.png"
+ggsave(plot = p, namePlot, path = "images/4-GTEx/1-GTEx_analysis/barplot/",
+       width = 8, height = 17, units = "cm", create.dir = TRUE)
+```
+
+### Pseudotime-DE genes
+
+```{r barplot_pseudotimeDE, echo=FALSE}
+barplot_data_pseudoDE <- data.frame(variable = c("Up", "Down"),
+                           nbr_genes = c(length(de_results_pseudotime_filtered$gene_name[which(de_results_pseudotime_filtered$qvalue < threshold_qvalue & de_results_pseudotime_filtered$logFC > 0)]),
+                                         length(de_results_pseudotime_filtered$gene_name[which(de_results_pseudotime_filtered$qvalue < threshold_qvalue & de_results_pseudotime_filtered$logFC < 0)]))
+)
+
+barplot_data_pseudoDE$coloring <- barplot_data_pseudoDE$variable
+barplot_data_pseudoDE <- barplot_data_pseudoDE[order(barplot_data_pseudoDE$nbr_genes, decreasing = TRUE),] # order data
+
+# barplot
+p <- barplot(barplot_data_pseudoDE, myTitle = "Nbr pseudotime-DE genes",
+             colors = c("Up" = 'aquamarine4', "Down" = "chocolate"),
+             labels = c("Up" = 'Upregulated', "Down" = "Downregulated"), 
+             nrowLegend = 2)
+p
+# save plot
+namePlot <- "barplot_nbr_pseudotimeDE_genes.png"
+ggsave(plot = p, namePlot, path = "images/4-GTEx/1-GTEx_analysis/barplot/",
+       width = 8, height = 17, units = "cm")
+```
+
+### Interaction-DE genes
+
+```{r barplot_interactionDE, echo=FALSE}
+barplot_data_intDE <- data.frame(variable = c("Up", "Down"),
+                           nbr_genes = c(length(de_results_interaction_filtered$gene_name[which(de_results_interaction_filtered$qvalue < threshold_qvalue & de_results_interaction_filtered$logFC > 0)]),
+                                         length(de_results_interaction_filtered$gene_name[which(de_results_interaction_filtered$qvalue < threshold_qvalue & de_results_interaction_filtered$logFC < 0)]))
+)
+
+barplot_data_intDE$coloring <- barplot_data_intDE$variable
+barplot_data_intDE <- barplot_data_intDE[order(barplot_data_intDE$nbr_genes, decreasing = TRUE),] # order data
+
+# barplot
+p <- barplot(barplot_data_intDE, myTitle = "Nbr interaction-DE genes",
+             colors = c("Up" = 'tomato', "Down" = "lightblue"),
+             labels = c("Up" = 'More upregulated in females', "Down" = "More upregulated in males"), 
+             nrowLegend = 2)
+p
+# save plot
+namePlot <- "barplot_nbr_interactionDE_genes.png"
+ggsave(plot = p, namePlot, path = "images/4-GTEx/1-GTEx_analysis/barplot/",
+       width = 8, height = 16, units = "cm")
+```
+
+
+## Volcanoplot
+
+### Sex-DE genes
+
+```{r volcanoplot_sexDE_auto, echo=FALSE}
+keyvals <- rep('grey75', nrow(de_results_autosomes))
+names(keyvals) <- rep('NS', nrow(de_results_autosomes))
+
+keyvals[which(de_results_autosomes$logFC < 0 & de_results_autosomes$qvalue < threshold_qvalue)] <- 'darkblue'
+names(keyvals)[which(de_results_autosomes$logFC  < 0 & de_results_autosomes$qvalue < threshold_qvalue)] <- 'Signif. males'
+
+keyvals[which(de_results_autosomes$logFC > 0 & de_results_autosomes$qvalue < threshold_qvalue)] <- 'darkred'
+names(keyvals)[which(de_results_autosomes$logFC > 0 & de_results_autosomes$qvalue < threshold_qvalue)] <- 'Signif. females'
+
+unique(keyvals)
+unique(names(keyvals))
+
+p <- EnhancedVolcano(de_results_autosomes,
+                     lab = as.character(de_results_autosomes$gene_name),
+                     x = 'logFC',
+                     y = 'qvalue',
+                     xlim = c(-1.5,1.5),
+                     FCcutoff = 2,
+                     pCutoff = 10E-15,
+                     cutoffLineType = 'blank',
+                     colCustom = keyvals,
+                     legendPosition = "none",
+                     ylab = expression('-Log'[10]*' q-value'),
+                     subtitle = "sex-DE analysis in HDBR",
+                     caption = "autosomal genes")
+p
+
+# save plot
+namePlot <- 'volcanoplot_colored_HDBR_dream_forebrain_pseudotime_sva_ind_interaction_sexDE_auto.png'
+ggsave(namePlot, path = "images/4-GTEx/1-GTEx_analysis/volcanoplot/",
+       width = 12, height = 15, units = "cm", create.dir = TRUE)
+```
+
+### Pseudotime-DE genes
+
+```{r volcanoplot_pseudotimeDE, echo=FALSE}
+keyvals <- rep('grey75', nrow(de_results_pseudotime_filtered))
+names(keyvals) <- rep('NS', nrow(de_results_pseudotime_filtered))
+
+keyvals[which(de_results_pseudotime_filtered$logFC < 0 & de_results_pseudotime_filtered$qvalue < threshold_qvalue)] <- 'chocolate'
+names(keyvals)[which(de_results_pseudotime_filtered$logFC  < 0 & de_results_pseudotime_filtered$qvalue < threshold_qvalue)] <- 'Signif. Down'
+
+keyvals[which(de_results_pseudotime_filtered$logFC > 0 & de_results_pseudotime_filtered$qvalue < threshold_qvalue)] <- 'aquamarine4'
+names(keyvals)[which(de_results_pseudotime_filtered$logFC > 0 & de_results_pseudotime_filtered$qvalue < threshold_qvalue)] <- 'Signif. Up'
+
+unique(keyvals)
+unique(names(keyvals))
+
+p <- EnhancedVolcano(de_results_pseudotime_filtered,
+                     lab = as.character(de_results_pseudotime_filtered$gene_name),
+                     x = 'logFC',
+                     y = 'qvalue',
+                     FCcutoff = 10,
+                     pCutoff = 10E-10,
+                     cutoffLineType = 'blank',
+                     colCustom = keyvals,
+                     legendPosition = "none",
+                     ylab = expression('-Log'[10]*' q-value'),
+                     subtitle = "pseudotime-DE analysis in HDBR",
+                     caption = "all genes")
+p
+
+# save plot
+namePlot <- 'volcanoplot_colored_HDBR_dream_forebrain_pseudotime_sva_ind_interaction_pseudotimeDE.png'
+ggsave(namePlot, path = "images/4-GTEx/1-GTEx_analysis/volcanoplot/",
+       width = 12, height = 15, units = "cm")
+```
+
+### Interaction-DE genes
+
+```{r volcanoplot_interactionDE_auto, echo=FALSE}
+keyvals <- rep('grey75', nrow(de_results_interaction_autosomes))
+names(keyvals) <- rep('NS', nrow(de_results_interaction_autosomes))
+
+keyvals[which(de_results_interaction_autosomes$logFC < -0 & de_results_interaction_autosomes$qvalue < threshold_qvalue)] <- 'lightblue'
+names(keyvals)[which(de_results_interaction_autosomes$logFC  < -0 & de_results_interaction_autosomes$qvalue < threshold_qvalue)] <- 'Signif. males'
+
+keyvals[which(de_results_interaction_autosomes$logFC > 0 & de_results_interaction_autosomes$qvalue < threshold_qvalue)] <- 'tomato'
+names(keyvals)[which(de_results_interaction_autosomes$logFC > 0 & de_results_interaction_autosomes$qvalue < threshold_qvalue)] <- 'Signif. females'
+
+unique(keyvals)
+unique(names(keyvals))
+
+p <- EnhancedVolcano(de_results_interaction_autosomes,
+                     lab = as.character(de_results_interaction_autosomes$gene_name),
+                     x = 'logFC',
+                     y = 'qvalue',
+                     FCcutoff = 4,
+                     pCutoff = 10E-20,
+                     cutoffLineType = 'blank',
+                     colCustom = keyvals,
+                     legendPosition = "none",
+                     ylab = expression('-Log'[10]*' q-value'),
+                     subtitle = "interaction-DE analysis in HDBR",
+                     caption = "autosomal genes")
+p
+
+# save plot
+namePlot <- 'volcanoplot_colored_HDBR_dream_forebrain_pseudotime_sva_ind_interaction_interactionDE_auto.png'
+ggsave(namePlot, path = "images/4-GTEx/1-GTEx_analysis/volcanoplot/",
+       width = 12, height = 15, units = "cm")
+```
+
+
+## Compare pseudotime-DE and sex-DE genes
+
+### Upset plot
+
+Merge sexDE and pseudotimeDE data to use it with ComplexUpSet package.
+
+```{r merge_data, echo=FALSE}
+merged_data <- merge(de_results_filtered[, c(1:5,11)], de_results_pseudotime_filtered[, c(1:5,11)], #all.x = TRUE,
+                     by = c("gene_id", "gene_name", "gene_type", "chr"), suffixes = c("_sexDE", "_pseudotimeDE"))
+merged_data$sexDE <- ifelse(merged_data$qvalue_sexDE < threshold_qvalue, TRUE, FALSE)
+merged_data$femaleDE <- ifelse(merged_data$qvalue_sexDE < threshold_qvalue & merged_data$logFC_sexDE > 0, TRUE, FALSE)
+merged_data$maleDE <- ifelse(merged_data$qvalue_sexDE < threshold_qvalue & merged_data$logFC_sexDE < 0, TRUE, FALSE)
+merged_data$pseudotimeDE <- ifelse(merged_data$qvalue_pseudotimeDE < threshold_qvalue, TRUE, FALSE)
+merged_data$upDE <- ifelse(merged_data$qvalue_pseudotimeDE < threshold_qvalue & merged_data$logFC_pseudotimeDE > 0, TRUE, FALSE)
+merged_data$downDE <- ifelse(merged_data$qvalue_pseudotimeDE < threshold_qvalue & merged_data$logFC_pseudotimeDE < 0, TRUE, FALSE)
+```
+
+Also add information about autosome/sex-chromosome genes.
+
+```{r add_chr, echo=FALSE}
+merged_data$type <- ifelse(merged_data$chr %in% c("chrX", "chrY"), "sex chr.", "autosomes")
+merged_data$sexChr <- ifelse(merged_data$chr %in% c("chrX", "chrY"), "TRUE", "FALSE")
+merged_data$type <- factor(merged_data$type, levels = c("sex chr.", "autosomes"))
+```
+
+Rename columns to improve upset plot.
+
+```{r rename_col, echo=FALSE}
+names(merged_data)[c(10, 11, 13, 14)] <- c("female", "male", "up", "down")
+```
+
+Format the data for the upset plot from the ComplexHeatmap package.
+
+```{r format_data_upset, echo=FALSE}
+combination_matrix <- make_comb_mat(merged_data[c(10, 11, 13, 14)])
+combination_matrix <- combination_matrix[comb_degree(combination_matrix) > 0]
+```
+
+Upset plot
+
+```{r upset_plot, echo=FALSE}
+colorVal <- list(group = c("up" = "#16967D", "down" = "#D35400", "male" = "#053061", "female" = "#B2182B"))
+p <- UpSet(combination_matrix, set_order = c("up", "down", "male", "female"), 
+           comb_order = order(comb_size(combination_matrix), decreasing = TRUE),
+           row_names_side = "left",
+           top_annotation = upset_top_annotation(combination_matrix, 
+                                                 show_annotation_name = FALSE,
+                                                 add_numbers = TRUE,
+                                                 numbers_rot = 0,
+                                                 numbers_gp = gpar(fontsize = 8),
+                                                 height = unit(7, "cm")),
+           left_annotation = rowAnnotation(group = c("female", "male", "down", "up"), 
+                                            col = colorVal,
+                                            show_annotation_name = FALSE,
+                                            show_legend = FALSE)
+)
+p
+# save plot
+png("images/4-GTEx/1-GTEx_analysis/UpsetPlot/complexUpsetPlot_between_sexDE_pseudotimeDE_allGenes.png",
+    width = 10, height = 10, units = "cm", res = 300)
+p
+dev.off()
+```
+
+
+### Test significance of overlap between pseudotime-DE and sex-DE genes
+
+#### Overall overlap
+
+Number of sex-DE genes also pseudotime-DE.
+
+```{r nbr_sexDE_pseudoDE, echo=FALSE}
+de_results_signif <- de_results_filtered[which(de_results_filtered$qvalue < threshold_qvalue),]
+de_results_pseudotime_signif <- de_results_pseudotime_filtered[which(de_results_pseudotime_filtered$qvalue < threshold_qvalue),]
+nbr_signif_overlap <- dim(de_results_signif[which(de_results_signif$gene_id %in% de_results_pseudotime_signif$gene_id),])[1]
+nbr_total_overlap <- dim(de_results_signif[which(de_results_signif$gene_id %in% de_results_pseudotime_filtered$gene_id),])[1]
+print(sprintf("Number of sex-DE genes also pseudotime-DE genes = %s / %s (representing %.3f %% of the genes)", nbr_signif_overlap, nbr_total_overlap, nbr_signif_overlap/nbr_total_overlap*100))
+```
+
+Are sex-DE genes enriched in pseudotime-DE genes?
+```{r hypergeometric_test_function, echo=FALSE}
+hypergeometric_test <- function(listGeneset, universe){
+  listGenesetSize <- lapply(listGeneset, length)
+  overlapSize <- length(purrr::reduce(listGeneset, intersect))
+  universeSize <- length(universe)
+  print(c(overlapSize-1, listGenesetSize[[1]], universeSize-listGenesetSize[[1]], listGenesetSize[[2]]))
+  pval <- phyper(overlapSize-1, listGenesetSize[[1]], universeSize-listGenesetSize[[1]], listGenesetSize[[2]], lower.tail = FALSE, log.p = FALSE)
+  return(pval)
+}
+```
+```{r enrich_sexDE_pseudoDE, echo=FALSE}
+# test for over-representation of the sex-DE genes in pseudotime-DE genes
+listGeneSet <- list(sexDE = de_results_signif$gene_id, pseudotimeDE = de_results_pseudotime_signif$gene_id)
+hypergeometric_test(listGeneSet, de_results_filtered$gene_id)
+```
+
+#### Specific overlap between male-biased genes and pseudotime down-regulated genes
+
+```{r nbr_maleBiased_pseudoDownDE, echo=FALSE}
+signifGenes_male <- de_results_filtered[which(de_results_filtered$qvalue < threshold_qvalue & de_results_filtered$logFC < 0),]
+signifGenes_pseudotime_down <- de_results_pseudotime_filtered[which(de_results_pseudotime_filtered$qvalue < threshold_qvalue & de_results_pseudotime_filtered$logFC < 0),]
+nbr_signif_overlap_male_down <- dim(signifGenes_male[which(signifGenes_male$gene_id %in% signifGenes_pseudotime_down$gene_id),])[1]
+nbr_total_overlap_male_down <- dim(signifGenes_male[which(signifGenes_male$gene_id %in% de_results_pseudotime_filtered$gene_id),])[1]
+print(sprintf("Number of male-biased genes also pseudotime down-regulated genes = %s / %s (representing %.3f %% of the genes)", nbr_signif_overlap_male_down, nbr_total_overlap_male_down, nbr_signif_overlap_male_down/nbr_total_overlap_male_down*100))
+```
+
+```{r hypergeometric_test_maleBiased, echo=FALSE}
+# test for over-representation of the male-biased genes in pseudotime down-regulated genes
+phyper(nbr_signif_overlap_male_down, length(signifGenes_male$gene_id), length(de_results_filtered$gene_id)-length(signifGenes_male$gene_id), length(signifGenes_pseudotime_down$gene_id), 
+       lower.tail = FALSE, log.p = FALSE)
+```
+
+
+#### Specific overlap between female-biased genes and pseudotime up-regulated genes
+
+```{r nbr_femaleBiased_pseudoUpDE, echo=FALSE}
+signifGenes_female <- de_results_filtered[which(de_results_filtered$qvalue < threshold_qvalue & de_results_filtered$logFC > 0),]
+signifGenes_pseudotime_up <- de_results_pseudotime_filtered[which(de_results_pseudotime_filtered$qvalue < threshold_qvalue & de_results_pseudotime_filtered$logFC > 0),]
+nbr_signif_overlap_female_up <- dim(signifGenes_female[which(signifGenes_female$gene_id %in% signifGenes_pseudotime_up$gene_id),])[1]
+nbr_total_overlap_female_up <- dim(signifGenes_female[which(signifGenes_female$gene_id %in% de_results_pseudotime_filtered$gene_id),])[1]
+print(sprintf("Number of female-biased genes also pseudotime up-regulated genes = %s / %s (representing %.3f %% of the genes)", nbr_signif_overlap_female_up, nbr_total_overlap_female_up, nbr_signif_overlap_female_up/nbr_total_overlap_female_up*100))
+```
+
+```{r hypergeometric_test_femaleBiased, echo=FALSE}
+# test for over-representation of the female-biased genes in pseudotime up-regulated genes
+phyper(nbr_signif_overlap_female_up, length(signifGenes_female$gene_id), length(de_results_filtered$gene_id)-length(signifGenes_female$gene_id), length(signifGenes_pseudotime_up$gene_id), 
+       lower.tail = FALSE, log.p = FALSE)
+```
+
+
+## Variance partition plot
+
+
+Load voom normalized counts and phenotypes.
+
+```{r load_data, echo=FALSE}
+load("data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_dream_counts_voom_phenotypes_pseudotime_interaction.RData")
+```
+
+Compute variance attributable to each variable
+
+```{r varpart, echo=FALSE}
+form <- reformulate(c("SEX", "PSEUDOTIME", "SEX:PSEUDOTIME", "(1 | SUBJID)", paste0("X", 1:sva.obj$n.sv)))
+varPart <- fitExtractVarPartModel(y, form, metadata)
+# sort variables (i.e. columns) by median fraction of variance explained
+vp <- sortCols( varPart )
+```
+
+```{r mean_varexplained, echo=FALSE}
+colMeans(vp)
+```
+
+
+Violin plot of contribution of each variable to total variance
+
+```{r violin_plot, echo=FALSE}
+p <- plotVarPart( vp )
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p
+ggsave("violinPlot_variancePartition.png", p,
+       path = "images/4-GTEx/1-GTEx_analysis/variancePartition/",
+       width = 20, height = 12, units = "cm", create.dir = TRUE)
+```
+
+
+# Session Info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```

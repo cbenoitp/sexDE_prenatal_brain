@@ -1,0 +1,215 @@
+---
+title: "GTEx sex-DE analysis with pseudotime and interaction term"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r load_libraries, echo=FALSE}
+suppressPackageStartupMessages( library(edgeR) )
+suppressPackageStartupMessages( library(limma) )
+suppressPackageStartupMessages( library(qvalue) )
+suppressPackageStartupMessages( library(sva) )
+suppressPackageStartupMessages( library(doParallel) )
+suppressPackageStartupMessages( library(variancePartition) )
+```
+
+```{r parallel_processing_param, echo=FALSE}
+# Specify parallel processing parameters
+# this is used implicitly by dream() to run in parallel
+param <- SnowParam(4, "SOCK", progressbar=TRUE)
+register(param)
+```
+
+```{r setup, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+# Sex-DE analysis on genes with pseudotime covariate
+
+## Load the counts and the phenotype data
+
+Load gene annotation.
+
+```{r load_annotation, echo=FALSE}
+ann <- read.table('data/0-input/gencode.v26.GRCh38.genes.short.txt', header=FALSE)
+colnames(ann) <- c('chr','gene_id','gene_type','gene_name')
+```
+
+Load counts.
+
+```{r load_counts, echo=FALSE}
+gtex <- read.table('data/4-GTEx/1-GTEx_analysis/brain_forebrain_GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_reads.txt.gz', header=TRUE)
+samp_id <- gsub("\\.", "-", colnames(gtex[-c(1:2)]))
+```
+
+Load phenotypes.
+
+```{r load_pheno, echo=FALSE}
+phenotypes <- read.table('data/4-GTEx/1-GTEx_analysis/GTEx_v8_forebrain_formated_phenotype.txt', header=TRUE)
+phenotypes <- phenotypes[which(phenotypes$assigned_sex > 0), ]
+```
+
+Load pseudotime.
+
+```{r load_pseudotime, echo=FALSE}
+load('data/4-GTEx/1-GTEx_analysis/GTEx_v8_forebrain_metadata_pseudotime.RData')
+metadata$Sample <- rownames(metadata)
+metadata_pseudotime <- metadata[, c(5, 6)]
+```
+
+
+## Format data
+
+Keep only samples with assigned sex.
+
+```{r filter_samples, echo=FALSE}
+toKeep <- which(samp_id %in% phenotypes$sampid)+2
+gtex <- gtex[, c(1:2, toKeep)]
+```
+
+Format phenotype data.
+
+```{r format_phenotype, echo=FALSE}
+SUBJID <- phenotypes$subjid
+SEX <- phenotypes$assigned_sex
+DTHHRDY <- phenotypes$dthhrdy 
+TISSUE <- phenotypes$tissue
+metadata <- data.frame(SEX = SEX, DTHHRDY = DTHHRDY, SUBJID = SUBJID, TISSUE = TISSUE)
+rownames(metadata) <- colnames(gtex[-c(1:2)])
+# add pseudotime
+metadata <- merge(metadata, metadata_pseudotime, by.x = 0, by.y = "Sample")
+names(metadata) <- c("SAMPLE", "SEX", "DTHHRDY", "SUBJID", "TISSUE", "PSEUDOTIME")
+rownames(metadata) <- metadata$SAMPLE
+PSEUDOTIME <- metadata$PSEUDOTIME
+```
+
+
+# Analysis
+
+## Format counts
+
+```{r format_counts, echo=FALSE}
+# format counts
+print('formatting counts')
+# DGE object
+x <- DGEList(counts=gtex[, -c(1:2)], genes=ann[match(gtex[,1], ann[,2]),])
+# TMM normalization
+xn <- calcNormFactors(x)
+# Counts per million -> how many samples have cpm > 1
+ccpm <- rowSums(cpm(xn) > 1)
+# Remove genes with low counts and expression
+ind <- which(ccpm>=10)
+x <- xn[ind,]
+# Remove other than protein-coding and lincRNA genes
+ind <- which((x$genes$gene_type=='protein_coding'|x$genes$gene_type=='lincRNA'))
+x <- x[ind,]
+```
+
+Save the formatted counts and phenotypes as a RData object
+```{r save_data, echo=FALSE}
+save(x, metadata, file = 'data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_dream_counts_phenotypes_pseudotime_interaction.RData')
+```
+
+## Prepare design
+
+```{r prepare_design, echo=FALSE}
+# design matrices for sva computation
+design <- model.matrix(~SEX+PSEUDOTIME+SEX:PSEUDOTIME+DTHHRDY+TISSUE)
+design0 <- model.matrix(~PSEUDOTIME+DTHHRDY+TISSUE)
+
+# design for voomDream (the variable to be tested must be a fixed effect)
+form <- ~ SEX + PSEUDOTIME + SEX:PSEUDOTIME + (1|DTHHRDY) + (1|TISSUE) + (1|SUBJID)
+```
+
+Voom normalization
+
+```{r voom_norm, echo=FALSE}
+png('images/4-GTEx/1-GTEx_analysis/trendplots/brain_forebrain_v8_VoomDream_fit_pseudotime_interaction.png')
+  y <- voomWithDreamWeights(x, form, metadata, plot = TRUE)
+dev.off()
+```
+
+Estimate surrogate variables.
+
+```{r compute_svas, echo=FALSE}
+# Estimate svas
+n.sv <- num.sv(y$E, design, method="be")
+sva.obj <- sva(y$E, design, design0, method="irw", n.sv=n.sv)
+# add svas to metadata
+metadata <- cbind(metadata, sva.obj$sv)
+names(metadata) <- c("SAMPLE", "SEX", "DTHHRDY", "SUBJID", "TISSUE", "PSEUDOTIME", paste0("X", 1:n.sv))
+# include svas in formula
+form <- reformulate(c("SEX", "PSEUDOTIME", "SEX:PSEUDOTIME", "(1|DTHHRDY)", "(1|TISSUE)", "(1|SUBJID)", paste0("X", 1:n.sv)))
+# Redo voom with new design matrix
+y <- voomWithDreamWeights(x, form, metadata, plot = TRUE)
+# save the formatted counts and phenotypes as a RData object
+save(y, metadata, sva.obj, form,
+     file = 'data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_dream_counts_voom_phenotypes_pseudotime_interaction.RData')
+```
+
+
+## DE analysis
+
+Differential expression with sva.
+
+```{r DE_analysis, echo=FALSE}
+fitmm <- dream(y, form, metadata)
+fitmm2 <- topTable(fitmm, coef = 2, number = 30000, sort.by = "none") 
+fitmm2$qvalue <- qvalue(fitmm2$P.Value)$qvalues
+```
+
+Save the fitmm object as a RData object
+
+```{r save_DE_analysis, echo=FALSE}
+save(fitmm, file = 'data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_fitmm_dream_pseudotime_interaction.RData')
+```
+
+
+```{r formatNsave_sexDEresults, echo=FALSE}
+# Compute mean, variance and sample size for each sex separatly and both sex at the same time
+fitmm2$meanMale <- rowMeans(y$E[which(y$genes$gene_id %in% fitmm2$gene_id), SEX==1])
+fitmm2$varMale <- rowVars(y$E[which(y$genes$gene_id %in% fitmm2$gene_id),SEX==1])
+fitmm2$nbrMale <- sum(SEX==1)
+fitmm2$meanFemale <- rowMeans(y$E[which(y$genes$gene_id %in% fitmm2$gene_id),SEX==2])
+fitmm2$varFemale <- rowVars(y$E[which(y$genes$gene_id %in% fitmm2$gene_id), SEX==2])
+fitmm2$nbrFemale <- sum(SEX==2)
+fitmm2$meanExpr <- rowMeans(y$E[which(y$genes$gene_id %in% fitmm2$gene_id), ])
+fitmm2$varExpr <- rowVars(y$E[which(y$genes$gene_id %in% fitmm2$gene_id), ])
+fitmm2$nbrSamples <- length(SEX)
+
+# Sort the genes by qvalue
+fitmm2 <- fitmm2[order(fitmm2$qvalue),]
+
+# Write output file
+write.table(fitmm2, "data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_VoomDream_topTable_with_sva_ind_pseudotime_interaction.txt", col.names=TRUE, row.names=F, quote=F)
+```
+
+
+```{r formatNsave_interactionDEresults, echo=FALSE}
+# Extract interaction results
+fitmm_interaction <- topTable(fitmm, coef = "SEX:PSEUDOTIME", number = 30000, sort.by = "none") 
+fitmm_interaction$qvalue <- qvalue(fitmm_interaction$P.Value)$qvalues
+
+# Write interaction output file
+write.table(fitmm_interaction, "data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_VoomDream_topTable_with_sva_ind_pseudotime_interaction_term.txt",
+            col.names=TRUE, row.names=F, quote=F)
+```
+
+
+```{r format_DEresults, echo=FALSE}
+# Extract pseudotime results
+fitmm_pseudotime <- topTable(fitmm, coef = "PSEUDOTIME", number = 30000, sort.by = "none") 
+fitmm_pseudotime$qvalue <- qvalue(fitmm_pseudotime$P.Value)$qvalues
+
+# Write pseudotime output file
+write.table(fitmm_pseudotime, "data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_VoomDream_topTable_with_sva_ind_pseudotime_interaction_pseudotime.txt",
+            col.names=TRUE, row.names=F, quote=F)
+```
+
+
+# Session info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```
