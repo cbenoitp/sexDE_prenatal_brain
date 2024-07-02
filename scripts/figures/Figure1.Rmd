@@ -61,13 +61,14 @@ p <- ggplot(metadata, aes(DevStage, pseudotime))
 p <- p + geom_boxplot(fill = "#DCDCDC", outlier.shape = NA)
 p <- p + theme_minimal() + xlab("Developmental stages")
 p <- p + geom_jitter(aes(color = Sex), position=position_jitter(0.2), show.legend = FALSE)
-p <- p + annotate("text", x = 1.5, y = 1.1, label = sprintf("tau = %.2f\n p-value = %.2e", corTestRes_Kendall$estimate, corTestRes_Kendall$p.value))
+p <- p + annotate("text", x = 1.6, y = 1.1, label = sprintf("tau = %.2f\n p-value = %.2e", corTestRes_Kendall$estimate, corTestRes_Kendall$p.value))
 p <- p + scale_color_manual(values = c("1" = "darkblue", "2" = "darkred"))
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
 p
 # save plot
 ggsave("1B_boxplot_devStages_vs_pseudotime.png", 
        path = "images/figures/",
-       plot = p, width = 15, height = 10, units = "cm")
+       plot = p, width = 10, height = 8, units = "cm")
 ```
 
 
@@ -343,7 +344,7 @@ p <- UpSet(combination_matrix, set_order = c("up", "down", "male", "female"),
                                                  add_numbers = TRUE,
                                                  numbers_rot = 0,
                                                  numbers_gp = gpar(fontsize = 8),
-                                                 height = unit(7, "cm")),
+                                                 height = unit(5, "cm")),
            left_annotation = rowAnnotation(group = c("female", "male", "down", "up"), 
                                             col = colorVal,
                                             show_annotation_name = FALSE,
@@ -352,7 +353,7 @@ p <- UpSet(combination_matrix, set_order = c("up", "down", "male", "female"),
 p
 # save plot
 png("images/figures/1E_complexUpsetPlot_between_sexDE_pseudotimeDE.png",
-    width = 10, height = 10, units = "cm", res = 300)
+    width = 8, height = 8, units = "cm", res = 300)
 p
 dev.off()
 ```
