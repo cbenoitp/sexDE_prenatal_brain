@@ -1,0 +1,219 @@
+---
+title: "Comparison prenatal and adult sex-DE genes - Linemodel"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r load_library, echo=FALSE}
+suppressPackageStartupMessages( library(tidyverse) )
+suppressPackageStartupMessages( library(ggplot2) )
+suppressPackageStartupMessages( library(scales) )
+suppressPackageStartupMessages( library(edgeR) )
+suppressPackageStartupMessages( library(limma) )
+suppressPackageStartupMessages( library(qvalue) )
+#suppressPackageStartupMessages( library(linemodels) )
+source("https://raw.githubusercontent.com/mjpirinen/linemodels/main/R/linemodels.R")
+```
+
+```{r, setup, include=FALSE, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+set.seed(12345)
+```
+
+# Load and prepare data
+
+Format data for linemodel:
+- Compute SE values for both prenatal and adult data
+- Select only genes that are sex-DE in at least one of the 2 data
+
+## Prenatal data
+
+```{r compute_SE_prenatal, echo=FALSE}
+load("data/3-DE/fitmm_dream_pseudotime_sva_ind_interaction_phenotypes.RData")
+fitmm_prenatal_tmp <- fitmm
+fitmm_prenatal_tmp$SE <- fitmm_prenatal_tmp$stdev.unscaled * fitmm_prenatal_tmp$sigma
+fitmm_prenatal <- cbind(fitmm_prenatal_tmp$genes, fitmm_prenatal_tmp$SE[,2])
+names(fitmm_prenatal)[5] <- "SE_prenatal"
+fitmm_prenatal$ensemblID <- sapply(strsplit(as.character(fitmm_prenatal$gene_id), "\\."), function(x){x[1]})
+```
+
+```{r load_data_prenatal, echo=FALSE}
+# load sex-DE data in prenatal brain
+results_prenatal <- read.table("data/3-DE/VoomDream_topTable_forebrain_pseudotime_sva_ind_interaction.txt", header = TRUE)
+results_prenatal$ensemblID <- sapply(strsplit(as.character(results_prenatal$gene_id), "\\."), function(x){x[1]})
+genes2remove <- c("XIST", as.character(results_prenatal$gene_name[which(results_prenatal$chr == "chrY" & results_prenatal$gene_type == "protein_coding")]))
+results_prenatal <- results_prenatal[which(!results_prenatal$gene_name %in% genes2remove),]
+```
+
+## Adult data
+
+```{r compute_SE_adult, echo=FALSE}
+load("data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_fitmm_dream_pseudotime_interaction.RData")
+fitmm_adult_tmp <- fitmm
+fitmm_adult_tmp$SE <- fitmm_adult_tmp$stdev.unscaled * fitmm_adult_tmp$sigma
+fitmm_adult <- cbind(fitmm_adult_tmp$genes, fitmm_adult_tmp$SE[,2])
+names(fitmm_adult)[5] <- "SE_adult"
+fitmm_adult$ensemblID <- sapply(strsplit(as.character(fitmm_adult$gene_id), "\\."), function(x){x[1]})
+```
+
+```{r load_data_adult, echo=FALSE}
+# load sex-DE data in adult brain
+results_adult <- read.table("data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_VoomDream_topTable_with_sva_ind_pseudotime_interaction.txt",
+                           header = TRUE)
+results_adult$ensemblID <- sapply(strsplit(as.character(results_adult$gene_id), "\\."), function(x){x[1]})
+genes2remove <- c("XIST", as.character(results_adult$gene_name[which(results_adult$chr == "chrY" & results_adult$gene_type == "protein_coding")]))
+results_adult <- results_adult[which(!results_adult$gene_name %in% genes2remove),]
+```
+
+## Merge data
+
+```{r merge_sexDE_data, echo=FALSE}
+fullMerge <- merge(results_prenatal, results_adult, by = "ensemblID", suffixes = c("_prenatal", "_adult"))
+```
+
+```{r load_XCI_data, echo=FALSE}
+# load XCI info form tukiainen 2017
+XCI_genes <- read.table("data/0-input/Tukiainen_2017_Nature_Suppl_Table_13.csv", sep = ";", header = TRUE, nrows = 683)
+XCI_genes <- XCI_genes[, c("Gene.name", "Gene.ID", "Region", "Reported.XCI.status", "Start")]
+XCI_genes$ensemblID <- sapply(strsplit(as.character(XCI_genes$Gene.ID), "\\."), function(x){x[1]})
+```
+
+```{r annotate_sexDE, echo=FALSE}
+fullMerge <- fullMerge[which(fullMerge$chr_prenatal != "chrY" & fullMerge$chr_prenatal != "chrM"), ]
+fullMerge$annot <- ifelse(fullMerge$chr_prenatal == "chrX",
+                          "X chr",
+                          "Autosome")
+fullMerge <- merge(fullMerge, XCI_genes[c(3,4,6)], all.x = TRUE)
+names(fullMerge)[39] <- "annotXCI"
+fullMerge$sexDE_prenatal <- ifelse(fullMerge$qvalue_prenatal < 0.01, "*", "ns")
+fullMerge$sexDE_adult <- ifelse(fullMerge$qvalue_adult < 0.01, "*", "ns")
+```
+
+## Genes selection
+
+```{r select_format_sexDE, echo=FALSE}
+sexDE_genes <- fullMerge[which(fullMerge$qvalue_prenatal < 0.01 | 
+                                 fullMerge$qvalue_adult < 0.01), ]
+sexDE_genes <- merge(merge(sexDE_genes, fitmm_prenatal[, c("ensemblID", "SE_prenatal")]), fitmm_adult[, c("ensemblID", "SE_adult")])
+input_lineModel <- sexDE_genes[, c("ensemblID", "logFC_prenatal", "SE_prenatal", "logFC_adult", "SE_adult")]
+dim(input_lineModel)[1]
+```
+
+# Parameters
+
+## Define the parameters for the linemodel
+
+Compute the tau for the HDBR and GTEx data:
+
+```{r tau_values, echo=FALSE}
+all_logFC <- c(input_lineModel$logFC_prenatal, input_lineModel$logFC_adult)
+tau_all <- quantile(abs(all_logFC), c(.95))/2
+tau_all
+tau_prenatal <- quantile(abs(input_lineModel$logFC_prenatal), c(.95))/2
+tau_prenatal
+tau_adult <- quantile(abs(input_lineModel$logFC_adult), c(.95))/2
+tau_adult
+```
+
+Compute the slope between prenatal and adult logFC using only the genes sex-DE in both data.
+
+```{r slope_value, echo=FALSE}
+sexDE_genes_common <- sexDE_genes[which(sexDE_genes$qvalue_prenatal < 0.01 & sexDE_genes$qvalue_adult < 0.01), ]
+summary(lm(sexDE_genes_common$logFC_adult ~ 0 + sexDE_genes_common$logFC_prenatal))
+```
+
+Use 3 models:
+- PRENATAL only (scale = 0.2016085, slope = 0, cor = 0.995)
+- ADULT only (scale = 0.2016085, slope = Inf, cor = 0.995)
+- SHARED0.5 (scale = 0.2016085, slope = 0.5, cor = 0.995)
+- SHARED1 (scale = 0.2016085, slope = 1, cor = 0.995)
+- SHARED2 (scale = 0.2016085, slope = 2, cor = 0.995)
+- OPPOSITE (scale = 0.2016085, slope = -1, cor = 0.990)
+
+```{r define_parm, echo=FALSE}
+nbr.models <- 6
+scales <- rep(tau_all, nbr.models)
+slopes <- c(0, Inf, 0.5, 1, 2, -1)
+cors <- c(0.995, 0.995, 0.995, 0.995, 0.995, 0.990)
+model.names <- c("PRENATAL", "ADULT", "SHARED0.5", "SHARED1", "SHARED2", "OPPOSITE")
+model.priors <- rep(1/nbr.models, nbr.models)
+```
+
+```{r visualize_lineModel, echo=FALSE}
+visualize.line.models(scales, slopes, cors,
+                      model.names = model.names,
+                      model.cols = c("#9729d6","#2bd494","#6b4b15","#d5952a","#eaca95", "#Fbfd8e"),
+                      legend.position = "topleft",
+                      xlim = c(-1, 1), ylim = c(-1, 1),
+                      xlab = "logFC - prenatal",
+                      ylab = "logFC - adult",
+                      emphasize.axes = TRUE)
+png(filename = "images/4-GTEx/2-comparison/lineModel/visualize_lineModel.png", 
+    width = 15, height = 15, res = 300, units = "cm")
+visualize.line.models(scales, slopes, cors,
+                      model.names = model.names,
+                      model.cols = c("#9729d6","#2bd494","#6b4b15","#d5952a","#eaca95", "#Fbfd8e"),
+                      legend.position = "topleft",
+                      xlim = c(-1, 1), ylim = c(-1, 1),
+                      xlab = "logFC - prenatal",
+                      ylab = "logFC - adult",
+                      emphasize.axes = TRUE)
+dev.off()
+```
+
+# Estimate line model
+
+```{r estimate_line_model, echo=FALSE}
+resLineModel_prop <- line.models.with.proportions(X = input_lineModel[,c("logFC_prenatal","logFC_adult")], 
+                                                  SE = input_lineModel[,c("SE_prenatal","SE_adult")],
+                                                  scales = scales, slopes = slopes, cors = cors,
+                                                  model.names = model.names,
+                                                  r.lkhood = 0,
+                                                  n.iter = 2000, n.burnin = 200)
+```
+
+We choose a threshold of 0.8 to classify a gene as specific.
+```{r classify_genes, echo=FALSE}
+bayesProb <- as.data.frame(resLineModel_prop$groups)
+# merge bayesian proba with input data
+results <- cbind(input_lineModel, bayesProb)
+# merge with gene name
+results <- merge(fullMerge[c(1,3)], results)
+names(results) <- c("ensemblID", "gene_name", "logFC_prenatal", "SE_prenatal", "logFC_adult", "SE_adult", "PRENATAL", "ADULT", "SHARED0.5", "SHARED1", "SHARED2", "OPPOSITE")
+# assign category to each gene
+threshold_classification <- 0.8
+results <- results %>% mutate(specificity = case_when(
+  PRENATAL > threshold_classification ~ 'PRENATAL',
+  ADULT > threshold_classification ~ 'ADULT',
+  SHARED0.5 > threshold_classification ~ 'SHARED0.5',
+  SHARED1 > threshold_classification ~ 'SHARED1',
+  SHARED2 > threshold_classification ~ 'SHARED2',
+  OPPOSITE > threshold_classification ~ 'OPPOSITE',
+  SHARED0.5+SHARED1+SHARED2 > threshold_classification ~ 'SHARED_UNSPECIFIED',
+  TRUE ~ 'UNCLASSIFIED'
+))
+results$specificity <- as.factor(results$specificity)
+table(results$specificity)
+```
+
+Save data.
+
+```{r save_res, echo=FALSE}
+write.table(results, file = "data/4-GTEx/2-comparison/lineModel/lineModel_prenatalVSadult_6models.txt", 
+            col.names = TRUE, row.names = FALSE, quote = FALSE)
+```
+
+```{r save_RData, echo=FALSE}
+save(resLineModel_prop, results, fullMerge, 
+     file = "data/4-GTEx/2-comparison/lineModel/lineModel_prenatalVSadult_6models.RData")
+```
+
+# Session info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```

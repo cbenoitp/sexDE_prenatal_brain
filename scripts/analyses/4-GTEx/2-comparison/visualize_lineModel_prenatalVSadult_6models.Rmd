@@ -1,0 +1,711 @@
+---
+title: "Visualize result from prenatal and adult sex-DE comparison with linemodel"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r load_library, echo=FALSE}
+suppressPackageStartupMessages( library(tidyverse) )
+suppressPackageStartupMessages( library(edgeR) )
+suppressPackageStartupMessages( library(limma) )
+suppressPackageStartupMessages( library(qvalue) )
+suppressPackageStartupMessages( library(gghighlight) )
+suppressPackageStartupMessages( library(ggpubr) )
+suppressPackageStartupMessages( library(rstatix) )
+```
+
+```{r, setup, include=FALSE, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+# Load data
+
+## Linemodel results
+
+```{r load_RData, echo=FALSE}
+load("data/4-GTEx/2-comparison/lineModel/lineModel_prenatalVSadult_6models.RData")
+```
+
+## Prenatal sex-DE
+
+```{r load_data_prenatal, echo=FALSE}
+# load sex-DE data in prenatal brain
+results_prenatal <- read.table("data/3-DE/VoomDream_topTable_forebrain_pseudotime_sva_ind_interaction.txt", header = TRUE)
+results_prenatal$ensemblID <- sapply(strsplit(as.character(results_prenatal$gene_id), "\\."), function(x){x[1]})
+genes2remove <- c("XIST", as.character(results_prenatal$gene_name[which(results_prenatal$chr == "chrY" & results_prenatal$gene_type == "protein_coding")]))
+results_prenatal <- results_prenatal[which(!results_prenatal$gene_name %in% genes2remove),]
+```
+
+## Adult sex-DE
+
+```{r load_data_adult, echo=FALSE}
+# load sex-DE data in adult brain
+results_adult <- read.table("data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_VoomDream_topTable_with_sva_ind_pseudotime_interaction.txt",
+                           header = TRUE)
+results_adult$ensemblID <- sapply(strsplit(as.character(results_adult$gene_id), "\\."), function(x){x[1]})
+genes2remove <- c("XIST", as.character(results_adult$gene_name[which(results_adult$chr == "chrY" & results_adult$gene_type == "protein_coding")]))
+results_adult <- results_adult[which(!results_adult$gene_name %in% genes2remove),]
+```
+
+
+# Plot proportions
+
+Posterior distribution of the proportion of genes belonging to each of the models
+
+```{r posterior_prop, echo=FALSE}
+proportions <- as.data.frame(resLineModel_prop$params)
+proportions
+```
+
+```{r plot_proportions, echo=FALSE}
+proportions$data <- factor(rownames(proportions), levels = c("PRENATAL", "ADULT", "SHARED0.5", "SHARED1", "SHARED2", "OPPOSITE"))
+p <- ggplot(proportions, aes(x = data, y = mean, ymin = `95%low`, ymax = `95%up`, color = data))
+p <- p + scale_color_manual(values = c("PRENATAL" = "#9729d6", "ADULT" = "#2bd494", "SHARED0.5" = "#95681d", "SHARED1" = "#d5952a", 
+                                       "SHARED2" = "#e6bf7f", "OPPOSITE" = "#Fbfd8e"),
+                            guide = "none")
+p <- p + geom_pointrange(size = 0.4)
+p <- p + theme_minimal() + ylab("Proportion") + xlab("")
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p
+# save plot
+ggsave("proportions_plot.png", 
+       path = 'images/4-GTEx/2-comparison/lineModel/', 
+       plot = p, width = 8, height = 12, units = "cm")
+```
+
+Add specificity info to the fullMerge data.
+
+```{r add_specificity_fullMerge, echo=FALSE}
+fullMerge_spe <- merge(fullMerge, results[, c(1,13)], all.x = TRUE)
+```
+
+```{r barplot_proportions, echo=FALSE}
+proportions$data <- factor(rownames(proportions), levels = c("PRENATAL", "SHARED0.5", "SHARED1", "SHARED2", "OPPOSITE", "ADULT"))
+p <- ggplot(proportions, aes(x = data, y = mean, fill = data))
+p <- p + geom_col()
+p <- p + geom_errorbar(aes(ymin = `95%low`, ymax = `95%up`), width = 0.2)
+p <- p + scale_fill_manual(values = c("PRENATAL" = "#9729d6", "ADULT" = "#2bd494", "SHARED0.5" = "#95681d", "SHARED1" = "#d5952a", 
+                                       "SHARED2" = "#e6bf7f", "OPPOSITE" = "#Fbfd8e"),
+                            guide = "none")
+p <- p + theme_minimal() + ylab("Proportion estimates") + xlab("")
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p
+# save plot
+ggsave("proportions_barplot.png", 
+       path = 'images/4-GTEx/2-comparison/lineModel/', 
+       plot = p, width = 5, height = 10, units = "cm")
+```
+
+# Barplot on number of genes per category
+
+Do a barplot with the 5 main categories colored by the detailed categories.
+
+```{r barplot_nbrGenes_perCategory, echo=FALSE}
+# format data
+dataToPlot <- merge(results, fullMerge_spe[, c(1, 37:42)])
+dataToPlot$specificityDetailed <- factor(dataToPlot$specificity, 
+                                         levels = c("PRENATAL", "ADULT",
+                                                    "SHARED0.5", "SHARED1", "SHARED2", "SHARED_UNSPECIFIED",
+                                                    "OPPOSITE", "UNCLASSIFIED"),
+                                         labels = c("PRENATAL" = "Prenatal specific", "ADULT" = "Adult specific",
+                                                    "SHARED0.5" = "Shared - higher prenatal effect", "SHARED1" = "Shared - equal effect", 
+                                                    "SHARED2" = "Shared - higher adult effect", "SHARED_UNSPECIFIED" = "Shared - unspecified",
+                                                    "OPPOSITE" = "Opposite effect", "UNCLASSIFIED" = "Unclassified"))
+dataToPlot$specificity <- fct_collapse(dataToPlot$specificity, 'Prenatal' = c('PRENATAL'), 'Adult' = c('ADULT'), 'Shared' = c('SHARED0.5', 'SHARED1', 'SHARED2', 'SHARED_UNSPECIFIED'), 'Opposite' = c('OPPOSITE'), 'Unclassified' = c('UNCLASSIFIED'))
+dataToPlot$specificity <- factor(dataToPlot$specificity , levels = c('Prenatal', 'Shared', 'Opposite', 'Adult', 'Unclassified'))
+dataToPlot$sexDE_prenatal_direction <- ifelse(dataToPlot$sexDE_prenatal == "*" & dataToPlot$logFC_prenatal > 0,
+                                              "female-biased", 
+                                              ifelse(dataToPlot$sexDE_prenatal == "*" & dataToPlot$logFC_prenatal < 0,
+                                                     "male-biased", dataToPlot$sexDE_prenatal))
+dataToPlot$sexDE_adult_direction <- ifelse(dataToPlot$sexDE_adult == "*" & dataToPlot$logFC_adult > 0,
+                                              "female-biased", 
+                                              ifelse(dataToPlot$sexDE_adult == "*" & dataToPlot$logFC_adult < 0,
+                                                     "male-biased", dataToPlot$sexDE_adult))
+# plot
+p <- ggplot(dataToPlot, aes(x = specificity, fill = specificityDetailed))
+p <- p + geom_bar(stat = "count")
+p <- p + scale_fill_manual(values = c('Prenatal specific' = "#9729d6", 'Adult specific' = "#2bd494",
+                                      'Shared - higher prenatal effect' = "#95681d", 'Shared - equal effect' = "#d5952a", 
+                                      'Shared - higher adult effect' = "#e6bf7f", 'Shared - unspecified' = "#6b4b15",
+                                      'Opposite effect' = "#Fbfd8e", 'Unclassified' = "#898989"))
+p <- p + theme_minimal() + ylab("Number of genes") + xlab("")
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p
+# save plot
+ggsave("nbrGenes_specificity_barplot.png", 
+       path = 'images/4-GTEx/2-comparison/lineModel/barplot/',
+       plot = p, width = 13, height = 12, units = "cm", create.dir = TRUE)
+```
+
+Similar figure as a stacked barplot and merging the different shared categories.
+
+```{r barplot_stacked_nbrGenes_perCategory, echo=FALSE}
+# plot
+p <- ggplot(dataToPlot, aes(x = 1, fill = specificity))
+p <- p + geom_bar(stat = "count")
+p <- p + scale_fill_manual(values = c('Prenatal' = "#9729d6", 'Adult' = "#2bd494",
+                                      'Shared' = "#6b4b15", 'Opposite' = "#Fbfd8e", 'Unclassified' = "#d0d0d0"),
+                           name = "Categories")
+p <- p + theme_minimal() + ylab("Number of genes") + xlab("")
+p <- p + theme(axis.title.x=element_blank(),
+               axis.text.x=element_blank(),
+               axis.ticks.x=element_blank())#,
+               #legend.position="bottom")
+#p <- p + guides(fill = guide_legend(ncol = 1, title.position="top", title.hjust = 0.5))
+p
+# save plot
+ggsave("nbrGenes_specificity_stackedBarplot.png", 
+       path = 'images/4-GTEx/2-comparison/lineModel/barplot/',
+       plot = p, width = 7, height = 8, units = "cm")
+```
+
+
+Do a barplot with the number of genes in each category, coloring by the direction of sex bias for each bar.
+
+```{r barplot_nbrGenes_perCategory_sexBiasDirection, echo=FALSE}
+# define the color merging information from prenatal sex-DE direction and adult sex-DE direction
+dataToPlot$sexDE <- ifelse(dataToPlot$sexDE_prenatal_direction == "female-biased",
+                           ifelse(dataToPlot$sexDE_adult_direction == "female-biased", "common female-biased",
+                           ifelse(dataToPlot$sexDE_adult_direction == "male-biased", "opposite", "prenatal female-biased")),
+                    ifelse(dataToPlot$sexDE_prenatal_direction == "male-biased",
+                           ifelse(dataToPlot$sexDE_adult_direction == "male-biased", "common male-biased",
+                           ifelse(dataToPlot$sexDE_adult_direction == "female-biased", "opposite", "prenatal male-biased")),
+                    ifelse(dataToPlot$sexDE_prenatal_direction == "ns",
+                           ifelse(dataToPlot$sexDE_adult_direction == "male-biased", "adult male-biased",
+                           ifelse(dataToPlot$sexDE_adult_direction == "female-biased", "adult female-biased", "ns")),
+                           NA)))
+dataToPlot$sexDEsimplified <- ifelse(dataToPlot$sexDE == "common female-biased" | dataToPlot$sexDE == "prenatal female-biased" | dataToPlot$sexDE == "adult female-biased",
+                                     "female-biased",
+                                     ifelse(dataToPlot$sexDE == "common male-biased" | dataToPlot$sexDE == "prenatal male-biased" | dataToPlot$sexDE == "adult male-biased",
+                                            "male-biased",
+                                            ifelse(dataToPlot$sexDE == "opposite", "opposite", NA)))
+dataToPlot$sexDEfinal <- ifelse(dataToPlot$specificity == "Shared", dataToPlot$sexDEsimplified,
+                                ifelse(dataToPlot$specificity == "Prenatal" | dataToPlot$sexDE_origin == "prenatal",
+                                       dataToPlot$sexDE_prenatal_direction,
+                                       ifelse(dataToPlot$specificity == "Adult" | dataToPlot$sexDE_origin == "adult",
+                                              dataToPlot$sexDE_adult_direction,
+                                              ifelse(dataToPlot$specificity == "Opposite", "opposite",
+                                                     dataToPlot$sexDEsimplified))))
+# plot
+p <- ggplot(dataToPlot, aes(x = specificity, fill = sexDEsimplified))
+p <- p + geom_bar(stat = "count")
+p <- p + scale_fill_manual(values = c("male-biased" = "darkblue", "female-biased" = "darkred", 'opposite' = "#000000"))
+p <- p + theme_minimal() + ylab("Number of genes") + xlab("")
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p
+# save plot
+ggsave("nbrGenes_specificity_barplot_colorDirection.png", 
+       path = 'images/4-GTEx/2-comparison/lineModel/barplot/', 
+       plot = p, width = 13, height = 12, units = "cm")
+```
+
+Do a similar barplot with the number of genes in each category, coloring by the direction of sex bias for each bar and adding the proportion of the specific category the each direction correspond to.
+
+```{r barplot_nbrGenes_perCategory_sexBiasDirection_prop, echo=FALSE}
+# summary data for the plot
+dataToPlotSummary <- dataToPlot %>% group_by(specificity, sexDEsimplified) %>% summarise(nbr = n()) %>% mutate(freq = nbr / sum(nbr))
+# plot
+p <- ggplot(dataToPlotSummary, aes(x = specificity, y = nbr, fill = sexDEsimplified))
+p <- p + geom_bar(stat = "identity")
+p <- p + geom_text(aes(label = scales::percent(freq, accuracy = 0.01)), size = 3, color = "white", position = position_stack(vjust = 0.5))
+p <- p + scale_fill_manual(values = c("male-biased" = "darkblue", "female-biased" = "darkred", 'opposite' = "#000000"))
+p <- p + theme_minimal() + ylab("Number of genes") + xlab("")
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p
+# save plot
+ggsave("nbrGenes_specificity_barplot_colorDirection_prop.png", 
+       path = 'images/4-GTEx/2-comparison/lineModel/barplot/', 
+       plot = p, width = 15, height = 12, units = "cm")
+```
+
+```{r barplot_nbrGenes_perCategory_sexBiasDirection_prop2, echo=FALSE}
+# summary data for the plot
+dataToPlotSummary <- dataToPlot %>% group_by(specificity, sexDEsimplified) %>% summarise(nbr = n()) %>% mutate(freq = nbr / sum(nbr))
+dataToPlotSummary <- dataToPlotSummary[which(dataToPlotSummary$specificity %in% c("Prenatal", "Shared")),]
+# plot
+p <- ggplot(dataToPlotSummary, aes(x = specificity, y = nbr, fill = sexDEsimplified))
+p <- p + geom_bar(stat = "identity")
+p <- p + geom_text(aes(label = scales::percent(freq, accuracy = 0.01)), size = 3, color = "white", position = position_stack(vjust = 0.5))
+p <- p + scale_fill_manual(values = c("male-biased" = "darkblue", "female-biased" = "darkred", 'opposite' = "#000000"))
+p <- p + theme_minimal() + ylab("Number of genes") + xlab("")
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p
+# save plot
+ggsave("nbrGenes_specificitySimple_barplot_colorDirection_prop.png", 
+       path = 'images/4-GTEx/2-comparison/lineModel/barplot/',
+       plot = p, width = 10, height = 12, units = "cm")
+```
+
+Test if the proportion of male and female-biased genes in these 2 categories are significantly different.
+
+```{r test_propDirection_}
+totCounts <- dataToPlotSummary %>% group_by(specificity) %>% summarise(totNbr = sum(nbr))
+# for female-biased genes
+prop.test(x = c(dataToPlotSummary$nbr[1], dataToPlotSummary$nbr[4]), n = totCounts$totNbr,alternative = "two.sided", correct = TRUE)
+# for male-biased genes
+prop.test(x = c(dataToPlotSummary$nbr[2], dataToPlotSummary$nbr[5]), n = totCounts$totNbr,alternative = "two.sided", correct = TRUE)
+```
+
+There is no difference in proportion of male and female-biased genes in the prenatal and shared categories.
+
+Do similar plots looking at autosomal vs sex-chr genes.
+
+
+
+# Barplot of the origin of sexDE genes
+
+Do a barplot showing the number of genes sex-DE in both data or only in one of the data.
+
+```{r barplot_origin_sexDE, echo=FALSE}
+dataToPlot$sexDE_origin <- ifelse(dataToPlot$sexDE_prenatal == "*" & dataToPlot$sexDE_adult == "*",
+                                  "common", 
+                                  ifelse(dataToPlot$sexDE_prenatal == "*" & dataToPlot$sexDE_adult == "ns",
+                                         "prenatal",
+                                         ifelse(dataToPlot$sexDE_prenatal == "ns" & dataToPlot$sexDE_adult == "*",
+                                                "adult",
+                                                NA)))
+# summary data for the plot
+dataToPlotSummaryOrigin <- dataToPlot %>% group_by(sexDE_origin, sexDEsimplified) %>% summarise(nbr = n()) %>% mutate(freq = nbr / sum(nbr))
+# plot
+p <- ggplot(dataToPlotSummaryOrigin, aes(x = sexDE_origin, y = nbr, fill = sexDEsimplified))
+p <- p + geom_bar(stat = "identity")
+p <- p + geom_text(aes(label = scales::percent(freq, accuracy = 0.01)), size = 3, color = "white", position = position_stack(vjust = 0.5))
+p <- p + scale_fill_manual(values = c("male-biased" = "darkblue", "female-biased" = "darkred", 'opposite' = "#000000"))
+p <- p + theme_minimal() + ylab("Number of genes") + xlab("")
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p
+# save plot
+ggsave("nbrGenes_sexDE_origin_barplot.png", 
+       path = 'images/4-GTEx/2-comparison/lineModel/barplot/',
+       plot = p, width = 13, height = 12, units = "cm")
+```
+
+
+# LogFC scatter plot
+
+```{r function_scatter_plot_specificity, echo=FALSE}
+scatterSpecificity <- function(results, addLabel = FALSE, threshold_label = 0.3){
+  nbr_prenatal_spe <- length(results$ensemblID[which(results$specificity == "PRENATAL")])
+  nbr_adult_spe <- length(results$ensemblID[which(results$specificity == "ADULT")])
+  nbr_shared0.5 <- length(results$ensemblID[which(results$specificity == "SHARED0.5")])
+  nbr_shared1 <- length(results$ensemblID[which(results$specificity == "SHARED1")])
+  nbr_shared2 <- length(results$ensemblID[which(results$specificity == "SHARED2")])
+  nbr_opposite <- length(results$ensemblID[which(results$specificity == "OPPOSITE")])
+  nbr_shared_unspecified <- length(results$ensemblID[which(results$specificity == "SHARED_UNSPECIFIED")])
+  nbr_unclassified <- length(results$ensemblID[which(results$specificity == "UNCLASSIFIED")])
+  # plot
+  p <- ggplot(results, aes(x = logFC_prenatal, y = logFC_adult, color = specificity))
+  p <- p + geom_linerange(aes(xmin = logFC_prenatal-SE_prenatal, xmax = logFC_prenatal+SE_prenatal))
+  p <- p + geom_linerange(aes(ymin = logFC_adult-SE_adult, ymax = logFC_adult+SE_adult))
+  p <- p + scale_color_manual(values = c("PRENATAL" = "#9729d6", "ADULT" = "#2bd494", 
+                                         "SHARED0.5" = "#95681d", "SHARED1" = "#d5952a", 
+                                         "SHARED2" = "#e6bf7f", "OPPOSITE" = "#Fbfd8e",
+                                         "SHARED_UNSPECIFIED" = "#6b4b15", "UNCLASSIFIED" = "#888888"),
+                              labels = c("PRENATAL" = paste0("Prenatal specific (", nbr_prenatal_spe, ")"), 
+                                         "ADULT" = paste0("Adult specific (", nbr_adult_spe,")"), 
+                                         "SHARED0.5" = paste0("Shared effect - slope=0.5 (", nbr_shared0.5,")"), 
+                                         "SHARED1" = paste0("Shared effect - slope=1 (", nbr_shared1,")"),
+                                         "SHARED2" = paste0("Shared effect - slope=2 (", nbr_shared2,")"),
+                                         "OPPOSITE" = paste0("Opposite effect (", nbr_opposite,")"),
+                                         "SHARED_UNSPECIFIED" = paste0("Shared effect - unspecified (", nbr_shared_unspecified,")"),
+                                         "UNCLASSIFIED" = paste0("Not classified (", nbr_unclassified, ")")),
+                              name = "")
+  p <- p + theme_bw() + theme(legend.position="bottom")
+  p <- p + geom_vline(xintercept = 0) + geom_hline(yintercept = 0) + geom_abline(slope = 1, intercept = 0)
+  if (addLabel){
+    p <- p + geom_text_repel(aes(label=ifelse(specificity %in% c("SHARED0.5", "SHARED1", "SHARED2") & abs(logFC_adult) > threshold_label & abs(logFC_prenatal) > threshold_label, as.character(gene_name),''), color = "black"), max.overlaps = 20)
+  }
+  p <- p + labs(x = "logFC - prenatal", y = "logFC - adult")
+  p <- p + gghighlight(specificity != "UNCLASSIFIED")
+  p <- p + guides(color = guide_legend(nrow=3, byrow=TRUE, override.aes = list(size = 3, shape = 21) ) )
+  return(p)
+}
+```
+
+
+Plot for each gene the logFC and SE on each dataset.
+```{r scatter_plot, echo=FALSE}
+threshold_label <- 0.3
+p <- scatterSpecificity(results, addLabel = FALSE)
+p <- p + coord_cartesian(xlim = c(-1.7, 1.7), ylim = c(-1.7, 1.7))
+p
+ggsave("lineModel_specificity_all_sexDE_Genes.png", 
+       path = 'images/4-GTEx/2-comparison/lineModel/scatterplot/',
+       plot = p, width = 16, height = 16, units = "cm", create.dir = TRUE)
+```
+
+Plot for each Escape gene the logFC and SE on each dataset.
+
+```{r scatter_plot_XCIescape, echo=FALSE}
+threshold_label <- 0.3
+results_XCIescape <- merge(results, fullMerge[c("ensemblID", "annotXCI")], by = "ensemblID")
+results_XCIescape <- results_XCIescape[which(results_XCIescape$annotXCI == "Escape"), ]
+p <- scatterSpecificity(results_XCIescape)
+p <- p + coord_cartesian(xlim = c(-1.5, 1.5), ylim = c(-1.5, 1.5))
+p
+ggsave("lineModel_specificity_sexDE_XCIescape.png", 
+       path = 'images/4-GTEx/2-comparison/lineModel/scatterplot/',
+       plot = p, width = 16, height = 16, units = "cm")
+```
+
+Plot for each Inactive gene the logFC and SE on each dataset.
+
+```{r scatter_plot_XCIinactive, echo=FALSE}
+threshold_label <- 0.3
+results_XCIinactive <- merge(results, fullMerge[c("ensemblID", "annotXCI")], by = "ensemblID")
+results_XCIinactive <- results_XCIinactive[which(results_XCIinactive$annotXCI == "Inactive"), ]
+p <- scatterSpecificity(results_XCIinactive)
+p <- p + coord_cartesian(xlim = c(-0.8, 0.8), ylim = c(-0.8, 0.8))
+p
+ggsave("lineModel_specificity_sexDE_XCIinactive.png", 
+       path = 'images/4-GTEx/2-comparison/lineModel/scatterplot/',
+       plot = p, width = 16, height = 16, units = "cm")
+```
+
+Plot for each Variable gene the logFC and SE on each dataset.
+
+```{r scatter_plot_XCIvariable, echo=FALSE}
+threshold_label <- 0.3
+results_XCIvariable <- merge(results, fullMerge[c("ensemblID", "annotXCI")], by = "ensemblID")
+results_XCIvariable <- results_XCIvariable[which(results_XCIvariable$annotXCI == "Variable"), ]
+p <- scatterSpecificity(results_XCIvariable)
+p <- p + coord_cartesian(xlim = c(-0.8, 0.8), ylim = c(-0.8, 0.8))
+p
+ggsave("lineModel_specificity_sexDE_XCIvariable.png", 
+       path = 'images/4-GTEx/2-comparison/lineModel/scatterplot/',
+       plot = p, width = 16, height = 16, units = "cm")
+```
+
+
+# Example genes
+
+For a selection of example genes, we plot both the logFC with their SE in both dataset and the posterior probability
+
+Functions to do the 2 plots:
+```{r function_plot_logFC_gene, echo=FALSE}
+plot_logFC_gene <- function(gene, data, save = TRUE, limits = c(-1, 1)){
+  # select data for the gene on interest
+  data_gene <- data[which(data$gene_name == gene),]
+  # format data
+  data_gene_longer <- data_gene[,c(1:7)] %>% 
+                                  pivot_longer(4:7, names_pattern = "^(.*)_(prenatal|adult)$",
+                                               names_to = c(".values", "dataset"))
+  data_gene_formated <- data_gene_longer %>% pivot_wider(names_from = .values, values_from = value)
+  # plot
+  p <- ggplot(data_gene_formated, aes(x = dataset, y = logFC, ymin = logFC-SE, ymax = logFC+SE))
+  p <- p + geom_pointrange(size = 0.4)
+  p <- p + theme_minimal() + ylab("LogFC") + xlab("")
+  p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+  p <- p + geom_hline(yintercept = 0, color = "grey")
+  p <- p + coord_cartesian(ylim = limits)
+  if (save){
+    ggsave(paste0("logFC_", gene, ".png"), 
+       path = 'images/4-GTEx/2-comparison/lineModel/examples/',
+       plot = p, width = 6, height = 6, units = "cm")
+  }
+  return(p)
+}
+plot_logFC_geneList <- function(geneList, data, save = TRUE, limits = c(-1.7, 1.7), nameFig = "example_genes"){
+  # select data for the gene on interest
+  data_gene <- data[which(data$gene_name %in% geneList),]
+  # format data
+  data_gene_longer <- data_gene[,c(1:7)] %>% 
+                                  pivot_longer(4:7, names_pattern = "^(.*)_(prenatal|adult)$",
+                                               names_to = c(".values", "dataset"))
+  data_gene_formated <- data_gene_longer %>% pivot_wider(names_from = .values, values_from = value)
+  data_gene_formated$dataset <- factor(data_gene_formated$dataset, 
+                                       levels = c("prenatal", "adult"))
+  data_gene_formated$gene_name <- factor(data_gene_formated$gene_name, levels = geneList)
+  # plot
+  p <- ggplot(data_gene_formated, aes(x = gene_name, y = logFC, 
+                                      ymin = logFC-SE, ymax = logFC+SE, 
+                                      color = dataset))
+  p <- p + geom_pointrange(size = 0.2, position = position_dodge(width = 0.5))
+  p <- p + scale_color_manual(values = c("prenatal" = "#9729d6", "adult" = "#2bd494"), name = "Dataset")
+  p <- p + theme_minimal() + ylab("LogFC") + xlab("")
+  p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+  p <- p + geom_hline(yintercept = 0, color = "grey")
+  p <- p + facet_grid(cols = vars(specificity), scales = "free", space = "free_x")
+  p <- p + coord_cartesian(ylim = limits)
+  p <- p + theme(legend.position="bottom")
+  if (save){
+    ggsave(paste0("logFC_", nameFig, ".png"), 
+           path = 'images/4-GTEx/2-comparison/lineModel/examples/',
+           plot = p, width = 3+dim(data_gene_formated)[1]/2, height = 8, units = "cm")
+  }
+  return(p)
+}
+```
+```{r function_plot_posterior_proba_gene, echo=FALSE}
+plot_post_proba_geneList <- function(geneList, data, save = TRUE, nameFig = "example_genes"){
+  # select data for the gene on interest
+  data_gene <- data[which(data$gene_name %in% geneList),]
+  # format data
+  data_gene_formated <- data_gene[,c(1:3,8:13)] %>% 
+                                  pivot_longer(4:9, names_to = "model")
+  data_gene_formated$model <- factor(data_gene_formated$model, levels = c("PRENATAL", "SHARED0.5", "SHARED1", "SHARED2", "OPPOSITE", "ADULT"))
+  data_gene_formated$gene_name <- factor(data_gene_formated$gene_name, levels = geneList)
+  # plot
+  p <- ggplot(data_gene_formated, aes(x = gene_name, y = value, fill = model))
+  p <- p + scale_fill_manual(values = c("PRENATAL" = "#9729d6", "ADULT" = "#2bd494", "SHARED0.5" = "#95681d", "SHARED1" = "#d5952a", 
+                                       "SHARED2" = "#e6bf7f", "OPPOSITE" = "#Fbfd8e"),
+                            name = "")
+  p <- p + geom_bar(stat='identity', position = "stack")
+  p <- p + theme_minimal() + ylab("Posterior probability") + xlab("")
+  p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+  p <- p + facet_grid(cols = vars(specificity), scales = "free", space = "free_x")
+  p <- p + coord_cartesian(ylim = c(0,1))
+  p <- p + theme(legend.position="none")
+  if (save){
+    ggsave(paste0("posteriorProba_", nameFig, ".png"),
+           path = 'images/4-GTEx/2-comparison/lineModel/examples/', 
+           plot = p, width = 5+dim(data_gene_formated)[1]/6, height = 6, units = "cm")
+  }
+  return(p)
+}
+```
+
+Prepare list of autosomal gene of interest:
+```{r prepare_example_geneLost, echo=FALSE}
+example_geneList <- c("DNAI1", "NPY", "CTXN3", "IQGAP3", "POMC", "SPESP1", "LINC01597",  "NOX5")
+```
+
+```{r plot_geneList_logFC, echo=FALSE}
+plot_logFC_geneList(example_geneList, dataToPlot)
+```
+
+```{r plot_geneList_posteriorProba, echo=FALSE}
+plot_post_proba_geneList(example_geneList, dataToPlot)
+```
+
+
+Example of X-chromosomal genes:
+
+Prepare list of gene of interest:
+```{r prepare_example_geneListX, echo=FALSE}
+example_geneListX <- c("ANOS1", "DDX3X", "JPX", "ZFX", "PNPLA4", "PLCXD1")
+```
+
+```{r plot_geneListX_logFC, echo=FALSE}
+plot_logFC_geneList(example_geneListX, dataToPlot, nameFig = "example_genes_Xchr")
+```
+
+```{r plot_geneListX_posteriorProba, echo=FALSE}
+plot_post_proba_geneList(example_geneListX, dataToPlot, nameFig = "example_genes_Xchr")
+```
+
+
+# Check why there is so little adult-specific sexDE genes
+
+For the genes only sex-DE in adult brain, check their pi1 replication score in prenatal brain.
+
+```{r pi1_adult_sexDE_only, echo=FALSE}
+adult_sexDE_only <- dataToPlot$ensemblID[which(dataToPlot$sexDE_origin == "adult")]
+pi1 <- 1-qvalue::pi0est(p = results_prenatal$P.Value[which(results_prenatal$ensemblID %in% adult_sexDE_only)], lambda = 0.95, pi0.method = "smoother")$pi0
+pi1
+```
+
+Then, compare the standard error in logFC in adult and prenatal brain for genes only sex-DE in adult brain.
+
+```{r compare_SE_logFC, echo=FALSE}
+data_summary <- function(x) {
+   m <- mean(x)
+   ymin <- m-sd(x)
+   ymax <- m+sd(x)
+   return(c(y=m,ymin=ymin,ymax=ymax))
+}
+# calculate de variance
+dataToPlotSE <- dataToPlot[, c(2,3,5,7,14,20:25)]
+dataToPlotSE <- dataToPlotSE %>% 
+  pivot_longer(3:4, names_prefix = "SE_",
+               names_to = "dataset", values_to = "SE")
+# plot and compare
+p <- ggplot(dataToPlotSE, 
+            aes(x = dataset, y = SE, fill = dataset))
+p <- p + geom_violin(alpha = 0.5, scale = "area", linewidth = 0.01)
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE, 
+                      position = position_dodge(width = 0.9))
+p <- p + theme_minimal() + ylab("SE") + xlab("")
+p <- p + scale_fill_manual(values = c("prenatal" = "#9729d6", "adult" = "#2bd494"), 
+                            name = "Dataset")
+p <- p + facet_grid(cols = vars(sexDE_origin))
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p
+```
+
+Do the same separating by direction of effect.
+
+```{r compare_SE_logFC_byDir, echo=FALSE}
+# plot and compare
+p <- ggplot(dataToPlotSE, 
+            aes(x = dataset, y = SE, fill = sexDEfinal))
+p <- p + geom_violin(alpha = 0.5, scale = "area", linewidth = 0.01)
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE, 
+                      position = position_dodge(width = 0.9))
+p <- p + theme_minimal() + ylab("SE") + xlab("")
+p <- p + scale_fill_manual(values = c("male-biased" = "darkblue", "female-biased" = "darkred", 
+                                      "opposite" = "black"), 
+                            name = "Dataset")
+p <- p + facet_grid(cols = vars(sexDE_origin))
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p
+```
+
+```{r compare_SE_logFC_byCategory, echo=FALSE}
+# test 
+stat.test <- dataToPlotSE %>%
+  group_by(dataset) %>%
+  wilcox_test(SE ~ sexDE_origin, detailed = TRUE) %>% 
+  add_significance(p.col = "p") %>%
+  add_xy_position(x = "sexDE_origin", dodge = 0.5, scales = "free_y", step.increase = 0, fun = "mean_se")
+stat.test
+# plot and compare
+p <- ggplot(dataToPlotSE, aes(x = sexDE_origin, y = SE))
+p <- p + geom_violin(aes(fill = sexDE_origin), alpha = 0.5, scale = "area", linewidth = 0.01)
+p <- p + stat_summary(aes(group = sexDE_origin), fun.data=data_summary, size=0.1, show.legend = FALSE, 
+                      position = position_dodge(width = 0.9))
+p <- p + theme_minimal() + ylab("SE") + xlab("")
+p <- p + scale_fill_manual(values = c("prenatal" = "#9729d6", "adult" = "#2bd494", "common" = "grey"),
+                            name = "Data sex-DE")
+p <- p + facet_grid(cols = vars(dataset))
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p <- p + stat_pvalue_manual(stat.test, label = "p.signif", hide.ns = TRUE,
+                            tip.length = 0, step.increase = 0.04, bracket.nudge.y = 0.15, 
+                            step.group.by = "dataset")
+p <- p + coord_cartesian(ylim = c(0,0.35))
+p
+# save plot
+ggsave("SE_logFC_byCategory.png", 
+       path = "images/4-GTEx/2-comparison/lineModel/SE_logFC/",
+       width = 10, height = 8, units = "cm", create.dir = TRUE)
+```
+
+```{r compare_SE_logFC_byCategory_byDir, echo=FALSE}
+# test 
+stat.test <- dataToPlotSE[which(dataToPlotSE$sexDEfinal != "opposite"),] %>%
+  group_by(dataset, sexDEfinal) %>%
+  wilcox_test(SE ~ sexDE_origin, detailed = TRUE) %>% 
+  add_significance(p.col = "p") %>%
+  add_xy_position(x = "sexDEfinal", group = "sexDE_origin", dodge = 0.9, scales = "free_y", step.increase = 0, fun = "mean_se")
+stat.test
+# plot and compare
+p <- ggplot(dataToPlotSE[which(dataToPlotSE$sexDEfinal != "opposite"),], aes(x = sexDEfinal, y = SE))
+p <- p + geom_violin(aes(fill = sexDE_origin), alpha = 0.5, scale = "area", linewidth = 0.01)
+p <- p + stat_summary(aes(group = sexDE_origin), fun.data=data_summary, size=0.1, show.legend = FALSE, 
+                      position = position_dodge(width = 0.9))
+p <- p + theme_minimal() + ylab("SE") + xlab("")
+p <- p + scale_fill_manual(values = c("prenatal" = "#9729d6", "adult" = "#2bd494", "common" = "grey"),
+                            name = "Data sex-DE")
+p <- p + facet_grid(cols = vars(dataset))
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p <- p + stat_pvalue_manual(stat.test, label = "p.signif", hide.ns = TRUE,
+                            tip.length = 0, step.increase = 0.04, bracket.nudge.y = 0.1, 
+                            step.group.by = "dataset")
+p <- p + coord_cartesian(ylim = c(0,0.35))
+p
+# save plot
+ggsave("SE_logFC_byCategory_byDir.png", 
+       path = "images/4-GTEx/2-comparison/lineModel/SE_logFC/",
+       width = 14, height = 8, units = "cm")
+```
+
+Also compare the gene expression variance for each category.
+
+```{r compare_varExpr_byDir, echo=FALSE}
+# format data
+fullMerge_new <- merge(fullMerge, dataToPlot[,c(1:2,19:25)])
+varExpr_toPlot <- fullMerge_new[, c(1,3,14,16,29,32,40:42,44:45,47:49)]
+names(varExpr_toPlot) <- c("ensemblID", "gene_name", "var_prenatal_male", "var_prenatal_female", 
+                           "var_adult_male", "var_adult_female", "sexDE_prenatal", "sexDE_adult", "specificity",
+                           "sexDE_prenatal_direction", "sexDE_adult_direction", "sexDEsimplified",
+                           "sexDEfinal", "sexDE_origin")
+varExpr_toPlot <- varExpr_toPlot %>% 
+  pivot_longer(3:6, names_prefix = "var_", values_to = "var",
+               names_to = c("dataset", "direction"), names_sep = "_")
+# test 
+stat.test <- varExpr_toPlot %>%
+  group_by(sexDE_origin, direction) %>%
+  wilcox_test(var ~ dataset, detailed = TRUE)
+stat.test
+# plot
+p <- ggplot(varExpr_toPlot, aes(x = direction, y = var, fill = dataset))
+p <- p + geom_violin(alpha = 0.5, scale = "area", linewidth = 0.01)
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE, 
+                      position = position_dodge(width = 0.9))
+p <- p + theme_minimal() + ylab("Var") + xlab("")
+p <- p + scale_fill_manual(values = c("prenatal" = "#9729d6", "adult" = "#2bd494"))
+p <- p + facet_grid(cols = vars(sexDE_origin))
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p <- p + stat_compare_means(method = "wilcox.test", label = "p.signif", hide.ns = TRUE,
+                            label.x.npc = "center")
+p
+```
+
+```{r compare_varExpr, echo=FALSE}
+# test 
+stat.test <- varExpr_toPlot %>%
+  group_by(dataset) %>%
+  wilcox_test(var ~ sexDE_origin, detailed = TRUE) %>% 
+  add_significance(p.col = "p") %>%
+  add_xy_position(x = "sexDE_origin", dodge = 0.8, scales = "free", step.increase = 0, fun = "mean_se")
+stat.test
+# plot
+p <- ggplot(varExpr_toPlot, aes(x = sexDE_origin, y = var))
+p <- p + geom_violin(aes(fill = sexDE_origin), alpha = 0.5, scale = "area", linewidth = 0.01)
+p <- p + stat_summary(aes(group = sexDE_origin), fun.data=data_summary, size=0.1, show.legend = FALSE, 
+                      position = position_dodge(width = 0.9))
+p <- p + theme_minimal() + ylab("Expr variance") + xlab("")
+p <- p + scale_fill_manual(values = c("prenatal" = "#9729d6", "adult" = "#2bd494", "common" = "black"))
+p <- p + facet_grid(cols = vars(dataset))
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p <- p + stat_pvalue_manual(stat.test, label = "p.signif", hide.ns = TRUE,
+                            tip.length = 0, step.increase = 0.04, bracket.nudge.y = 3, 
+                            step.group.by = "dataset")
+p <- p + coord_cartesian(ylim = c(0,10))
+p
+# save plot
+ggsave("varExpr_byCategory.png", 
+       path = "images/4-GTEx/2-comparison/lineModel/varExpr/",
+       width = 12, height = 8, units = "cm", create.dir = TRUE)
+```
+
+```{r compare_varExpr_byDir2, echo=FALSE}
+# test 
+stat.test <- varExpr_toPlot %>%
+  group_by(dataset, direction) %>%
+  wilcox_test(var ~ sexDE_origin, detailed = TRUE) %>% 
+  add_significance(p.col = "p") %>%
+  add_xy_position(x = "direction", group = "sexDE_origin", dodge = 0.9, scales = "free", step.increase = 0, fun = "mean_se")
+stat.test
+# plot
+p <- ggplot(varExpr_toPlot, aes(x = direction, y = var))
+p <- p + geom_violin(aes(fill = sexDE_origin), alpha = 0.5, scale = "area", linewidth = 0.01)
+p <- p + stat_summary(aes(group = sexDE_origin), fun.data=data_summary, size=0.1, show.legend = FALSE, 
+                      position = position_dodge(width = 0.9))
+p <- p + theme_minimal() + ylab("Expr variance") + xlab("")
+p <- p + scale_fill_manual(values = c("prenatal" = "#9729d6", "adult" = "#2bd494", "common" = "black"))
+p <- p + facet_grid(cols = vars(dataset))
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p <- p + stat_pvalue_manual(stat.test, label = "p.signif", hide.ns = TRUE,
+                            tip.length = 0, step.increase = 0.04, bracket.nudge.y = 3, 
+                            step.group.by = "direction")
+p <- p + coord_cartesian(ylim = c(0,10))
+p
+# save plot
+ggsave("varExpr_byCategory_byDir.png",
+       path = "images/4-GTEx/2-comparison/lineModel/varExpr/",
+       width = 14, height = 8, units = "cm")
+```
+
+# Save linemodel results with annotations
+
+```{r save_linemodels_res_withAnnot, echo=FALSE}
+write.table(dataToPlot[,c(1,3:13,2,20:25,14:16)], file = "data/4-GTEx/2-comparison/lineModel/lineModel_prenatalVSadult_6models_withAnnotation.txt", col.names = TRUE, row.names = FALSE, quote = FALSE, sep = "\t")
+```
+
+# Session info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```

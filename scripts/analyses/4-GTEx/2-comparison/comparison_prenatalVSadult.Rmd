@@ -1,0 +1,809 @@
+---
+title: "Comparison between prenatal and adult sex-DE"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r load_library, echo=FALSE}
+suppressPackageStartupMessages( library(tidyverse) )
+suppressPackageStartupMessages( library(edgeR) )
+suppressPackageStartupMessages( library(limma) )
+suppressPackageStartupMessages( library(qvalue) )
+suppressPackageStartupMessages( library(ggalluvial) )
+suppressPackageStartupMessages( library(gridExtra) )
+suppressPackageStartupMessages( library(fmsb) )
+suppressPackageStartupMessages( library(ComplexHeatmap))
+suppressPackageStartupMessages( library(ggpubr) )
+```
+
+```{r, setup, include=FALSE, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+set.seed(1234)
+```
+
+Thresholds:
+```{r thresholds, echo=FALSE}
+qvalue_threshold <- 0.01
+```
+
+# Load data and functions
+
+## Load and prepare prenatal sex-DE genes 
+
+```{r load_sexDE_prenatal, echo=FALSE}
+results_prenatal <- read.table("data/3-DE/VoomDream_topTable_forebrain_pseudotime_sva_ind_interaction.txt",
+                           header = TRUE)
+results_prenatal$ensemblID <- sapply(strsplit(as.character(results_prenatal$gene_id), "\\."), function(x){x[1]})
+```
+
+Prepare the data:
+- remove the genes used to define the sex of the samples.
+```{r prepare_sexDE_prenatal, echo=FALSE}
+genes2remove <- c("XIST", as.character(results_prenatal$gene_name[which(results_prenatal$chr == "chrY" &
+                                                                          results_prenatal$gene_type == "protein_coding")]))
+results_prenatal <- results_prenatal[which(!results_prenatal$gene_name %in% genes2remove),]
+results_prenatal_auto <- results_prenatal[which(!results_prenatal$chr %in% c("chrY", "chrX", "chrM")), ]
+```
+
+
+## Load and prepare adult sex-DE genes
+
+```{r load_sexDE_adult, echo=FALSE}
+results_adult <- read.table("data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_VoomDream_topTable_with_sva_ind_pseudotime_interaction.txt",
+                           header = TRUE)
+results_adult$ensemblID <- sapply(strsplit(as.character(results_adult$gene_id), "\\."), function(x){x[1]})
+```
+
+Prepare the data:
+- remove the genes used to define the sex of the samples.
+```{r prepare_sexDE_adult, echo=FALSE}
+genes2remove <- c("XIST", as.character(results_adult$gene_name[which(results_adult$chr == "chrY" & results_adult$gene_type == "protein_coding")]))
+results_adult <- results_adult[which(!results_adult$gene_name %in% genes2remove),]
+results_adult_auto <- results_adult[which(!results_adult$chr %in% c("chrY", "chrX", "chrM")), ]
+```
+
+
+## Load XCI data
+
+```{r load_XCI_data, echo=FALSE}
+# load XCI info form tukiainen 2017
+XCI_genes <- read.table("data/0-input/Tukiainen_2017_Nature_Suppl_Table_13.csv", sep = ";", header = TRUE, nrows = 683)
+XCI_genes <- XCI_genes[, c("Gene.name", "Gene.ID", "Region", "Reported.XCI.status", "Start")]
+XCI_genes$ensemblID <- sapply(strsplit(as.character(XCI_genes$Gene.ID), "\\."), function(x){x[1]})
+```
+
+
+## Merge both data
+
+Merge the 2 datasets.
+
+```{r full_merge, echo=FALSE}
+fullMerge <- merge(results_prenatal, results_adult, by = "ensemblID", suffixes = c("_prenatal", "_adult"))
+```
+
+Add info needed for the complexUpset plot.
+
+```{r compleUpset_info, echo=FALSE}
+fullMerge$`prenatal male-biased genes` <- ifelse(fullMerge$qvalue_prenatal < qvalue_threshold & fullMerge$logFC_prenatal < 0, TRUE, FALSE)
+fullMerge$`prenatal female-biased genes` <- ifelse(fullMerge$qvalue_prenatal < qvalue_threshold & fullMerge$logFC_prenatal > 0, TRUE, FALSE)
+fullMerge$`adult male-biased genes` <- ifelse(fullMerge$qvalue_adult < qvalue_threshold & fullMerge$logFC_adult < 0, TRUE, FALSE)
+fullMerge$`adult female-biased genes` <- ifelse(fullMerge$qvalue_adult < qvalue_threshold & fullMerge$logFC_adult > 0, TRUE, FALSE)
+```
+
+Get only autosomal genes from this merged dataset.
+
+```{r full_merge_auto, echo=FALSE}
+fullMerge_auto <- fullMerge[which(!fullMerge$chr_prenatal %in% c("chrX", "chrY", "chrM") & 
+                                    !fullMerge$chr_adult %in% c("chrX", "chrY", "chrM")), ]
+```
+
+```{r annotate_sexDE, echo=FALSE}
+fullMerge_annot <- fullMerge[which(fullMerge$chr_prenatal != "chrY" & fullMerge$chr_prenatal != "chrM"), ]
+fullMerge_annot$annot <- ifelse(fullMerge_annot$chr_prenatal == "chrX",
+                                "X chr",
+                                "Autosome")
+fullMerge_annot <- merge(fullMerge_annot, XCI_genes[c(3,4,6)], all.x = TRUE)
+names(fullMerge_annot)[43] <- "annotXCI"
+fullMerge_annot$sexDE_prenatal <- ifelse(fullMerge_annot$qvalue_prenatal < 0.01, "*", "ns")
+fullMerge_annot$sexDE_adult <- ifelse(fullMerge_annot$qvalue_adult < 0.01, "*", "ns")
+```
+
+
+# Summary of sex-DE in each data
+
+Do a barplot of the percentage of sex-DE genes in autosomes and X-chromosome comparing adult and prenatal data.
+Then, do a similar plot looking at the different categories of X-chr genes.
+
+## Autosomal vs X-chr sex-DE genes
+
+```{r format_data_plot, echo=FALSE}
+# format data for plot
+barplot_count_data <- fullMerge_annot[, c(1,41,44,45)] %>% pivot_longer(c(3,4), names_to = "data", names_prefix = "sexDE_", values_to = "sexDE") %>% group_by(data, annot, sexDE) %>% summarise(nbr = n())
+barplot_percent_data <- barplot_count_data %>% group_by(data, annot) %>% mutate(genes_per_group = sum(nbr)) %>% ungroup() %>% mutate(percent = nbr/genes_per_group*100)
+barplot_percent_data$data <- factor(barplot_percent_data$data, levels = c("adult", "prenatal"))
+```
+
+
+```{r barplot_count_sexDE_autoVSchrX, echo=FALSE}
+p <- ggplot(barplot_count_data[which(barplot_count_data$sexDE == "*" & !is.na(barplot_count_data$annot)),], aes(x = annot, y = nbr, fill = data))
+p <- p + geom_col(position = "dodge")
+p <- p + scale_fill_manual(values = c("#2bd494", "#9729d6"), name = "Brain data")
+p <- p + theme_minimal() 
+p <- p + theme(text = element_text(size = 15), axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p <- p + xlab("") + ylab("nbr of sex-DE genes")
+p
+# save plot
+ggsave("barplot_sexDE_count_autoVSchrX.png", path = "images/4-GTEx/2-comparison/comparison/barplot/",
+       plot = p, width = 10, height = 12, units = "cm", create.dir = TRUE)
+```
+
+```{r barplot_percent_sexDE_autoVSchrX, echo=FALSE}
+p <- ggplot(barplot_percent_data[which(barplot_percent_data$sexDE == "*" & !is.na(barplot_percent_data$annot)),], aes(x = annot, y = percent, fill = data))
+p <- p + geom_col(position = "dodge")
+p <- p + scale_fill_manual(values = c("#2bd494", "#9729d6"), name = "Brain data")
+p <- p + theme_minimal() 
+p <- p + theme(text = element_text(size = 15), axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p <- p + xlab("") + ylab("percent of sex-DE genes")
+p
+# save plot
+ggsave("barplot_sexDE_percent_autoVSchrX.png", path = "images/4-GTEx/2-comparison/comparison/barplot/",
+       plot = p, width = 8, height = 12, units = "cm")
+```
+
+## X-chr genes: escape, inactive and variable
+
+```{r format_data_plot_XCI, echo=FALSE}
+# format data for plot
+barplot_count_XCI_data <- fullMerge_annot[, c(1,43,44,45)] %>% pivot_longer(c(3,4), names_to = "data", names_prefix = "sexDE_", values_to = "sexDE") %>% group_by(data, annotXCI, sexDE) %>% summarise(nbr = n())
+barplot_count_XCI_data$annotXCI <- factor(barplot_count_XCI_data$annotXCI, levels = c("Inactive", "Escape", "Variable", "Unknown"))
+barplot_percent_XCI_data <- barplot_count_XCI_data %>% group_by(data, annotXCI) %>% mutate(genes_per_group = sum(nbr)) %>% ungroup() %>% mutate(percent = nbr/genes_per_group*100)
+barplot_percent_XCI_data$data <- factor(barplot_percent_XCI_data$data, levels = c("adult", "prenatal"))
+barplot_percent_XCI_data$annotXCI <- factor(barplot_percent_XCI_data$annotXCI, levels = c("Escape", "Variable", "Inactive", "Unknown"))
+```
+
+
+```{r barplot_count_sexDE_escapeVSinactive, echo=FALSE}
+p <- ggplot(barplot_count_XCI_data[which(barplot_count_XCI_data$sexDE == "*" & !is.na(barplot_count_XCI_data$annotXCI)),], aes(x = annotXCI, y = nbr, fill = data))
+p <- p + geom_col(position = "dodge")
+p <- p + scale_fill_manual(values = c("#2bd494", "#9729d6"), name = "Brain data")
+p <- p + theme_minimal() 
+p <- p + theme(text = element_text(size = 15), axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p <- p + xlab("") + ylab("nbr of sex-DE genes")
+p
+# save plot
+ggsave("barplot_sexDE_count_escapeVSinactive.png", path = "images/4-GTEx/2-comparison/comparison/barplot/",
+       plot = p, width = 11, height = 12, units = "cm")
+```
+
+Test difference in proportion of sexDE genes between escape and inactive in adult and prenatal data separately.
+
+```{r test_prop, echo=FALSE}
+# prenatal
+prenatalRes <- prop.test(x = c(30, 86), n = c(67, 359))
+# adult
+adultRes <- prop.test(x = c(38, 25), n = c(67, 359))
+# prepare stats to be plotted
+stat2plot <- tibble::tribble(
+       ~data, ~group1,     ~group2,                               ~p, 
+  "prenatal", "Escape",  "Inactive", as.numeric(prenatalRes$p.value),
+     "adult", "Escape",  "Inactive",    as.numeric(adultRes$p.value)
+  )
+stat2plot$data <- factor(stat2plot$data)
+stat2plot <- stat2plot %>% mutate(y.position = c(45, 57))
+stat2plot
+```
+
+```{r barplot_percent_sexDE_escapeVSinactive, echo=FALSE}
+p <- ggplot(barplot_percent_XCI_data[which(barplot_percent_XCI_data$sexDE == "*" & !is.na(barplot_percent_XCI_data$annotXCI)),], aes(x = annotXCI, y = percent, fill = data))
+p <- p + geom_col(position = "dodge")
+p <- p + scale_fill_manual(values = c("#2bd494", "#9729d6"), name = "Brain data")
+p <- p + theme_minimal() 
+p <- p + theme(text = element_text(size = 15), axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p <- p + xlab("XCI status") + ylab("percent of sex-DE genes")
+p
+# save plot
+ggsave("barplot_sexDE_percent_escapeVSinactive.png", path = "images/4-GTEx/2-comparison/comparison/barplot/",
+       plot = p, width = 11, height = 12, units = "cm")
+```
+
+
+
+
+# Comparison including sex-chromosomes
+
+## Mean effect size
+
+```{r function_mean_logFC, echo=FALSE}
+meanLogFC <- function(data, qvalue_threshold = 0.01, logFC_threshold = 0){
+  data_signif <- data[which(data$qvalue < qvalue_threshold & abs(data$logFC) > logFC_threshold),]
+  meanLogFC <- mean(abs(data_signif$logFC))
+  return(meanLogFC)
+}
+```
+
+Mean effect size in prenatal brain:
+```{r logFC_prenatal, echo=FALSE}
+meanLogFC(results_prenatal, qvalue_threshold = qvalue_threshold)
+```
+
+Mean effect size in adult brain:
+```{r logFC_adult, echo=FALSE}
+meanLogFC(results_adult, qvalue_threshold = qvalue_threshold)
+```
+
+## Overlap of the data
+
+Format the data for the upset plot from the ComplexHeatmap package.
+
+```{r format_data_upset, echo=FALSE}
+names(fullMerge)[c(37, 38, 39, 40)] <- c("prenatal male", "prenatal female", "adult male", "adult female")
+combination_matrix <- make_comb_mat(fullMerge[c(37, 38, 39, 40)])
+combination_matrix <- combination_matrix[comb_degree(combination_matrix) > 0]
+```
+
+Upset plot
+
+```{r upset_plot, echo=FALSE}
+colorVal <- list(sex = c("male" = "#053061", "female" = "#B2182B"),
+                 dataset = c("adult" = "#2bd494", "prenatal" = "#9729d6"))
+p <- UpSet(combination_matrix, set_order = c("prenatal male", "prenatal female", "adult male", "adult female"), 
+           comb_order = order(comb_size(combination_matrix), decreasing = TRUE),
+           row_names_side = "left",
+           top_annotation = upset_top_annotation(combination_matrix, 
+                                                 show_annotation_name = FALSE,
+                                                 add_numbers = TRUE,
+                                                 numbers_rot = 0,
+                                                 numbers_gp = gpar(fontsize = 8),
+                                                 height = unit(7, "cm")),
+           left_annotation = rowAnnotation(sex = c("male", "female", "male", "female"),
+                                           dataset = c("prenatal", "prenatal", "adult", "adult"),
+                                           col = colorVal,
+                                           show_annotation_name = FALSE,
+                                           show_legend = FALSE)
+)
+p
+# save plot
+png("images/4-GTEx/2-comparison/comparison/complexUpsetPlot_sexDE_between_prenatal_adult.png",
+    width = 10, height = 10, units = "cm", res = 300)
+p
+dev.off()
+```
+
+
+Test the significance of this overlap with an hypergeometric test.
+```{r hypergeometric_test_function, echo=FALSE}
+hypergeometric_test <- function(listGeneset, universe, sex=FALSE){
+  universeSize <- length(universe)
+  if (sex == TRUE){
+    listGenesetSize <- lapply(listGeneset, length)
+    listGenesetSize <- c(listGenesetSize[[1]]+listGenesetSize[[2]], listGenesetSize[[3]]+listGenesetSize[[4]])
+    overlapSize <- length(purrr::reduce(list(listGeneset[[1]], listGeneset[[3]]), intersect)) +
+      length(purrr::reduce(list(listGeneset[[2]], listGeneset[[4]]), intersect))
+    print(universeSize)
+    print(sprintf("a = %s; b = %s; c = %s; d = %s", overlapSize, listGenesetSize[1], universeSize-listGenesetSize[1], listGenesetSize[2]))
+    print(sprintf("relative enrichment = %s", (overlapSize*universeSize)/(listGenesetSize[1]*listGenesetSize[2])))
+    pval <- phyper(overlapSize, listGenesetSize[1], universeSize-listGenesetSize[1], listGenesetSize[2], 
+                   lower.tail = FALSE, log.p = FALSE)
+  } else if (sex == "male"){
+    listGeneset_male <- listGeneset[c(2,4)]
+    listGenesetSize_male <- lapply(listGeneset_male, length)
+    overlapSize_male <- length(purrr::reduce(list(listGeneset_male[[1]], listGeneset_male[[2]]), intersect))
+    print(sprintf("a = %s; b = %s; c = %s; d = %s", overlapSize_male, listGenesetSize_male[[1]], universeSize-listGenesetSize_male[[1]], listGenesetSize_male[[2]]))
+    print(sprintf("relatiuve enrichment = %s", (overlapSize_male*universeSize)/(listGenesetSize_male[[1]]*listGenesetSize_male[[2]])))
+    pval <- phyper(overlapSize_male, listGenesetSize_male[[1]], universeSize-listGenesetSize_male[[1]], listGenesetSize_male[[2]], 
+                   lower.tail = FALSE, log.p = FALSE)
+  } else if (sex == "female"){
+    listGeneset_female <- listGeneset[c(1,3)]
+    listGenesetSize_female <- lapply(listGeneset_female, length)
+    overlapSize_female <- length(purrr::reduce(list(listGeneset_female[[1]], listGeneset_female[[2]]), intersect))
+    print(sprintf("a = %s; b = %s; c = %s; d = %s", overlapSize_female, listGenesetSize_female[[1]], universeSize-listGenesetSize_female[[1]], listGenesetSize_female[[2]]))
+    print(sprintf("relatiuve enrichment = %s", (overlapSize_female*universeSize)/(listGenesetSize_female[[1]]*listGenesetSize_female[[2]])))
+    pval <- phyper(overlapSize_female, listGenesetSize_female[[1]], universeSize-listGenesetSize_female[[1]], listGenesetSize_female[[2]], 
+                   lower.tail = FALSE, log.p = FALSE)
+  } else{
+    listGenesetSize <- lapply(listGeneset, length)
+    overlapSize <- length(purrr::reduce(listGeneset, intersect))
+    pval <- phyper(overlapSize, listGenesetSize[[1]], universeSize-listGenesetSize[[1]], listGenesetSize[[2]], 
+                   lower.tail = FALSE, log.p = FALSE)
+  }
+  return(pval)
+}
+```
+```{r format_data_upset_plot_function, echo=FALSE}
+getSignifGenes <- function(de_results, direction, qvalue_threshold = 0.01, logFC_threshold = 0){
+  if (direction == "positive"){
+    signifGenes <- de_results[which(de_results$qvalue < qvalue_threshold & de_results$logFC > logFC_threshold), ]
+  } else if (direction == "negative"){
+    signifGenes <- de_results[which(de_results$qvalue < qvalue_threshold & de_results$logFC < logFC_threshold), ]
+  }
+  return(signifGenes)
+}
+
+prepareDataEnrich <- function(de_results1, de_results2, listNames, selectedCol = "ensemblID", qvalue_threshold = 0.01, logFC_threshold = 0){
+  listInput <- list(getSignifGenes(de_results1, "positive", qvalue_threshold, logFC_threshold)[, selectedCol],
+                    getSignifGenes(de_results1, "negative", qvalue_threshold, logFC_threshold)[, selectedCol],
+                    getSignifGenes(de_results2, "positive", qvalue_threshold, logFC_threshold)[, selectedCol],
+                    getSignifGenes(de_results2, "negative", qvalue_threshold, logFC_threshold)[, selectedCol])
+  names(listInput) <- listNames
+  return(listInput)
+}
+```
+
+```{r test_overlap, echo=FALSE}
+listInput <- prepareDataEnrich(results_prenatal, results_adult, 
+                               listNames = c("prenatal female-biased genes", "prenatal male-biased genes", "adult female-biased genes", "adult male-biased genes"),
+                               qvalue_threshold = qvalue_threshold, logFC_threshold = 0)
+hypergeometric_test(listInput, fullMerge$ensemblID, sex = TRUE)
+```
+
+Test the overlap of male and female sex-biased genes separatly.
+```{r test_overlap_male, echo=FALSE}
+hypergeometric_test(listInput, fullMerge$ensemblID, sex = "male")
+```
+
+```{r test_overlap_female, echo=FALSE}
+hypergeometric_test(listInput, fullMerge$ensemblID, sex = "female")
+```
+
+
+## Replication rate
+
+Functions to compute the pi1 replication rate and the pi1 replication rate normalized by the overall pi1.
+```{r function_pi1_score, echo=FALSE}
+pi1_score <- function(data1, data2, columnMerge = "ensemblID"){
+  # compute pi1 for second dataset compared to the first dataset
+  selected_pvalue <- data2$P.Value[which(data2[, columnMerge] %in% data1[, columnMerge])]
+  if (berryFunctions::is.error(qvalue::pi0est(p = selected_pvalue, lambda = 0.5, pi0.method = "smoother")) ) {
+    pi1 <- qvalue::qvalue(p = selected_pvalue, pi0 = 1)$pi0
+  }else{
+    pi1 <- 1-qvalue::pi0est(p = selected_pvalue, lambda = 0.5, pi0.method = "smoother")$pi0
+  }
+  
+  # continue only if the pi1 value was computed
+  if (is.numeric(pi1)){
+    return(pi1)
+  } else{
+    return("No pi1 analysis!")
+  }
+}
+```
+
+```{r function_pi1_normalized, echo=FALSE}
+pi1_normalized <- function(data1, data2, columnMerge = "ensemblID", qvalue_threshold = 0.01, logFC_threshold = 0, verbose = TRUE){
+  # get the significant genes in the first dataset
+  data1_signif <- data1[which(data1$qvalue < qvalue_threshold & abs(data1$logFC) > logFC_threshold), ]
+  
+  # pi1 replication rate for the significant genes
+  pi1_signif <- pi1_score(data1_signif, data2, columnMerge = "ensemblID")
+  if (verbose){
+    print(sprintf("pi1 for signif genes = %s", pi1_signif))
+  }
+  # pi1 replication rate for all genes
+  pi1_all <- pi1_score(data1, data2, columnMerge = "ensemblID")
+  if (verbose){
+    print(sprintf("pi1 for all genes = %s", pi1_all))
+  }
+  
+  # return the pi1 for significant genes normalized by the pi1 for all genes
+  return(pi1_signif/pi1_all)
+}
+```
+
+Compute the pi1 replication rates of significant sex-DE genes between prenatal and adult sex-DE analysis.
+```{r compute_pi1, echo=FALSE}
+print("Replication of prenatal results in adult analysis:")
+pi1_normalized(results_prenatal, results_adult, qvalue_threshold = qvalue_threshold)
+print("Replication of adult results in prenatal analysis:")
+pi1_normalized(results_adult, results_prenatal, qvalue_threshold = qvalue_threshold)
+```
+
+Compute the replication rates for the union of sex-DE genes between prenatal and adult sex-DE analysis.
+```{r compute_pi1_union, echo=FALSE}
+# compute the union of sex-DE genes in both datasets
+print("Replication in adult analysis:")
+union <- fullMerge[which(fullMerge$qvalue_prenatal < qvalue_threshold | fullMerge$qvalue_adult < qvalue_threshold),]
+union_prenatal <- results_prenatal[which(results_prenatal$ensemblID %in% union$ensemblID),]
+pi1_union_prenatal <- pi1_score(union_prenatal, results_adult, columnMerge = "ensemblID")
+sprintf("pi1 for union genes = %s", pi1_union_prenatal)
+print("Replication in prenatal analysis:")
+union_adult <- results_adult[which(results_adult$ensemblID %in% union$ensemblID),]
+pi1_union_adult <- pi1_score(union_adult, results_prenatal, columnMerge = "ensemblID")
+sprintf("pi1 for union genes = %s", pi1_union_adult)
+```
+
+
+## Consistency plot
+
+```{r function_alluvial_plot, echo=FALSE}
+consistency_plot <- function(data1, data2, nameData1, nameData2, columnMerge = "ensemblID", 
+                             qvalueThreshold = 0.01, logFCThreshold = 0, typeComparison = "1vs2"){
+  # merge the 2 datasets
+  de_results_merged <- merge(data1, data2, by = columnMerge, suffixes = c(".data1", ".data2"))
+
+  # Depending on the type of comparison choosen, get the observed consistency 
+  de_results_merged_filtered <- data.frame()
+  if (typeComparison == "1vs2"){
+    # keep only the genes/transcripts that are significant in the first data
+    de_results_merged_filtered <- de_results_merged[which(de_results_merged$qvalue.data1 < qvalueThreshold & abs(de_results_merged$logFC.data1) > logFCThreshold), ]
+    print(sprintf("Number of genes compared = %s", dim(de_results_merged_filtered)[1]))
+  } else if (typeComparison == "intersection"){
+    # keep only the genes/transcripts that are significant in the second data
+    de_results_merged_filtered <- de_results_merged[which(de_results_merged$qvalue.data1 < qvalueThreshold & abs(de_results_merged$logFC.data1) > logFCThreshold &
+                                                            de_results_merged$qvalue.data2 < qvalueThreshold & abs(de_results_merged$logFC.data2) > logFCThreshold), ]
+    print(sprintf("Number of genes compared = %s", dim(de_results_merged_filtered)[1]))
+  } else if (typeComparison == "union"){
+    # keep only the genes/transcripts that are significant in the second data
+    de_results_merged_filtered <- de_results_merged[which((de_results_merged$qvalue.data1 < qvalueThreshold & abs(de_results_merged$logFC.data1) > logFCThreshold) |
+                                                            (de_results_merged$qvalue.data2 < qvalueThreshold & abs(de_results_merged$logFC.data2) > logFCThreshold)), ]
+    print(sprintf("Number of genes compared = %s", dim(de_results_merged_filtered)[1]))
+  }
+  
+  # prepare data for the alluvial data
+  de_results_merged_filtered$direction.data1 <- ifelse(de_results_merged_filtered$logFC.data1 < 0, "Male", "Female")
+  de_results_merged_filtered$direction.data2 <- ifelse(de_results_merged_filtered$logFC.data2 < 0, "Male", "Female")
+  de_results_merged_filtered_table <- de_results_merged_filtered %>% 
+    group_by(direction.data1, direction.data2) %>%
+    dplyr::count()
+  
+  numberCat <- dim(de_results_merged_filtered_table)[1]
+  if (numberCat == 4){
+    de_results_merged_filtered_table$consistency <- c("Female", "No1", "No", "Male")
+  } else if (numberCat == 3){
+    de_results_merged_filtered_table$consistency <- c("Female", "No", "Male")
+  } else if (numberCat == 2){
+    de_results_merged_filtered_table$consistency <- c("Female", "Male")
+  } else if (numberCat == 1){
+    if (de_results_merged_filtered_table$direction.data1 == de_results_merged_filtered_table$direction.data2){
+      if  (de_results_merged_filtered_table$direction.data1 == "Female"){
+        de_results_merged_filtered_table$consistency <- "Female"
+      } else if (de_results_merged_filtered_table$direction.data1 == "Male"){
+        de_results_merged_filtered_table$consistency <- "Male"
+      }
+    }
+  }
+  
+  print(de_results_merged_filtered_table)
+  
+  ### alluvial plot
+  p <- ggplot(de_results_merged_filtered_table, aes(axis1 = direction.data2, axis2 = direction.data1, y = n))
+  p <- p + geom_alluvium(aes(fill = consistency), discern = FALSE) + geom_stratum(discern = FALSE)
+  p <- p + geom_text(stat = "stratum", discern = FALSE,  aes(label = after_stat(stratum)), size = 7)
+  p <- p + scale_x_discrete(limits = c(nameData2, nameData1), expand = c(.01, .01))
+  if (numberCat == 4){
+    p <- p + scale_fill_manual("", values = c("Female" = "#c42134", "Male" = "#074c9b", "No1" = "#787878", "No" = "#C0C0C0"), guide = "none")
+  } else if (numberCat == 3){
+    p <- p + scale_fill_manual("", values = c("Female" = "#c42134", "Male" = "#074c9b", "No" = "#C0C0C0"), guide = "none")
+  } else if (numberCat == 2){
+    p <- p + scale_fill_manual("", values = c("Female" = "#c42134", "Male" = "#074c9b"), guide = "none")
+  } else if (numberCat == 1){
+    if (de_results_merged_filtered_table$consistency == "Male"){
+      p <- p + scale_fill_manual("", values = c("Male" = "#074c9b"), guide = "none")
+    } else if (de_results_merged_filtered_table$consistency == "Female"){
+      p <- p + scale_fill_manual("", values = c("Female" = "#c42134"), guide = "none")
+    }
+  }
+  p <- p + theme_minimal() + ylab("")
+  p <- p + theme(axis.title.y = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+                 axis.text.y = element_text(size = 16))
+  p <- p + coord_flip()
+  return(p)
+}
+```
+
+```{r _function_consistency, echo=FALSE}
+consistency_test <- function(data1, data2, columnMerge = "ensemblID", binomTestP = 0.5,
+                             qvalueThreshold = 0.01, logFCThreshold = 0, typeComparison = "1vs2"){
+  # merge the 2 datasets
+  de_results_merged <- merge(data1, data2, by = columnMerge, suffixes = c(".data1", ".data2"))
+  # Depending on the type of comparison choosen, get the observed consistency 
+  de_results_merged_filtered <- data.frame()
+  nbr_consistent <- 0
+  consistency <- 0
+  if (typeComparison == "1vs2"){
+    # keep only the genes/transcripts that are significant in the first data
+    de_results_merged_filtered <- de_results_merged[which(de_results_merged$qvalue.data1 < qvalueThreshold & abs(de_results_merged$logFC.data1) > logFCThreshold), ]
+    print(sprintf("Number of genes compared = %s", dim(de_results_merged_filtered)[1]))
+    # number of consistent genes/transcripts
+    nbr_consistent <- sum(sign(de_results_merged_filtered$t.data1) == sign(de_results_merged_filtered$t.data2))
+    consistency <- nbr_consistent/length(de_results_merged_filtered[, columnMerge])
+  } else if (typeComparison == "intersection"){
+    # keep only the genes/transcripts that are significant in the second data
+    de_results_merged_filtered <- de_results_merged[which(de_results_merged$qvalue.data1 < qvalueThreshold & abs(de_results_merged$logFC.data1) > logFCThreshold &
+                                                            de_results_merged$qvalue.data2 < qvalueThreshold & abs(de_results_merged$logFC.data2) > logFCThreshold), ]
+    print(sprintf("Number of genes compared = %s", dim(de_results_merged_filtered)[1]))
+    # number of consistent genes/transcripts
+    nbr_consistent <- sum(sign(de_results_merged_filtered$t.data1) == sign(de_results_merged_filtered$t.data2))
+    consistency <- nbr_consistent/length(de_results_merged_filtered[, columnMerge])
+  } else if (typeComparison == "union"){
+    # keep only the genes/transcripts that are significant in the second data
+    de_results_merged_filtered <- de_results_merged[which((de_results_merged$qvalue.data1 < qvalueThreshold & abs(de_results_merged$logFC.data1) > logFCThreshold) |
+                                                            (de_results_merged$qvalue.data2 < qvalueThreshold & abs(de_results_merged$logFC.data2) > logFCThreshold)), ]
+    print(sprintf("Number of genes compared = %s", dim(de_results_merged_filtered)[1]))
+    # number of consistent genes/transcripts
+    nbr_consistent <- sum(sign(de_results_merged_filtered$t.data1) == sign(de_results_merged_filtered$t.data2))
+    consistency <- nbr_consistent/length(de_results_merged_filtered[, columnMerge])
+  }
+  # compare this consistency score with the consistency of list of random genes
+  cons_values <- rep(NA, 1000)
+  # to do 1000 times
+  for (i in 1:1000){
+    # randomly select the same number of genes/transcripts in the data2 to test the overlap with the data1 signif genes
+    selection <- sample(de_results_merged[, columnMerge], length(de_results_merged_filtered[, columnMerge]))
+    nbr_consistent_th <- sum(sign(de_results_merged$logFC.data2[which(de_results_merged[, columnMerge] %in% selection)]) == sign(de_results_merged$logFC.data1[which(de_results_merged[, columnMerge] %in% selection)]))
+    cons_values[i] <- nbr_consistent_th/length(de_results_merged_filtered[, columnMerge])
+  }
+  cons_values <- as.data.frame(cons_values)
+  # plot the distribution of the predited consistency and the real value
+  p <- ggplot(cons_values, aes(cons_values))
+  p <- p + geom_histogram(binwidth=0.02, boundary = 0, fill="grey", color="black")
+  p <- p + theme_bw() + xlab("consistency") + ylab("Frequency")
+  p <- p + scale_x_continuous(limits = c(0, 1))
+  p <- p + geom_vline(xintercept = consistency, color = "red")
+  print(p)
+  # test this consistency with a permutation test
+  nsmaller <- sum(cons_values >= consistency)
+  permutation_test <- round((nsmaller+1)/(1000+1), 3)
+  # test this consistency with a binomial test
+  result_test <- binom.test(nbr_consistent, length(de_results_merged_filtered[, columnMerge]), p = binomTestP)
+  # print results
+  print(sprintf("number of consistent gene = %s", nbr_consistent))
+  print(sprintf("consistency = %s", consistency))
+  print(sprintf("permutation test p-value = %s", permutation_test))
+  print(sprintf("binomial test p-value = %s", result_test$p.value))
+  return(consistency)
+}
+```
+
+```{r create_alluvial_plot_HDBRvsGTEx, echo=FALSE}
+p <- consistency_plot(results_prenatal, results_adult, "Prenatal", "Adult", qvalueThreshold = qvalue_threshold, logFCThreshold = 0, typeComparison = "1vs2")
+p
+# save plot
+namePlot <- "HDBRvsGTEx.png"
+ggsave(namePlot, plot = p, 
+       path = "images/4-GTEx/2-comparison/comparison/alluvialPlot/",
+       width = 18, height = 10, units = "cm", create.dir = TRUE)
+```
+
+
+```{r consistency_score_prenatalVSadult, echo=FALSE}
+print("Consistency of the prenatal sexDE genes in adult forebrain:")
+consistency_all <- consistency_test(results_prenatal, results_adult, qvalueThreshold = qvalue_threshold, logFCThreshold = 0)
+```
+
+```{r consistency_score_adultVSprenatal, echo=FALSE}
+print("Consistency of the adult sexDE genes in the prenatal forebrain:")
+consistency_test(results_adult, results_prenatal, qvalueThreshold = qvalue_threshold, logFCThreshold = 0)
+```
+
+```{r consistency_score_union, echo=FALSE}
+print("Consistency of the union of the sexDE genes betweeen adult and prenatal forebrain:")
+consistency_test(results_prenatal, results_adult, qvalueThreshold = qvalue_threshold, logFCThreshold = 0, typeComparison = "union")
+print("Consistency of the union of the sexDE genes between adult and prenatal forebrain:")
+consistency_test(results_adult, results_prenatal, qvalueThreshold = qvalue_threshold, logFCThreshold = 0, typeComparison = "union")
+```
+
+## LogFC correlation
+
+Correlation of the logFC for the 3 lists of genes.
+
+```{r function_scatter_plot_logFC, echo=FALSE}
+scatter_logFC <- function(data1, data2, nameData1, nameData2, columnMerge = "ensemblID", corRes = TRUE){
+  # merge the 2 dataset
+  de_results_merged <- merge(data1, data2, by = columnMerge, suffixes = c(".data1", ".data2"))
+  # test correlation
+  res <- cor.test(de_results_merged$logFC.data1, de_results_merged$logFC.data2, 
+                  method = "pearson")
+  if (res$p.value == 0){
+    annotation_text <- sprintf("r = %.3f\nP < 2.2e-16", res$estimate)
+  } else{
+    annotation_text <- sprintf("r = %.3f\nP = %1.2e", res$estimate, res$p.value)
+  }
+  yrng <- range(de_results_merged$logFC.data2)
+  xrng <- range(de_results_merged$logFC.data1)
+  # plot
+  p <- ggplot(de_results_merged, aes(x = logFC.data1, y = logFC.data2))
+  p <- p + geom_abline(intercept = 0, slope = 1, col = "grey")
+  p <- p + geom_point( alpha = 0.3)
+  p <- p + theme_bw()
+  p <- p + theme(plot.title = element_text(hjust = 0.5),
+                 plot.subtitle = element_text(hjust = 0.5))
+  p <- p + xlab(paste0("logFC - ", nameData1)) + ylab(paste0("logFC - ", nameData2))
+  if (corRes){
+   p <- p + annotate("text", xrng[1], yrng[2], hjust = 0, vjust = 1, 
+                     label = annotation_text) 
+  }
+  return(p)
+}
+
+scatter_logFC_union <- function(data1, data2, nameData1, nameData2, columnMerge = "ensemblID", onlySignif = FALSE){
+  # merge the 2 dataset
+  de_results_merged <- merge(data1, data2, by = columnMerge, suffixes = c(".data1", ".data2"))
+  # union of DE genes
+  de_results_merged_filtered <- de_results_merged[which(de_results_merged$signif.data1 + de_results_merged$signif.data2 >= 1), ]
+  # test correlation
+  res <- cor.test(de_results_merged$logFC.data1, de_results_merged$logFC.data2, 
+                  method = "spearman")
+  res_union <- cor.test(de_results_merged_filtered$logFC.data1,
+                        de_results_merged_filtered$logFC.data2, method = "pearson")
+  if (res$p.value == 0){
+    annotation_text <- sprintf("r = %.3f\nP < 2.2e-16", res$estimate)
+  } else{
+    annotation_text <- sprintf("r = %.3f\nP = %1.2e", res$estimate, res$p.value)
+  }
+  yrng <- range(de_results_merged$logFC.data1)
+  xrng <- range(de_results_merged$logFC.data2)
+  # plot
+  if (onlySignif){
+    p <- ggplot(de_results_merged_filtered, aes(x = logFC.data1, y = logFC.data2, shape = as.character(signif.data1 + signif.data2),
+                                                fill = as.character(signif.data1 + signif.data2)))
+  } else{
+    p <- ggplot(de_results_merged, aes(x = logFC.data1, y = logFC.data2, shape = as.character(signif.data1 + signif.data2),
+                                       fill = as.character(signif.data1 + signif.data2)))
+  }
+  p <- p + geom_abline(intercept = 0, slope = 1, col = "grey")
+  p <- p + geom_point(alpha = 0.5)
+  p <- p + scale_shape_manual(values = c("0" = 1, "1" = 21, "2" = 23), 
+                             labels = c("0" = 'not sex-DE', "1" = 'sex-DE in one data', "2" = 'sex-DE in both data'),
+                             name = "")
+  p <- p + scale_fill_manual(values = c("0" = "grey", "1" = "grey50", "2" = "black"), 
+                             labels = c("0" = 'not sex-DE', "1" = 'sex-DE in one data', "2" = 'sex-DE in both data'),
+                             name = "")
+  p <- p + theme_bw() + labs(title = "logFC correlation")
+  p <- p + theme(plot.title = element_text(hjust = 0.5),
+                 plot.subtitle = element_text(hjust = 0.5))
+  p <- p + xlab(paste0("logFC - ", nameData1)) + ylab(paste0("logFC - ", nameData2))
+  p <- p + annotate("text", xrng[1], yrng[2], hjust = 0, vjust = 1, 
+                    label = annotation_text)
+  return(p)
+}
+```
+
+
+```{r scatter_plot_union_sexDE, echo=FALSE}
+# prepare data
+results_prenatal$signif <- ifelse(results_prenatal$qvalue < qvalue_threshold & abs(results_prenatal$logFC) > 0, 1, 0)
+results_adult$signif <- ifelse(results_adult$qvalue < qvalue_threshold & abs(results_adult$logFC) > 0, 1, 0)
+# scatter plot
+scatter_logFC_union(results_prenatal, results_adult, "Prenatal", "Adult", onlySignif = TRUE)
+```
+
+```{r scatter_plot_prenatal_sexDE, echo=FALSE}
+p <- scatter_logFC(results_prenatal[which(results_prenatal$signif == 1), ], results_adult, "Prenatal", "Adult")
+p <- p + theme(panel.grid = element_blank())
+p <- p + geom_hline(yintercept = 0) + geom_vline(xintercept = 0)
+p
+# save plot
+ggsave("logFC_prenatal_vs_adult_prenatalSexDE.png",
+       path = "images/4-GTEx/2-comparison/comparison/scatterPlot/",
+       units = "cm", height = 10, width = 10, create.dir = TRUE)
+```
+
+
+```{r scatter_plot_adult_sexDE, echo=FALSE}
+p <- scatter_logFC(results_adult[which(results_adult$signif == 1), ], results_prenatal, "Adult", "Prenatal")
+p
+```
+
+
+# Comparison excluding sex-chromosomes
+
+## Mean effect size
+
+Mean effect size in prenatal brain:
+```{r logFC_prenatal_auto, echo=FALSE}
+meanLogFC(results_prenatal_auto, qvalue_threshold = qvalue_threshold, logFC_threshold = 0)
+```
+
+Mean effect size in adult brain:
+```{r logFC_adult_auto, echo=FALSE}
+meanLogFC(results_adult_auto, qvalue_threshold = qvalue_threshold, logFC_threshold = 0)
+```
+
+
+## Overlap of the data
+
+Test the overlap of male and female sex-biased genes separatly.
+```{r test_overlap_male_auto, echo=FALSE}
+listInput_auto <- prepareDataEnrich(results_prenatal_auto, results_adult_auto, 
+                                  listNames = c("prenatal female-biased genes", "prenatal male-biased genes", "adult female-biased genes", "adult male-biased genes"),
+                                  qvalue_threshold = qvalue_threshold, logFC_threshold = 0)
+hypergeometric_test(listInput_auto, fullMerge_auto$ensemblID, sex = "male")
+```
+
+```{r test_overlap_female_auto, echo=FALSE}
+hypergeometric_test(listInput_auto, fullMerge_auto$ensemblID, sex = "female")
+```
+
+
+## Replication rate
+
+Compute the pi1 replication rates of significant sex-DE genes between prenatal and adult sex-DE analysis.
+```{r compute_pi1_auto, echo=FALSE}
+print("Replication of prenatal results in adult analysis (autosomal genes):")
+pi1_normalized(results_prenatal_auto, results_adult_auto, 
+               qvalue_threshold = qvalue_threshold, logFC_threshold = 0)
+print("Replication of adult results in prenatal analysis (autosomal genes):")
+pi1_normalized(results_adult_auto, results_prenatal_auto, 
+               qvalue_threshold = qvalue_threshold, logFC_threshold = 0)
+```
+
+Compute the replication rates for the union of sex-DE genes between prenatal and adult sex-DE analysis.
+```{r compute_pi1_union_auto, echo=FALSE}
+# compute the union of sex-DE genes in both datasets
+print("Replication in adult analysis:")
+union_auto <- fullMerge_auto[which(fullMerge_auto$qvalue_prenatal < qvalue_threshold | 
+                                     fullMerge_auto$qvalue_adult < qvalue_threshold),]
+union_auto_prenatal <- results_prenatal_auto[which(results_prenatal_auto$ensemblID %in% union_auto$ensemblID),]
+pi1_union_auto_prenatal <- pi1_score(union_auto_prenatal, results_adult_auto, columnMerge = "ensemblID")
+sprintf("pi1 for union genes = %s", pi1_union_auto_prenatal)
+print("Replication in prenatal analysis:")
+union_auto_adult <- results_adult_auto[which(results_adult_auto$ensemblID %in% union_auto$ensemblID),]
+pi1_union_auto_adult <- pi1_score(union_auto_adult, results_prenatal_auto, columnMerge = "ensemblID")
+sprintf("pi1 for union genes = %s", pi1_union_auto_adult)
+```
+
+## Consistency plot
+
+```{r create_alluvial_plot_prenatalVSadult_auto, echo=FALSE}
+p <- consistency_plot(results_prenatal_auto, results_adult_auto, "Prenatal", "Adult", qvalueThreshold = qvalue_threshold, logFCThreshold = 0, typeComparison = "1vs2")
+p
+# save plot
+namePlot <- "HDBRvsGTEx_auto.png"
+ggsave(namePlot, plot = p, 
+       path = "images/4-GTEx/2-comparison/comparison/alluvialPlot/",
+       width = 18, height = 10, units = "cm")
+```
+
+
+```{r consistency_score_prenatalVSadult_auto, echo=FALSE}
+print("Consistency of the prenatal sexDE genes in adult forebrain:")
+consistency_auto <- consistency_test(results_prenatal_auto, results_adult_auto, qvalueThreshold = qvalue_threshold, logFCThreshold = 0)
+```
+
+```{r consistency_score_adultVSprenatal_auto, echo=FALSE}
+print("Consistency of the adult sexDE genes in the prenatal forebrain:")
+consistency_test(results_adult_auto, results_prenatal_auto, qvalueThreshold = qvalue_threshold, logFCThreshold = 0)
+```
+
+```{r consistency_score_union_auto, echo=FALSE}
+print("Consistency of the union of the sexDE genes betweeen adult and prenatal forebrain:")
+consistency_test(results_prenatal_auto, results_adult_auto, qvalueThreshold = qvalue_threshold, logFCThreshold = 0, typeComparison = "union")
+print("Consistency of the union of the sexDE genes between adult and prenatal forebrain:")
+consistency_test(results_adult_auto, results_prenatal_auto, qvalueThreshold = qvalue_threshold, logFCThreshold = 0, typeComparison = "union")
+```
+
+## LogFC correlation
+
+```{r scatter_plot_union_sexDE_auto, echo=FALSE}
+# prepare data
+results_prenatal_auto$signif <- ifelse(results_prenatal_auto$qvalue < qvalue_threshold & abs(results_prenatal_auto$logFC) > 0, 1, 0)
+results_adult_auto$signif <- ifelse(results_adult_auto$qvalue < qvalue_threshold & abs(results_adult_auto$logFC) > 0, 1, 0)
+# scatter plot
+scatter_logFC_union(results_prenatal_auto, results_adult_auto, "Prenatal", "Adult", onlySignif = TRUE)
+```
+
+```{r scatter_plot_prenatal_sexDE_auto, echo=FALSE}
+p <- scatter_logFC(results_prenatal_auto[which(results_prenatal_auto$signif == 1), ], results_adult_auto, "Prenatal", "Adult")
+p <- p + theme(panel.grid = element_blank(),
+               axis.title.x = element_text(color = "#2bd494"),
+               axis.title.y = element_text(color = "#9729d6"))
+p <- p + geom_hline(yintercept = 0) + geom_vline(xintercept = 0)
+p
+# save plot
+ggsave("logFC_prenatal_vs_adult_prenatalSexDE_auto.png",
+       path = "images/4-GTEx/2-comparison/comparison/scatterPlot/",
+       units = "cm", height = 10, width = 10)
+```
+
+
+```{r scatter_plot_adult_sexDE_auto, echo=FALSE}
+p <- scatter_logFC(results_adult_auto[which(results_adult_auto$signif == 1), ], results_prenatal_auto, "Adult", "Prenatal")
+p
+```
+
+# Session info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```
