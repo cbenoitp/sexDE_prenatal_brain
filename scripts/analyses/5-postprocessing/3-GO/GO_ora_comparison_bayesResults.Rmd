@@ -1,0 +1,461 @@
+---
+title: "GO analysis with ORA - comparison between sex-DE in adult and prenatal brain and bayes results"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+---
+
+```{r load_libraries, echo=FALSE}
+suppressPackageStartupMessages( library(SummarizedExperiment) )
+suppressPackageStartupMessages( library(dplyr) )
+suppressPackageStartupMessages( library(fgsea) )
+suppressPackageStartupMessages( library(data.table) )
+suppressPackageStartupMessages( library(qvalue) )
+suppressPackageStartupMessages( library(ggplot2) )
+suppressPackageStartupMessages( library(RColorBrewer) )
+suppressPackageStartupMessages( library(limma) )
+suppressPackageStartupMessages( library(clusterProfiler) )
+suppressPackageStartupMessages( library(enrichplot) )
+suppressPackageStartupMessages( library(org.Hs.eg.db) )
+suppressPackageStartupMessages( library(gridExtra) )
+suppressPackageStartupMessages( library(forcats) )
+```
+
+```{r, setup, include=FALSE, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+
+# Functions
+
+## Prepare gene list
+
+```{r fct_prepare_geneList_bayes, echo=FALSE}
+prepareGeneList_bayes <- function(data, specificity = "Shared", direction = "UP", logFCThreshold = 0){
+  if (direction == "UP"){
+    geneList <- data$gene_name[which(data$specificity == specificity & data$logFC_prenatal > logFCThreshold)]
+  } else if (direction == "DOWN"){
+    geneList <- data$gene_name[which(data$specificity == specificity & data$logFC_prenatal < logFCThreshold)]
+  }
+  return(geneList)
+}
+```
+
+
+
+## Enrichment with compareCluster and enrichGO
+
+```{r fct_compareCluster_bayesOnly, echo=FALSE}
+compare_GOenrich_bayesOnly <- function(bayes, bayesNames,
+                                       universe, ont, OrgDb = org.Hs.eg.db, 
+                                       keyType = "SYMBOL", minGSSize = 15, maxGSSize = 500, pvalueCutoff = 0.05, 
+                                       logFCThreshold = 0, simplify = TRUE, cutoffSimplify = 0.7){
+  # prepare gene lists of up and down regulated genes 
+  clusters <- list(prepareGeneList_bayes(bayes, specificity = "Prenatal", direction = "UP", logFCThreshold = logFCThreshold),
+                   prepareGeneList_bayes(bayes, specificity = "Prenatal", direction = "DOWN", logFCThreshold = logFCThreshold),
+                   prepareGeneList_bayes(bayes, specificity = "Shared", direction = "UP", logFCThreshold = logFCThreshold),
+                   prepareGeneList_bayes(bayes, specificity = "Shared", direction = "DOWN", logFCThreshold = logFCThreshold))
+  names(clusters) <- bayesNames
+  # do enrichment analysis
+  resGO <- compareCluster(clusters, fun = "enrichGO", universe = universe, ont = ont, OrgDb = OrgDb, keyType = keyType, 
+                          minGSSize = minGSSize, maxGSSize = maxGSSize, pvalueCutoff = pvalueCutoff)
+  if (simplify){
+    # simplify the GO terms
+    resGO_simplify <- simplify(resGO, cutoff=cutoffSimplify, by="pvalue", select_fun=min)
+    return(resGO_simplify)
+  } else{
+    return(resGO)
+  }
+}
+```
+
+Function to count the number of GO terms containing a list of keywords.
+
+```{r function_count_GO_keyword, echo=FALSE}
+countKeyword <- function(resGO, cluster, keywords){
+  # get only GO term enriched in the choosen cluster
+  GOcluster <- resGO@compareClusterResult[which(resGO@compareClusterResult$Cluster == cluster), ]
+  # Count number of GO terms containing at least one of the keywords
+  containKeyword <- Reduce("|", lapply(keywords, grepl, x = GOcluster$Description))
+  return(sum(containKeyword))
+}
+```
+
+
+
+## Plot enrichment results
+
+```{r fct_plot_enrichRes, echo=FALSE}
+plot_resGO <- function(resGO){
+  p <- dotplot(resGO, showCategory = 10, label_format = 100)
+  p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+  p <- p + xlab("")
+  p <- p + scale_color_gradient(low = "#e6e6e6", high = "#000000", trans = 'reverse')
+  return(p)
+}
+```
+
+
+# Analysis
+
+## Load data
+
+### Load prenatal sex-DE data
+
+```{r load_prenatal_DE, echo=FALSE}
+results_prenatal <- read.table("data/3-DE/VoomDream_topTable_forebrain_pseudotime_sva_ind_interaction.txt",
+                             header = TRUE, check.names=FALSE)
+results_prenatal$ensemblID <- sapply(strsplit(as.character(results_prenatal$gene_id), "\\."), function(x){x[1]})
+# remove genes used to define sex of samples
+genes2remove <- c("XIST", as.character(results_prenatal$gene_name[which(results_prenatal$chr == "chrY" & results_prenatal$gene_type == "protein_coding")]))
+results_prenatal <- results_prenatal[which(!results_prenatal$gene_name %in% genes2remove),]
+# keep only autosomal genes
+results_prenatal_auto <- results_prenatal[which(!results_prenatal$chr %in% c("chrX", "chrY", "chrM")),]
+```
+
+
+### Load adult sex-DE data
+
+```{r load_adult_DE, echo=FALSE}
+results_adult <- read.table("data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_VoomDream_topTable_with_sva_ind_pseudotime_interaction.txt",
+                            header = TRUE)
+results_adult$ensemblID <- sapply(strsplit(as.character(results_adult$gene_id), "\\."), function(x){x[1]})
+# remove genes used to define sex of samples
+genes2remove <- c("XIST", as.character(results_adult$gene_name[which(results_adult$chr == "chrY" & 
+                                                                       results_adult$gene_type == "protein_coding")]))
+results_adult <- results_adult[which(!results_adult$gene_name %in% genes2remove),]
+# keep only autosomal genes
+results_adult_auto <- results_adult[which(!results_adult$chr %in% c("chrX", "chrY", "chrM")),]
+```
+
+
+### Load bayesian results
+
+```{r load_bayesRes, echo=FALSE}
+bayesRes <- read.table("data/4-GTEx/2-comparison/lineModel/lineModel_prenatalVSadult_6models_withAnnotation.txt", header = TRUE, sep = "\t")
+# add chromosome information using the prenatal sex-DE results
+bayesRes <- merge(bayesRes, results_prenatal[, c("ensemblID","chr")])
+# keep only autosomal genes
+bayesRes_auto <- bayesRes[which(!bayesRes$chr %in% c("chrX", "chrY", "chrM")),]
+```
+
+## Create universe
+
+Create the universe gene list corresponding to all genes analyzed in both datasets.
+
+```{r universe, echo=FALSE}
+# merge adult and prenatal data
+merged_results <- merge(results_prenatal, results_adult, by = "ensemblID")
+# keep only autosomal genes
+merged_results_auto <- merged_results[which(!merged_results$chr.x %in% c("chrX", "chrY", "chrM")),]
+universe <- as.character(merged_results$gene_name.x)
+universe_auto <- as.character(merged_results_auto$gene_name.x)
+universe_bayes <- as.character(bayesRes$gene_name)
+universe_bayes_auto <- as.character(bayesRes_auto$gene_name)
+```
+
+
+## Create keywords list
+
+Prepare the lists of keywords to search in the enriched GO terms.
+
+```{r keyword_lists, echo=FALSE}
+cellCycle <- list("cell cycle", "meisosis", "meiotic", "mitotic", "mitosis", "cytokinesis",
+                  "DNA", "chromosome", " chromatid", "chromatin", "spindle", "centrosome", "kinetochore", "centriole",
+                  "G1", "G2", "M phase", "S phase", "S transition", "M transition", "metaphase", "anaphase",
+                  "segregation", "division", "replication", "fission")
+development <- list("development", "morphogenesis", "embryonic", "maturation", "stem cell", "pattern formation", "neural tube")
+sensoryPerception <- list("sensory", "perception", "stimulus", "stimuli")
+mito <- list("mitochondria", "mitochondrial", "mitochondrion",
+             "ATP", "respiration", "respiratory", "apoptotic", "apoptosis",
+             "oxidative phosphorylation", "electron transport chain",
+             "autophagy", "autophagic", "autophagosome")
+neuro <- list("synaptic", "synapse", "presynapse", "postsynapse", "presynaptic", "postsynaptic",
+              "neuron", "neurotransmitter", "neuronal", "nervous system",
+              "axon", "axonogenesis", "axonal", "dendrite", "dendritic", "neural")
+rna <- list("splicing", "spliceosome", "RNA")
+
+# list of all lists of keywords to test
+listKeywords <- list("cell cycle" = cellCycle, "development" = development, "sensory perception" = sensoryPerception, "mitochodria/autophagy" = mito, "synapse/neuron" = neuro, "RNA" = rna)
+```
+
+## GO analysis on all genes
+
+### Analysis for BP
+
+```{r GOanalysis_BP, echo=FALSE}
+resGO_BP <- compare_GOenrich_bayesOnly(bayes = bayesRes, universe = universe_bayes, ont = "BP",
+                                       bayesNames = c("prenatal-specific female-biased", "prenatal-specific male-biased", "shared female-biased", "shared male-biased"),
+                                       logFCThreshold = 0, simplify = FALSE)
+```
+
+Number of significant GO terms for each gene list.
+
+```{r nbr_signif_BP, echo=FALSE}
+resGO_BP@compareClusterResult %>% group_by(Cluster) %>% summarise(nbr = n())
+```
+
+Count number of GO terms with specific keywords for each category.
+
+```{r count_keywords_BP, echo=FALSE}
+analyzedClusters <- c("prenatal-specific female-biased", "prenatal-specific male-biased", "shared female-biased", "shared male-biased")
+for (cluster in analyzedClusters){
+  for (keywords in names(listKeywords)){
+    print(sprintf(">>> Search %s keywords in GO-term enriched in %s genes", keywords, cluster))
+    counts <- countKeyword(resGO_BP, cluster = cluster,
+                           keywords = listKeywords[[keywords]])
+    print(counts)
+  }
+}
+```
+
+```{r plot_GOcompare_BP, echo=FALSE}
+p <- plot_resGO(resGO_BP)
+p
+ggsave("dotplot_BP_bayes.png", plot = p, 
+       path = "images/5-postprocessing/3-GO/shared/", 
+       width = 20, height = 20, units = "cm")
+```
+
+Save the results in file.
+
+```{r save_GOcompare_BP, echo=FALSE}
+write.table(resGO_BP@compareClusterResult,
+            "data/5-postprocessing/3-GO/shared/GOcompare_bayes_BP.txt", 
+            row.names = FALSE, col.names = TRUE, quote = FALSE, sep = "\t")
+```
+
+
+### Analysis for CC
+
+```{r GOanalysis_CC, echo=FALSE}
+resGO_CC <- compare_GOenrich_bayesOnly(bayes = bayesRes, universe = universe_bayes, ont = "CC",
+                                       bayesNames = c("prenatal-specific female-biased", "prenatal-specific male-biased", "shared female-biased", "shared male-biased"),
+                                       logFCThreshold = 0, simplify = FALSE)
+```
+
+Number of significant GO terms for each gene list.
+
+```{r nbr_signif_CC, echo=FALSE}
+resGO_CC@compareClusterResult %>% group_by(Cluster) %>% summarise(nbr = n())
+```
+
+Count number of GO terms with specific keywords.
+
+```{r count_keywords_CC, echo=FALSE}
+analyzedClusters <- c("prenatal-specific female-biased", "prenatal-specific male-biased", "shared female-biased", "shared male-biased")
+for (cluster in analyzedClusters){
+  for (keywords in names(listKeywords)){
+    print(sprintf(">>> Search %s keywords in GO-term enriched in %s genes", keywords, cluster))
+    counts <- countKeyword(resGO_CC, cluster = cluster,
+                           keywords = listKeywords[[keywords]])
+    print(counts)
+  }
+}
+```
+
+```{r plot_GOcompare_CC, echo=FALSE}
+p <- plot_resGO(resGO_CC)
+p
+ggsave("dotplot_CC_bayes.png", plot = p, 
+       path = "images/5-postprocessing/3-GO/shared/", 
+       width = 20, height = 20, units = "cm")
+```
+
+Save the results in file.
+
+```{r save_GOcompare_CC, echo=FALSE}
+write.table(resGO_CC@compareClusterResult,
+            "data/5-postprocessing/3-GO/shared/GOcompare_bayes_CC.txt", 
+            row.names = FALSE, col.names = TRUE, quote = FALSE, sep = "\t")
+```
+
+
+### Analysis for MF
+
+```{r GOanalysis_MF, echo=FALSE}
+resGO_MF <- compare_GOenrich_bayesOnly(bayes = bayesRes, universe = universe_bayes, ont = "MF",
+                                       bayesNames = c("prenatal-specific female-biased", "prenatal-specific male-biased", "shared female-biased", "shared male-biased"),
+                                       logFCThreshold = 0, simplify = FALSE)
+```
+
+Number of significant GO terms for each gene list.
+
+```{r nbr_signif_MF, echo=FALSE}
+resGO_MF@compareClusterResult %>% group_by(Cluster) %>% summarise(nbr = n())
+```
+
+Count number of GO terms with specific keywords.
+
+```{r count_keywords_MF, echo=FALSE}
+analyzedClusters <- c("prenatal-specific female-biased", "prenatal-specific male-biased", "shared female-biased", "shared male-biased")
+for (cluster in analyzedClusters){
+  for (keywords in names(listKeywords)){
+    print(sprintf(">>> Search %s keywords in GO-term enriched in %s genes", keywords, cluster))
+    counts <- countKeyword(resGO_MF, cluster = cluster,
+                           keywords = listKeywords[[keywords]])
+    print(counts)
+  }
+}
+```
+
+```{r plot_GOcompare_MF, echo=FALSE}
+p <- plot_resGO(resGO_MF)
+p
+ggsave("dotplot_MF_bayes.png", plot = p, 
+       path = "images/5-postprocessing/3-GO/shared/", 
+       width = 24, height = 20, units = "cm")
+```
+
+Save the results in file.
+
+```{r save_GOcompare_MF, echo=FALSE}
+write.table(resGO_MF@compareClusterResult,
+            "data/5-postprocessing/3-GO/shared/GOcompare_bayes_MF.txt", 
+            row.names = FALSE, col.names = TRUE, quote = FALSE, sep = "\t")
+```
+
+
+## GO analysis on autosomal genes
+
+### Analysis for BP
+
+```{r GOanalysis_BP_auto, echo=FALSE}
+resGO_BP_auto <- compare_GOenrich_bayesOnly(bayes = bayesRes_auto, universe = universe_bayes_auto, ont = "BP",
+                                            bayesNames = c("prenatal-specific female-biased", "prenatal-specific male-biased", "shared female-biased", "shared male-biased"),
+                                            logFCThreshold = 0, simplify = FALSE)
+```
+
+Number of significant GO terms for each gene list.
+
+```{r nbr_signif_BP_auto, echo=FALSE}
+resGO_BP_auto@compareClusterResult %>% group_by(Cluster) %>% summarise(nbr = n())
+```
+
+Count number of GO terms with specific keywords.
+
+```{r count_keywords_BP_auto, echo=FALSE}
+analyzedClusters <- c("prenatal-specific female-biased", "prenatal-specific male-biased", "shared female-biased", "shared male-biased")
+for (cluster in analyzedClusters){
+  for (keywords in names(listKeywords)){
+    print(sprintf(">>> Search %s keywords in GO-term enriched in %s genes", keywords, cluster))
+    counts <- countKeyword(resGO_BP_auto, cluster = cluster,
+                           keywords = listKeywords[[keywords]])
+    print(counts)
+  }
+}
+```
+
+```{r plot_GOcompare_BP_auto, echo=FALSE}
+p <- plot_resGO(resGO_BP_auto)
+p
+ggsave("dotplot_BP_bayes_auto.png", plot = p, 
+       path = "images/5-postprocessing/3-GO/shared/", 
+       width = 26, height = 20, units = "cm")
+```
+
+Save the results in file.
+
+```{r save_GOcompare_BP_auto, echo=FALSE}
+write.table(resGO_BP_auto@compareClusterResult,
+            "data/5-postprocessing/3-GO/shared/GOcompare_BP_bayes_auto.txt", 
+            row.names = FALSE, col.names = TRUE, quote = FALSE, sep = "\t")
+```
+
+### Analysis for CC
+
+```{r GOanalysis_CC_auto, echo=FALSE}
+resGO_CC_auto <- compare_GOenrich_bayesOnly(bayes = bayesRes_auto, universe = universe_bayes_auto, ont = "CC",
+                                            bayesNames = c("prenatal-specific female-biased", "prenatal-specific male-biased", "shared female-biased", "shared male-biased"),
+                                            logFCThreshold = 0, simplify = FALSE)
+```
+
+Number of significant GO terms for each gene list.
+
+```{r nbr_signif_CC_auto, echo=FALSE}
+resGO_CC_auto@compareClusterResult %>% group_by(Cluster) %>% summarise(nbr = n())
+```
+
+Count number of GO terms with specific keywords.
+
+```{r count_keywords_CC_auto, echo=FALSE}
+analyzedClusters <- c("prenatal-specific female-biased", "prenatal-specific male-biased", "shared female-biased", "shared male-biased")
+for (cluster in analyzedClusters){
+  for (keywords in names(listKeywords)){
+    print(sprintf(">>> Search %s keywords in GO-term enriched in %s genes", keywords, cluster))
+    counts <- countKeyword(resGO_CC_auto, cluster = cluster,
+                           keywords = listKeywords[[keywords]])
+    print(counts)
+  }
+}
+```
+
+```{r plot_GOcompare_CC_auto, echo=FALSE}
+p <- plot_resGO(resGO_CC_auto)
+p
+ggsave("dotplot_CC_bayes_auto.png", plot = p, 
+       path = "images/5-postprocessing/3-GO/shared/", 
+       width = 20, height = 20, units = "cm")
+```
+
+Save the results in file.
+
+```{r save_GOcompare_CC_auto, echo=FALSE}
+write.table(resGO_CC_auto@compareClusterResult,
+            "data/5-postprocessing/3-GO/shared/GOcompare_CC_bayes_auto.txt", 
+            row.names = FALSE, col.names = TRUE, quote = FALSE, sep = "\t")
+```
+
+
+### Analysis for MF
+
+```{r GOanalysis_C´MF_auto, echo=FALSE}
+resGO_MF_auto <- compare_GOenrich_bayesOnly(bayes = bayesRes_auto, universe = universe_bayes_auto, ont = "MF",
+                                            bayesNames = c("prenatal-specific female-biased", "prenatal-specific male-biased", "shared female-biased", "shared male-biased"),
+                                            logFCThreshold = 0, simplify = FALSE)
+```
+
+Number of significant GO terms for each gene list.
+
+```{r nbr_signif_MF_auto, echo=FALSE}
+resGO_MF_auto@compareClusterResult %>% group_by(Cluster) %>% summarise(nbr = n())
+```
+
+Count number of GO terms with specific keywords.
+
+```{r count_keywords_MF_auto, echo=FALSE}
+analyzedClusters <- c("prenatal-specific female-biased", "prenatal-specific male-biased", "shared female-biased", "shared male-biased")
+for (cluster in analyzedClusters){
+  for (keywords in names(listKeywords)){
+    print(sprintf(">>> Search %s keywords in GO-term enriched in %s genes", keywords, cluster))
+    counts <- countKeyword(resGO_MF_auto, cluster = cluster,
+                           keywords = listKeywords[[keywords]])
+    print(counts)
+  }
+}
+```
+
+```{r plot_GOcompare_MF_auto, echo=FALSE}
+p <- plot_resGO(resGO_MF_auto)
+p
+ggsave("dotplot_MF_bayes_auto.png", plot = p, 
+       path = "images/5-postprocessing/3-GO/shared/", 
+       width = 26, height = 20, units = "cm")
+```
+
+Save the results in file.
+
+```{r save_GOcompare_MF_auto, echo=FALSE}
+write.table(resGO_MF_auto@compareClusterResult,
+            "data/5-postprocessing/3-GO/shared/GOcompare_MF_bayes_auto.txt", 
+            row.names = FALSE, col.names = TRUE, quote = FALSE, sep = "\t")
+```
+
+# Session Info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```
