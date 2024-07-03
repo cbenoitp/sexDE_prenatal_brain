@@ -1,0 +1,259 @@
+---
+title: "Correlation  between pseudotime and cell type decomposition"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+---
+
+```{r load_libraries, echo=FALSE}
+suppressPackageStartupMessages( library(tidyverse) )
+suppressPackageStartupMessages( library(forecast) )
+```
+
+```{r, setup, include=FALSE, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+# Load data
+
+## Load pseudotime data
+
+```{r load_pseudotime, echo=FALSE}
+load("data/2-pseudotime/forebrain_metadata_pseudotime.RData")
+```
+
+
+## Load cell type decomposition analysis
+
+Load CIBERSORTx result file
+
+```{r load_cibersortx_result, echo=FALSE}
+cell_prop <- read.table("data/5-postprocessing/2-CellType/CIBERSORTx/prenatal/results/CIBERSORTx_Adjusted.txt",
+                        header = TRUE, sep = "\t")
+```
+
+Merge the cell type decomposition results and the pseudotime.
+
+```{r merge_ct_pseudotime, echo=FALSE}
+cell_prop <- merge(cell_prop, metadata, by.x = "Mixture", by.y = 0)
+```
+
+# Correlation of the cell types proportions with pseudotimes
+
+For separate cell types:
+
+```{r cor_pseudotime_NSC, echo=FALSE}
+corTestRes <- cor.test(cell_prop$NPC, cell_prop$pseudotime)
+p <- ggplot(cell_prop, aes(y = NPC, x = pseudotime))
+p <- p + geom_point()
+p <- p + ylab("Proportion of neuronal stem cells") + xlab("Pseudotime")
+p <- p + theme_minimal()
+p <- p + annotate("text", x = 0.9, y = 0.75, 
+                  label = sprintf("r = %.2f\n p-value = %.2e", corTestRes$estimate, corTestRes$p.value))
+p
+# save plot
+ggsave("NPC_VS_pseudotime.png",
+       path = "images/5-postprocessing/2-CellType/prenatal/",
+       plot = p, width = 15, height = 10, units = "cm")
+```
+
+```{r cor_pseudotime_neurons_ex, echo=FALSE}
+corTestRes <- cor.test(cell_prop$ExN, cell_prop$pseudotime)
+p <- ggplot(cell_prop, aes(y = ExN, x = pseudotime))
+p <- p + geom_point()
+p <- p + ylab("Proportion of excitatory neurons") + xlab("Pseudotime")
+p <- p + theme_minimal()
+p <- p + annotate("text", x = -0.75, y = 0.6, 
+                  label = sprintf("r = %.2f\n p-value = %.2e", corTestRes$estimate, corTestRes$p.value))
+p
+# save plot
+ggsave("ExNeurons_VS_pseudotime.png",
+       path = "images/5-postprocessing/2-CellType/prenatal/",
+       plot = p, width = 15, height = 10, units = "cm")
+```
+
+```{r cor_pseudotime_neurons_in, echo=FALSE}
+corTestRes <- cor.test(cell_prop$InN, cell_prop$pseudotime)
+p <- ggplot(cell_prop, aes(y = InN, x = pseudotime))
+p <- p + geom_point()
+p <- p + ylab("Proportion of interneurons") + xlab("Pseudotime")
+p <- p + theme_minimal()
+p <- p + annotate("text", x = -0.75, y = 0.5, 
+                  label = sprintf("r = %.2f\n p-value = %.2e", corTestRes$estimate, corTestRes$p.value))
+p
+# save plot
+ggsave("Interneurons_VS_pseudotime.png",
+       path = "images/5-postprocessing/2-CellType/prenatal/",
+       plot = p, width = 15, height = 10, units = "cm")
+```
+
+```{r cor_pseudotime_neurons, echo=FALSE}
+corTestRes <- cor.test(cell_prop$ExN + cell_prop$InN, cell_prop$pseudotime)
+p <- ggplot(cell_prop, aes(y = InN + ExN, x = pseudotime))
+p <- p + geom_point()
+p <- p + ylab("Proportion of neurons") + xlab("Pseudotime")
+p <- p + theme_minimal()
+p <- p + annotate("text", x = -0.75, y = 0.8, 
+                  label = sprintf("r = %.2f\n p-value = %.2e", corTestRes$estimate, corTestRes$p.value))
+p
+# save plot
+ggsave("AllNeurons_VS_pseudotime.png",
+       path = "images/5-postprocessing/2-CellType/prenatal/",
+       plot = p, width = 15, height = 10, units = "cm")
+```
+
+```{r cor_pseudotime_OPC, echo=FALSE}
+corTestRes <- cor.test(cell_prop$OPC, cell_prop$pseudotime)
+p <- ggplot(cell_prop, aes(y = OPC, x = pseudotime))
+p <- p + geom_point()
+p <- p + ylab("Proportion of OPC") + xlab("Pseudotime")
+p <- p + theme_minimal()
+p <- p + annotate("text", x = 0.75, y = 0.2, 
+                  label = sprintf("r = %.2f\n p-value = %.2e", corTestRes$estimate, corTestRes$p.value))
+p
+# save plot
+ggsave("OPC_VS_pseudotime.png",
+       path = "images/5-postprocessing/2-CellType/prenatal/",
+       plot = p, width = 15, height = 10, units = "cm")
+```
+
+Correlation of the different cell types with the pseudotime.
+
+```{r cor_ct_VS_pseudotime, echo=FALSE}
+print("NPC")
+cor(cell_prop$NPC, cell_prop$pseudotime)
+print("ExN")
+cor(cell_prop$ExN, cell_prop$pseudotime)
+print("InNC")
+cor(cell_prop$InN, cell_prop$pseudotime)
+print("Neurons")
+cor(cell_prop$InN + cell_prop$ExN, cell_prop$pseudotime)
+print("Micro")
+cor(cell_prop$Micro, cell_prop$pseudotime)
+print("OPC")
+cor(cell_prop$OPC, cell_prop$pseudotime)
+print("Astro")
+cor(cell_prop$Astro, cell_prop$pseudotime)
+print("Olig")
+cor(cell_prop$Olig, cell_prop$pseudotime)
+print("Endo")
+cor(cell_prop$Endo, cell_prop$pseudotime)
+print("Perc")
+cor(cell_prop$Perc, cell_prop$pseudotime)
+```
+
+
+# Plot the cell type composition with a moving average
+
+## Compute the moving average
+
+Compute the moving average proportion for each cell type along pseudotime
+
+```{r compute_ma, echo=FALSE}
+cell_prop <- cell_prop[order(cell_prop$pseudotime),]
+cell_prop_ma <- as.data.frame(lapply(cell_prop[2:10], ma, order = 20))
+# remove the first and last lines
+cell_prop_ma <- cell_prop_ma[complete.cases(cell_prop_ma), ]
+```
+
+Prepare the data for the plots.
+
+```{r format_prop_ma, echo=FALSE}
+# add an index for the plot
+cell_prop_ma$idx <- rownames(cell_prop_ma)
+cell_prop_ma_plot <- gather(cell_prop_ma, c(1:9), key = "cell_type", value = "proportion")
+cell_prop_ma_plot$cell_type <- factor(cell_prop_ma_plot$cell_type, 
+                                             levels = c("NPC", "ExN", "InN", "OPC", "Olig", "Astro", "Micro", "Endo", "Perc"))
+```
+
+Do the same moving average separating the samples by sex.
+
+```{r compute_ma_sex, echo=FALSE}
+## Males
+cell_prop_M <- cell_prop[which(cell_prop$Sex == "1"), ]
+cell_prop_M <- cell_prop_M[order(cell_prop_M$pseudotime),]
+cell_prop_M_ma <- as.data.frame(lapply(cell_prop_M[2:10], ma, order = 20))
+# remove the first and last lines
+cell_prop_M_ma <- cell_prop_M_ma[complete.cases(cell_prop_M_ma), ]
+rownames(cell_prop_M_ma) <- NULL
+## Females
+cell_prop_F <- cell_prop[which(cell_prop$Sex == "2"), ]
+cell_prop_F <- cell_prop_F[order(cell_prop_F$pseudotime),]
+cell_prop_F_ma <- as.data.frame(lapply(cell_prop_F[2:10], ma, order = 20))
+# remove the first and last lines
+cell_prop_F_ma <- cell_prop_F_ma[complete.cases(cell_prop_F_ma), ]
+rownames(cell_prop_F_ma) <- NULL
+```
+
+```{r format_prop_ma_sex, echo=FALSE}
+# add an index for the plot
+cell_prop_M_ma$idx <- rownames(cell_prop_M_ma)
+cell_prop_F_ma$idx <- rownames(cell_prop_F_ma)
+# merge male and female data
+cell_prop_sex_ma <- bind_rows(cell_prop_M_ma , cell_prop_F_ma , .id = 'Sex')
+cell_prop_sex_ma_plot <- gather(cell_prop_sex_ma, c(2:10), 
+                                       key = "cell_type", value = "proportion")
+cell_prop_sex_ma_plot$cell_type <- factor(cell_prop_sex_ma_plot$cell_type, 
+                                             levels = c("NPC", "ExN", "InN", "OPC", "Olig", "Astro", "Micro", "Endo", "Perc"))
+cell_prop_sex_ma_plot$sex <- factor(cell_prop_sex_ma_plot$Sex, levels = c("1","2"), 
+                                           labels = c("M", "F"))
+```
+
+## Plot the cell type composition with a moving average
+
+### For both sexes:
+
+```{r stacked_barplot_ma, echo=FALSE}
+p <- ggplot(cell_prop_ma_plot, aes(x=as.integer(idx),y=proportion, fill=cell_type))
+p <- p + geom_bar(position="stack", stat="identity", width = 1)
+p <- p + scale_fill_manual(values = c("NPC" = "#f4ccd8", "ExN" = "#cce3c1", "InN" = "#f6c9a6",
+                                      "Micro" = "#b2b2ae", "Astro" = "#c2b29d", "OPC" = "#c9c6d9",
+                                      "Endo" = "#eed9c4", "Olig" = "#ccdff4", "Perc" = "#e4d5b7"),
+                           name = "Cell types")
+p <- p + theme_bw() + ylab("Cell type proportions") + xlab("pseudotime")
+p <- p + theme(panel.border = element_blank(),
+               panel.grid.major = element_blank(), 
+               panel.grid.minor = element_blank(),
+               axis.text.x = element_blank(),
+               axis.ticks = element_blank()) 
+p
+# save plot
+ggsave("Cibersortx_Song_forebrain_pseudotime_ma_stackedBarplot_9CellTypes.png", 
+       path = "images/5-postprocessing/2-CellType/prenatal/",
+       plot = p, width = 30, height = 12, units = "cm")
+```
+
+## Separating by sexes:
+
+```{r stacked_barplot_sex_ma, echo=FALSE}
+p <- ggplot(cell_prop_sex_ma_plot, aes(x=as.integer(idx),y=proportion, fill=cell_type))
+p <- p + geom_bar(position="stack", stat="identity", width = 1)
+p <- p + scale_fill_manual(values = c("NPC" = "#f4ccd8", "ExN" = "#cce3c1", "InN" = "#f6c9a6",
+                                      "Micro" = "#b2b2ae", "Astro" = "#c2b29d", "OPC" = "#c9c6d9",
+                                      "Endo" = "#eed9c4", "Olig" = "#ccdff4", "Perc" = "#e4d5b7"),
+                           name = "Cell types")
+p <- p + facet_grid(cell_prop_sex_ma_plot$Sex~., labeller = labeller(Sex = c("1" = "Males", "2" = "Female")))
+p <- p + theme_bw() + ylab("Cell type proportions") + xlab("pseudotime")
+p <- p + theme(strip.background = element_blank(),
+               panel.border = element_blank(),
+               panel.grid.major = element_blank(), 
+               panel.grid.minor = element_blank(),
+               axis.text.x = element_blank(),
+               axis.ticks = element_blank()) 
+p
+# save plot
+ggsave("Cibersortx_Song_forebrain_pseudotime_ma_sex_stackedBarplot_9CellTypes.png", 
+       path = "images/5-postprocessing/2-CellType/prenatal/",
+       plot = p, width = 30, height = 12, units = "cm")
+```
+
+
+# Session Info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```
+

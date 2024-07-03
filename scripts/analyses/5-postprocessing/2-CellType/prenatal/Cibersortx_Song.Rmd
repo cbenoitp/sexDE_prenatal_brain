@@ -1,0 +1,400 @@
+---
+title: Cell type decomposition of HDBR data with CIBERSORTx using Song et al 2021
+  (STAB) scRNAseq data.
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+---
+
+```{r load_libraries, echo=FALSE}
+suppressPackageStartupMessages( library(edgeR) )
+suppressPackageStartupMessages( library(limma) )
+suppressPackageStartupMessages( library(Seurat) )
+suppressPackageStartupMessages( library(Matrix) )
+suppressPackageStartupMessages( library(tidyverse) )
+suppressPackageStartupMessages( library(stringr) )
+suppressPackageStartupMessages( library(ggpubr) )
+suppressPackageStartupMessages( library(forecast) )
+```
+
+```{r, setup, include=FALSE, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+# Preparation of the data for the analysis with CIBERSORTx
+
+## Load and prepare data for bulk RNA-seq
+
+Load bulk RNA-seq counts and phenotypes.
+
+```{r load_bulk_data, echo=FALSE, eval=FALSE}
+# Load bulk RNA-seq counts values
+load("data/1-preprocessing/counts_forebrain_phenotypes.RData")
+```
+
+Format the bulk RNA-seq counts data.
+
+```{r prepare_bulk_counts, echo=FALSE, eval=FALSE}
+RNAseq_counts <- x$counts
+RNAseq_counts <- as.data.frame(RNAseq_counts)
+RNAseq_counts$Gene <- x$genes$gene_name
+RNAseq_counts <- RNAseq_counts[, c(267, 1:266)]
+```
+
+Save the bulk RNA-seq counts data in a file for CIBERSORTx.
+
+```{r save_bulk_counts, echo=FALSE, eval=FALSE}
+write.table(RNAseq_counts, file = "data/5-postprocessing/2-CellType/CIBERSORTx/prenatal/mixture_HDBR.txt",
+            quote = FALSE, sep = "\t", row.names = FALSE, col.names = TRUE)
+```
+
+Clean variables that arer not needed anymore.
+
+```{r clean_workspace, echo=FALSE, eval=FALSE}
+rm(phenotypes, x, RNAseq_counts)
+```
+
+
+## Load and prepare data for single cell RNA-seq
+
+Load the single cell Seurat object.
+
+```{r load_sc_data, echo=FALSE, eval=FALSE}
+load("data/5-postprocessing/2-CellType/scRNAseq/stab.combined.RData")
+h.combined <- UpdateSeuratObject(object = h.combined)
+```
+
+In this data, select only the samples coming from the forebrain. Also remove samples from region that I am not sure of...
+
+```{r select_forebrain, echo=FALSE, eval=FALSE}
+h.combined <- subset(x = h.combined, subset = (Area != "Pons" & Area != "MDL" & Area != "VMB" & Area != "SN" & Area != "CBC"))
+h.combined <- subset(x = h.combined, subset = (Area != "MGE" & Area != "IG" & Area != "MTG"))
+# remove unused levels in Area, dataset & Period
+h.combined$Area <- droplevels(h.combined$Area)
+h.combined$dataset <- droplevels(h.combined$dataset)
+h.combined$Period <- droplevels(h.combined$Period)
+```
+
+Save this filtered data.
+
+```{r save_filtered_data, echo=FALSE, eval=FALSE}
+save(h.combined, file = "data/5-postprocessing/2-CellType/scRNAseq/stab.combined.filtered.RData")
+```
+
+If needed, directly load the filtered data (only single cells from the forebrain).
+
+```{r load_sc_filtered_data, echo=FALSE, eval=FALSE}
+load("data/5-postprocessing/2-CellType/scRNAseq/stab.combined.filtered.RData")
+```
+
+Look at the repartition of males and females samples to help define which dataset should be kept.
+
+```{r statistic_sex, echo=FALSE, eval=FALSE}
+# number of males and females samples per dataset
+table(h.combined$dataset, as.factor(h.combined$Sex))
+# number of males and females samples per dataset
+table(h.combined$Period, as.factor(h.combined$Sex))
+```
+
+
+Also, select only some datasets: h2, h3 and h5.
+
+```{r select_datasets, echo=FALSE, eval=FALSE}
+h.combined <- subset(x = h.combined, subset = (dataset == "h2" |  dataset == "h3" | dataset == "h5"))
+# remove unused levels in Area, dataset & Period
+h.combined$Area <- droplevels(h.combined$Area)
+h.combined$dataset <- droplevels(h.combined$dataset)
+h.combined$Period <- droplevels(h.combined$Period)
+```
+
+```{r statistic_sex_data2, echo=FALSE, eval=FALSE}
+summary(as.factor(h.combined$Sex))
+# number of males and females samples per dataset
+table(h.combined$dataset, as.factor(h.combined$Sex))
+# number of males and females samples per period
+table(h.combined$Period, as.factor(h.combined$Sex))
+# number of males and females samples per area
+table(h.combined$Area, as.factor(h.combined$Sex))
+```
+
+Save this filtered data.
+
+```{r save_filtered_data2, echo=FALSE, eval=FALSE}
+save(h.combined, file = "data/5-postprocessing/2-CellType/scRNAseq/stab.combined.filtered2.RData")
+```
+
+If needed, directly load the filtered data (only single cells from the forebrain).
+
+```{r load_sc_filtered_data2, echo=FALSE, eval=FALSE}
+load("data/5-postprocessing/2-CellType/scRNAseq/stab.combined.filtered2.RData")
+```
+
+Format the single cell RNA-seq counts.
+
+```{r format_sc_counts, echo=FALSE, eval=FALSE, eval=FALSE}
+# Get counts data
+scRNAseq_counts <- h.combined@assays$RNA@counts
+# Rename the column to make it correspond to the cell types
+colnames(scRNAseq_counts) <- h.combined$cluster
+```
+
+Save the single cell RNA-seq counts data in a file for CIBERSORTx.
+
+```{r save_sc_counts, echo=FALSE, eval=FALSE}
+write.table(as.matrix(scRNAseq_counts), 
+            file = "data/5-postprocessing/2-CellType/CIBERSORTx/prenatal/reference_Song2021.txt",
+            quote = FALSE, sep = "\t", row.names = TRUE, col.names = TRUE)
+```
+
+
+# Run CIBERSORTx
+
+If token if not valide anymore, ask for a new one on the website: https://cibersortx.stanford.edu.
+
+This command generate the signature matrix from the scRNA-seq & compute the fraction of each cell type in the bulk RNA-seq.
+
+```{bash, eval=FALSE}
+## Full analysis in one command
+docker run -v /Users/benoicla/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/data/5-postprocessing/2-CellType/CIBERSORTx/prenatal:/src/data -v /Users/benoicla/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/data/5-postprocessing/2-CellType/CIBERSORTx/prenatal/results:/src/outdir cibersortx/fractions --username ** --token ** --single_cell TRUE --refsample reference_Song2021.txt --mixture mixture_HDBR.txt --outdir /Users/benoicla/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/data/5-postprocessing/2-CellType/CIBERSORTx/prenatal/results --fraction 1 --rmbatchSmode TRUE --perm 100 --replicates 5 --sampling 0.5 --fraction 1 --k.max 999 --q.value 0.01 --verbose TRUE
+```
+
+
+# Load and visualize CIBERSORTx results
+
+# Load data
+
+Load CIBERSORTx result file
+
+```{r load_cibersortx_result, echo=FALSE}
+cell_prop <- read.table("data/5-postprocessing/2-CellType/CIBERSORTx/prenatal/results/CIBERSORTx_Adjusted.txt",
+                        header = TRUE, sep = "\t")
+```
+
+Load the phenotypes of the bulk RNAseq samples.
+
+```{r load_phenotypes_bulk, echo=FALSE}
+load("data/1-preprocessing/counts_forebrain_phenotypes.RData")
+# format phenotypes
+phenotypes <- phenotypes[, c(1,13,9,11)]
+names(phenotypes) <- c("Sample", "Sex", "DevStage", "ForebrainRegion")
+phenotypes$Sex <- as.factor(phenotypes$Sex)
+levels(phenotypes$Sex) <- list("M" = "1", "F" = "2")
+# order developmental stages
+phenotypes$DevStage <- factor(phenotypes$DevStage, levels = list("5-7PCW"="5-7PCW", "8PCW"="8PCW", "9PCW"="9PCW", "10PCW"="10PCW", "11PCW"="11PCW", "12PCW"="12PCW", "13PCW"="13PCW", "14-17PCW"="14-17PCW"), ordered = TRUE)
+```
+
+## Format the data for the plots and tests
+
+Merge the proportion and the phenotypes.
+
+```{r merge_prop_pheno, echo=FALSE}
+cell_prop <- merge(cell_prop, phenotypes, by.x = "Mixture", by.y = "Sample")
+cell_prop <- cell_prop[, c(1,14:16,2:10)]
+```
+
+### Format data for the plots
+
+Format the proportion for the plots.
+
+```{r format_prop, echo=FALSE}
+cell_prop_plot <- gather(cell_prop, c(5:13), key = "cell_type", value = "proportion")
+cell_prop_plot$cell_type <- factor(cell_prop_plot$cell_type, 
+                                   levels = c("NPC", "ExN", "InN", "OPC", "Olig", "Astro", "Micro", "Endo", "Perc"))
+```
+
+Compute the mean and sd of the percentage by developmental stage.
+
+```{r mean_prop_devstage, echo=FALSE}
+cell_prop_plot_mean <- cell_prop_plot %>% group_by(cell_type, DevStage) %>% summarise(mean = mean(proportion), std = sd(proportion))
+```
+
+Compute the mean and the sd of the percentage by developmental stage and sex.
+
+```{r mean_prop_devstage_sex, echo=FALSE}
+cell_prop_plot_mean_sex <- cell_prop_plot %>% group_by(cell_type, DevStage, Sex) %>% summarise(mean = mean(proportion), std = sd(proportion))
+```
+
+Compute the mean and sd of the percentage by sex.
+
+```{r mean_prop_sex, echo=FALSE}
+cell_prop_plot_sex <- cell_prop_plot %>% group_by(cell_type, Sex) %>% summarise(mean = mean(proportion), std = sd(proportion))
+```
+
+### Prepare data for the statistical tests
+
+Prepare data for the statistical tests comparing male and female cell type proportions.
+
+```{r mean_prop_devstage_sex_tests, echo=FALSE}
+cell_prop_test_mean_sex_devstage <- cell_prop_plot %>% group_by(cell_type, DevStage, Sex) %>% summarise(mean = mean(proportion), std = sd(proportion), 
+                                                                                               N = length(proportion), se = std / sqrt(N))
+```
+
+```{r mean_prop_sex_tests, echo=FALSE}
+cell_prop_test_mean_sex <- cell_prop_plot %>% group_by(cell_type, Sex) %>% summarise(mean = mean(proportion), std = sd(proportion), 
+                                                                                     N = length(proportion), se = std / sqrt(N))
+```
+
+
+## Statistical tests
+
+### Tests the overall difference in cell type proportion distribution between males and females
+
+```{r test_overall_distribution, echo=FALSE}
+male <- filter(cell_prop_test_mean_sex, Sex=='M')
+female <- filter(cell_prop_test_mean_sex, Sex=='F')
+out <- merge(male,female,by=1)
+k <- length(unique(out$cell_type))
+te <- sum((out$mean.x[1:(k-1)] - out$mean.y[1:(k-1)])^2 / (out$se.x[1:(k-1)]^2 + out$se.y[1:(k-1)]^2))
+p <- pchisq(te, df = k-1, lower = FALSE)
+p
+```
+
+
+### Test the difference in cell type proportion distribution between males and females
+
+```{r test_distribution, echo=FALSE}
+cell_prop_sex_p <- NULL
+for (i in unique(cell_prop_test_mean_sex_devstage$DevStage)){
+  male <- filter(cell_prop_test_mean_sex_devstage, Sex=='M', DevStage==i)
+  female <- filter(cell_prop_test_mean_sex_devstage, Sex=='F', DevStage==i)
+  out <- merge(male,female,by=1)
+  k <- length(unique(out$cell_type))
+  te <- sum((out$mean.x[1:(k-1)] - out$mean.y[1:(k-1)])^2 / (out$se.x[1:(k-1)]^2 + out$se.y[1:(k-1)]^2))
+  p <- pchisq(te, df = k-1, lower = FALSE)
+  cell_prop_sex_p <- rbind(cell_prop_sex_p,c(i,p))
+}
+# format results
+cell_prop_sex_p <- as.data.frame(cell_prop_sex_p)
+names(cell_prop_sex_p) <- c("DevStage", "pvalue")
+cell_prop_sex_p$pvalue <- as.numeric(as.character(cell_prop_sex_p$pvalue))
+# bonferroni correction
+cell_prop_sex_p$padj <- p.adjust(cell_prop_sex_p$pvalue, "bonferroni")
+cell_prop_sex_p
+```
+
+
+### Test the difference in individual cell types between males and females per dev stage
+
+```{r test_cellType, echo=FALSE}
+cell_type_sex_p <- NULL
+for (i in unique(cell_prop_plot$cell_type)){
+  for (j in unique(cell_prop_plot$DevStage)){
+    t <- unlist(t.test(filter(cell_prop_plot, DevStage==j, cell_type==i, Sex=='F')$proportion,
+                       filter(cell_prop_plot, DevStage==j, cell_type==i, Sex=='M')$proportion)[c('p.value','estimate')])
+    cell_type_sex_p <- rbind(cell_type_sex_p, c(i,j,t))
+  }
+}
+# format results
+cell_type_sex_p <- as.data.frame(cell_type_sex_p)
+names(cell_type_sex_p) <- c("CellType", "DevStage", "pvalue", "estimateMeanFemale", "estimateMeanMale")
+cell_type_sex_p$pvalue <- as.numeric(as.character(cell_type_sex_p$pvalue))
+# bonferroni correction
+cell_type_sex_p$padj <- p.adjust(cell_type_sex_p$pvalue, "bonferroni")
+cell_type_sex_p
+```
+
+
+## Plots
+
+### Plot for each sex the proportion of each cell type
+
+```{r by_sex, echo=FALSE}
+p <- ggplot(cell_prop_plot, aes(x = Sex, y = proportion, fill = cell_type))
+p <- p + geom_boxplot()
+p <- p + facet_grid(.~cell_type)
+p <- p + scale_fill_manual(name = "Cell type", guide = "none",
+                           values = c("NPC" = "#f4ccd8", "ExN" = "#cce3c1", "InN" = "#f6c9a6",
+                                      "Micro" = "#b2b2ae", "Astro" = "#c2b29d", "OPC" = "#c9c6d9",
+                                      "Endo" = "#eed9c4", "Olig" = "#ccdff4", "Perc" = "#e4d5b7"))
+p <- p + theme_bw() + xlab("") + ylab("Proportion")
+p
+ggsave("Cibersortx_Song_forebrain_boxplot_sex_9CellTypes.png", 
+       path = "images/5-postprocessing/2-CellType/prenatal/",
+       plot = p, width = 12, height = 8, units = "cm")
+```
+
+
+
+### Plot for each cell type the proportion at each developmental stages
+
+Plot proportion by developmental stages for the 9 cell types.
+
+```{r by_devStage_9ct, echo=FALSE}
+p <- ggplot(cell_prop_plot_mean, aes(x = DevStage, y = mean))
+p <- p + geom_rect(data = cell_prop_plot_mean, aes(fill = cell_type), xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf, alpha = 0.05)
+p <- p + scale_fill_manual(name = "Cell type", guide = "none",
+                           values = c("NPC" = "#f4ccd8", "ExN" = "#cce3c1", "InN" = "#f6c9a6",
+                                      "Micro" = "#b2b2ae", "Astro" = "#c2b29d", "OPC" = "#c9c6d9",
+                                      "Endo" = "#eed9c4", "Olig" = "#ccdff4", "Perc" = "#e4d5b7"))
+p <- p + geom_point()
+p <- p + geom_errorbar(aes(ymin = mean-std, ymax = mean+std), width = .1)
+p <- p + facet_grid(.~cell_prop_plot_mean$cell_type)
+p <- p + theme_bw() + xlab("") + ylab("Proportion")
+p <- p + theme(axis.text.x = element_text(angle = 45, hjust = 1),
+               strip.background = element_blank()) 
+p
+ggsave("Cibersortx_Song_forebrain_devStages_points_9cellTypes.png",
+       path = "images/5-postprocessing/2-CellType/prenatal/",
+       width = 28, height = 10, units = "cm")
+```
+
+### Plot for each cell type the proportion at each developmental stages for each sex
+
+Plot proportion by developmental stages and sexes for the 6 cell types.
+
+```{r by_devStage_sexes_9ct, echo=FALSE}
+# Plot
+pd <- position_dodge(0.4)
+p <- ggplot(cell_prop_plot_mean_sex, aes(x = DevStage, y = mean))
+p <- p + geom_rect(data = cell_prop_plot_mean_sex, aes(fill = cell_type), xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf, alpha = 0.05)
+p <- p + scale_fill_manual(name = "Cell type", guide = "none",
+                           values = c("NPC" = "#f4ccd8", "ExN" = "#cce3c1", "InN" = "#f6c9a6",
+                                      "Micro" = "#b2b2ae", "Astro" = "#c2b29d", "OPC" = "#c9c6d9",
+                                      "Endo" = "#eed9c4", "Olig" = "#ccdff4", "Perc" = "#e4d5b7"))
+p <- p + geom_point(position = pd, aes(color = Sex))
+p <- p + geom_errorbar(aes(ymin = mean-std, ymax = mean+std, color = Sex), width = .1, position = pd)
+p <- p + facet_grid(.~cell_prop_plot_mean_sex$cell_type)
+p <- p + scale_color_manual(name = "Sex", values = c("M" = "#1565c1", "F" = "#B2182B"))
+p <- p + theme_bw() + xlab("") + ylab("Proportion")
+p <- p + theme(axis.text.x = element_text(angle = 45, hjust = 1),
+               strip.background = element_blank()) 
+p
+ggsave("Cibersortx_Song_forebrain_devStages_sex_points_9cellTypes.png",
+       path = "images/5-postprocessing/2-CellType/prenatal/",
+       width = 30, height = 10, units = "cm")
+```
+
+
+### Stacked barplot of the different cell type proportion at each developmental stages separated by sex
+
+```{r stacked_barplot, echo=FALSE}
+p <- ggplot(cell_prop_plot_mean_sex, aes(x=Sex, y=mean, fill=cell_type))
+p <- p + geom_bar(position="stack", stat="identity")
+p <- p + facet_grid(.~cell_prop_plot_mean_sex$DevStage)
+p <- p + scale_fill_manual(values = c("NPC" = "#f4ccd8", "ExN" = "#cce3c1", "InN" = "#f6c9a6",
+                                      "Micro" = "#b2b2ae", "Astro" = "#c2b29d", "OPC" = "#c9c6d9",
+                                      "Endo" = "#eed9c4", "Olig" = "#ccdff4", "Perc" = "#e4d5b7"),
+                           name = "Cell types")
+p <- p + theme_bw() + ylab("Cell type proportions")
+p <- p + theme(strip.background = element_blank(),
+               panel.border = element_blank(),
+               panel.grid.major = element_blank(), 
+               panel.grid.minor = element_blank()) 
+p
+# save plot
+ggsave("Cibersortx_Song_forebrain_devStages_sex_stackedBarplot_9CellTypes.png", 
+       path = "images/5-postprocessing/2-CellType/prenatal/",
+       plot = p, width = 20, height = 12, units = "cm")
+```
+
+
+# Session Info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```
+
+
