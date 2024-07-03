@@ -1,0 +1,563 @@
+---
+title: "Prenatal sex-DE genes properties"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r load_library, echo=FALSE}
+suppressPackageStartupMessages( library(tidyverse) )
+suppressPackageStartupMessages( library(ggplot2) )
+suppressPackageStartupMessages( library(ggpubr) )
+suppressPackageStartupMessages( library(gghighlight) )
+suppressPackageStartupMessages( library(ggrepel) )
+suppressPackageStartupMessages( library(matrixStats) )
+suppressPackageStartupMessages( library(readxl) )
+suppressPackageStartupMessages( library(rtracklayer) )
+```
+
+```{r, setup, include=FALSE, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+```{r param, echo=FALSE}
+threshold_qvalue <- 0.01
+```
+
+# Load and prepare data
+
+## Load and prepare prenatal sex-DE genes
+
+```{r load_sexDE_data, echo=FALSE}
+results <- read.table("data/3-DE/VoomDream_topTable_forebrain_pseudotime_sva_ind_interaction.txt", header = TRUE)
+results$ensemblID <- sapply(strsplit(as.character(results$gene_id), "\\."), function(x){x[1]})
+genes2remove <- c("XIST", as.character(results$gene_name[which(results$chr == "chrY" & results$gene_type == "protein_coding")]))
+results <- results[which(!results$gene_name %in% genes2remove),]
+```
+
+```{r prepare_sexDE_data, echo=FALSE}
+results$sexDE <- ifelse(results$qvalue < threshold_qvalue, ifelse(results$logFC > 0, "Female", "Male"), "No")
+results$sexDE <- factor(results$sexDE, levels = c("No", "Male", "Female"))
+```
+
+Select autosomal genes
+
+```{r sexDE_auto, echo=FALSE}
+results_auto <- results[which(!results$chr %in% c("chrX", "chrY", "chrM")), ]
+```
+
+
+## Prepare expression data
+
+Create expression bins.
+
+```{r create_expr_bin, echo=FALSE}
+results$exprbin <- cut(results$AveExpr, 
+                       quantile(results$AveExpr, seq(0,1,0.1)), 
+                       labels=c(1:10), include.lowest=T)
+```
+
+
+## Load and prepare BrainSpan expression data
+
+First, load the brainSpan data: normalized TPM values in the forebrain.
+
+```{r load_brainspan_normalized_tpm, echo=FALSE}
+load("data/5-postprocessing/1-GeneProperties/normalized_tpm_samples_forebrain.RData")
+```
+
+Formatting by variable (e.g. life stages or brain regions).
+```{r format_byVariable, echo=FALSE}
+format_byVariable <- function(data, phenotypes, variable){
+  values <- levels(phenotypes[, variable])#$lifeStageFull
+  result <- data.frame(Gene = data$Gene)
+  for (curVal in values){
+    # get the index of all the column corresponding to the current value
+    idx <- which(phenotypes[, variable] == curVal)+1
+    # compute the mean and sd of the columns
+    if (length(idx) == 1){
+      mean_expr <- data[, idx]
+      sd_expr <- rep(0, length(data[, idx]))
+    } else{
+      mean_expr <- as.vector(rowMeans(data[, idx]))
+      sd_expr <- rowSds(as.matrix(data[, idx]))
+    }
+    # write the results
+    result[, paste(curVal, "mean", sep = "_")] <- mean_expr
+    result[, paste(curVal, "sd", sep = "_")] <- sd_expr
+  }
+  return(result)
+}
+```
+```{r format_brainspan_data, echo=FALSE}
+normalized_tpm_byLifeStage <- format_byVariable(normalized_tpm, samples, "lifeStageFull2")
+```
+
+Merge this expression data with our data.
+
+```{r merge_brainspan, echo=FALSE}
+results_brainspan <- merge(results, normalized_tpm_byLifeStage, by.x = "gene_name", by.y = "Gene")
+```
+
+
+## Load and prepare constraint metric
+
+```{r prepare_loeuf_score, echo=FALSE}
+# load loeuf score
+constraint_data <- read.table("data/5-postprocessing/1-GeneProperties/gnomad.v4.1.constraint_metrics.tsv", 
+                              header = TRUE, sep = "\t")
+constraint_data <- constraint_data[c("gene_id", "canonical", "mane_select", "lof.oe_ci.upper")]
+# keep MANE transcript or canonical if no MANE transcript for a gene
+constraint_data <- constraint_data[which((constraint_data$mane_select == "true" | constraint_data$canonical == "true") & startsWith(constraint_data$gene_id, "ENSG")), ]
+constraint_data <- constraint_data[c("gene_id", "lof.oe_ci.upper")]
+names(constraint_data) <- c("gene_id", "LOEUF")
+# merge with results
+results <- merge(results, constraint_data, by.x = "ensemblID", by.y = "gene_id", all.x = TRUE)
+# create loeuf bins
+results$LOEUF_bin <- cut(results$LOEUF, 
+                     quantile(results$LOEUF, seq(0,1,0.1), na.rm = TRUE), 
+                     labels=c(1:10), include.lowest=T)
+```
+
+## Load and prepare tissue-specificity metric (tau?)
+
+```{r load_tau_data, echo=FALSE}
+tau_data <- read.table("data/5-postprocessing/1-GeneProperties/Tau_gene_V8.csv",
+                       header = TRUE, sep = ",")
+tau_data$sumExpr <- rowSums(tau_data[,3:32])
+tau_data$tau_modif <- ifelse(is.na(tau_data$tau) & tau_data$sumExpr == 0, -1, tau_data$tau)
+# merge with results
+results <- merge(results, tau_data, by.x = "ensemblID", by.y = "gene_id", all.x = TRUE)
+```
+
+## Load and prepare sexDE sharing across GTEx tissues
+
+Load GTEx shared sex-DE genes.
+
+```{r gtex_shared_sexDE, echo=FALSE}
+load("data/5-postprocessing/1-GeneProperties/GTEx_tissues_sexDE_sharing_bayes_6models.RData")
+```
+
+Merge sex-DE results with sharing in GTEx tissues.
+
+```{r gtexSharing_sexDE, echo=FALSE}
+sharing_sexDE_annot$ensemblID <- sapply(strsplit(as.character(sharing_sexDE_annot$gene), "\\."),function(x){x[1]})
+sharing_sexDE_annot$dir <- ifelse(sharing_sexDE_annot$sexDE_coherent == sharing_sexDE_annot$femaleBias, "female",
+                                  ifelse(sharing_sexDE_annot$sexDE_coherent == sharing_sexDE_annot$maleBias, "male", "no"))
+consistent_sexDE$ensemblID <- sapply(strsplit(as.character(consistent_sexDE$gene), "\\."),function(x){x[1]})
+consistent_sexDE$dir <- ifelse(consistent_sexDE$sexDE_coherent == consistent_sexDE$femaleBias, "female",
+                               ifelse(consistent_sexDE$sexDE_coherent == consistent_sexDE$maleBias, "male", "no"))
+sharing_sexDE_annot_tmp <- sharing_sexDE_annot[, c(12,13,2,3,4,5,6,7,8)]
+names(sharing_sexDE_annot_tmp) <- c("ensemblID", "dirGTEx", "nbrTissue_sexDE",
+                                    "nbrTissue_femaleBias", "nbrTissue_maleBias",
+                                    "nbrTissueAnalyzed", "sexDE_coherent",
+                                    "percent_sexDE","percent_coherent")
+sharing_sexDE_annot_tmp$dirGTEx <- ifelse(sharing_sexDE_annot$dir == "male", "Male",
+                                          ifelse(sharing_sexDE_annot$dir == "female", "Female", NA))
+overlap_gtexSharing_sexDE <- merge(results, sharing_sexDE_annot_tmp, by = "ensemblID")
+```
+
+# Plots
+
+## SexDE vs expression
+
+Plot the level of expression of sex-DE genes vs non sex-DE genes.
+
+```{r violinplot_expr, echo=FALSE}
+# function
+data_summary <- function(x) {
+   m <- mean(x)
+   ymin <- m-sd(x)
+   ymax <- m+sd(x)
+   return(c(y=m,ymin=ymin,ymax=ymax))
+}
+p <- ggplot(results, aes(x = sexDE, y = AveExpr, fill = sexDE))
+p <- p + geom_violin(alpha = 0.5, scale = "area", size = 0.01, show.legend = FALSE) 
+p <- p + stat_summary(fun.data=data_summary, linewidth=0.1, show.legend = FALSE)
+p <- p + theme_minimal() + xlab("sex-DE") + ylab("Mean expression")
+p <- p + scale_fill_manual(values = c("Male" = "darkblue", "Female" = "darkred", "No" = "lightgrey"),
+                           name = "sex-DE", )
+p <- p + stat_compare_means(method = "wilcox.test",
+                            label = "p.signif", hide.ns = TRUE, vjust = 0.7,
+                            tip.length = 1, na.rm = TRUE, ref.group = "No")
+p
+# save plot
+ggsave("prenatal_sexDE_vs_expr.png",
+       path = "images/5-postprocessing/1-GeneProperties/prenatal/",
+       width = 8, height = 8, units = "cm")
+```
+
+## SexDE per expression bin
+
+Plot proportion of sex-DE gene for each expression bin coloring male and female-biased genes.
+
+```{r plot_barplot_exprBin, echo=FALSE}
+results %>% 
+  dplyr::group_by(exprbin) %>%
+  dplyr::count(sexDE) %>%
+  dplyr::mutate(proportion = n/sum(n)) %>%
+  ggplot(aes(exprbin, proportion, fill = sexDE)) + 
+  geom_col(position = position_stack()) + 
+  geom_text(aes(label = n), position = position_stack(vjust =0.5), colour = "white", size = 2) + 
+  theme_minimal() + xlab("") + ylab("") +
+  scale_fill_manual(values = c("Male" = "darkblue", "Female" = "darkred", "No" = "lightgrey"),
+                           name = "sex-DE")
+# save plot
+ggsave("prenatal_sexDE_vs_exprBin.png",
+       path = "images/5-postprocessing/1-GeneProperties/prenatal/",
+       width = 12, height = 8, units = "cm")
+```
+
+## SexDE vs BrainSpan expression
+
+```{r format_BrainSpan_expr, echo=FALSE}
+results_brainspan2plot <-  results_brainspan[, c(1,17,19,21,23,25,27,29,31,33)] %>% pivot_longer(3:10, names_to = c("lifeStage", "mean"), names_sep = "_", values_to = "expr") 
+results_brainspan2plot_grouped <- results_brainspan2plot[,-4] %>% group_by(sexDE, lifeStage) %>% summarise("meanExpr" = mean(expr), seExpr = sd(expr)/sqrt(length(expr)), sdExpr = sd(expr), pi2.5Expr = quantile(expr, 0.025), pi97.5Expr = quantile(expr, 0.975))
+# order the lifeStage factor
+results_brainspan2plot_grouped$lifeStage <- factor(results_brainspan2plot_grouped$lifeStage,
+                                                   levels = c("Early prenatal", "Early mid-prenatal", "Late mid-prenatal", "Late prenatal", "Infancy", "Childhood", "Adolescence", "Adulthood"),
+                                                   labels = c("Early\nprenatal", "Early\nmid-prenatal", "Late\nmid-prenatal", "Late\nprenatal", "Infancy", "Childhood", "Adolescence", "Adulthood"))
+results_brainspan2plot$lifeStage <- factor(results_brainspan2plot$lifeStage,
+                                           levels = c("Early prenatal", "Early mid-prenatal", "Late mid-prenatal", "Late prenatal", "Infancy", "Childhood", "Adolescence", "Adulthood"),
+                                           labels = c("Early\nprenatal", "Early\nmid-prenatal", "Late\nmid-prenatal", "Late\nprenatal", "Infancy", "Childhood", "Adolescence", "Adulthood"))
+```
+
+```{r violinplot_BrainSpan_expr, echo=FALSE}
+p <- ggplot(results_brainspan2plot, aes(x = sexDE, y = expr, fill = sexDE))
+p <- p + geom_violin(alpha = 0.5, scale = "area", size = 0.01, show.legend = FALSE) 
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + facet_grid(cols = vars(lifeStage))
+p <- p + theme_minimal() + xlab("") + ylab("Mean expression")
+p <- p + scale_fill_manual(values = c("Male" = "darkblue", "Female" = "darkred", "No" = "lightgrey"),
+                           name = "sex-DE", )
+p <- p + stat_compare_means(method = "wilcox.test",
+                            label = "p.signif", hide.ns = TRUE, vjust = 0.7,
+                            tip.length = 1, na.rm = TRUE, ref.group = "No")
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+p
+# save plot
+ggsave("prenatal_sexDE_vs_BrainSpanExpr.png",
+       path = "images/5-postprocessing/1-GeneProperties/prenatal/",
+       width = 20, height = 8, units = "cm")
+```
+
+```{r violinplot_BrainSpan_expr_lifestage, echo=FALSE}
+p <- ggplot(results_brainspan2plot_grouped, aes(x = lifeStage, y = meanExpr, ymin = pi2.5Expr, ymax = pi97.5Expr,
+                                                fill = sexDE, color = sexDE, group = sexDE))
+p <- p + geom_line(position = position_dodge(width = 0.2)) 
+p <- p + geom_point(position = position_dodge(width = 0.2),  show.legend = FALSE) 
+p <- p + geom_errorbar(position = position_dodge(width = 0.2), width = 0.2)
+#p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE, position = "nudge")
+p <- p + theme_minimal() + xlab("Life stage") + ylab("Mean expression")
+p <- p + scale_color_manual(values = c("Male" = "darkblue", "Female" = "darkred", "No" = "lightgrey"),
+                           name = "sex-DE", )
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+p
+# save plot
+ggsave("prenatal_sexDE_vs_BrainSpanExpr_lifeStage.png",
+       path = "images/5-postprocessing/1-GeneProperties/prenatal/",
+       width = 12, height = 8, units = "cm")
+```
+
+## SexDE vs constraint
+
+Plot the LOEUF score of sex-DE genes vs non sex-DE genes.
+
+```{r violinplot_constraint, echo=FALSE}
+p <- ggplot(results[which(!is.na(results$LOEUF)),], aes(x = sexDE, y = LOEUF, fill = sexDE))
+p <- p + geom_violin(alpha = 0.5, scale = "area", size = 0.01, show.legend = FALSE) 
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + theme_minimal() + xlab("sex-DE") + ylab("Constraint")
+p <- p + scale_fill_manual(values = c("Male" = "darkblue", "Female" = "darkred", "No" = "lightgrey"),
+                           name = "sex-DE", )
+p <- p + stat_compare_means(method = "wilcox.test",
+                            label = "p.signif", hide.ns = TRUE, vjust = 0.7,
+                            tip.length = 1, na.rm = TRUE, ref.group = "No")
+p
+# save plot
+ggsave("prenatal_sexDE_vs_constraint.png",
+       path = "images/5-postprocessing/1-GeneProperties/prenatal/",
+       width = 8, height = 8, units = "cm")
+```
+
+
+## SexDE per constraint bin
+
+Plot proportion of sex-DE gene for each constraint bin coloring male and female-biased genes.
+
+```{r plot_barplot_constraintBin, echo=FALSE}
+results[which(!is.na(results$LOEUF)),] %>% 
+  dplyr::group_by(LOEUF_bin) %>%
+  dplyr::count(sexDE) %>%
+  dplyr::mutate(proportion = n/sum(n)) %>%
+  ggplot(aes(LOEUF_bin, proportion, fill = sexDE)) + 
+  geom_col(position = position_stack()) + 
+  geom_text(aes(label = n), position = position_stack(vjust =0.5), colour = "white", size = 2) + 
+  theme_minimal() + xlab("") + ylab("") +
+  scale_fill_manual(values = c("Male" = "darkblue", "Female" = "darkred", "No" = "lightgrey"),
+                           name = "sex-DE")
+# save plot
+ggsave("prenatal_sexDE_vs_constraintBin.png",
+       path = "images/5-postprocessing/1-GeneProperties/prenatal/",
+       width = 12, height = 8, units = "cm")
+```
+
+## SexDE vs expression per constraint bin
+
+As we know that the level of expression varies between different level of constraint, we look at both variable at the same time.
+
+```{r violinplot_expr_constraintBin, echo=FALSE}
+p <- ggplot(results[which(!is.na(results$LOEUF)),], aes(x = sexDE, y = AveExpr, fill = sexDE))
+p <- p + geom_violin(alpha = 0.5, scale = "area", size = 0.01) 
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + facet_grid(cols = vars(LOEUF_bin), switch = "both")
+p <- p + theme_minimal()
+p <- p + theme(axis.text.x=element_blank(),
+               axis.ticks.x=element_blank())
+p <- p + xlab("Contraint bins") + ylab("Mean expression")
+p <- p + scale_fill_manual(values = c("Male" = "darkblue", "Female" = "darkred", "No" = "lightgrey"),
+                           name = "sex-DE")
+p <- p + stat_compare_means(method = "wilcox.test", #p.adjust.method="BH",
+                            label = "p.signif", hide.ns = TRUE, angle = 90, vjust = 0.7,
+                            tip.length = 0, na.rm = TRUE, step.increase = 0,
+                            ref.group = "No")
+p
+# save plot
+ggsave("prenatal_sexDE_vs_expr_perConsBin.png",
+       path = "images/5-postprocessing/1-GeneProperties/prenatal/",
+       plot = p, width = 16, height = 8, units = "cm")
+```
+
+
+## SexDE vs constraint per expression bin
+
+```{r violinplot_constraint_exprBin, echo=FALSE}
+p <- ggplot(results[which(!is.na(results$LOEUF)),], aes(x = sexDE, y = LOEUF, fill = sexDE))
+p <- p + geom_violin(alpha = 0.5, scale = "area", size = 0.01) 
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + facet_grid(cols = vars(exprbin), switch = "both")
+p <- p + theme_minimal()
+p <- p + theme(axis.text.x=element_blank(),
+               axis.ticks.x=element_blank())
+p <- p + xlab("Expression bins") + ylab("Constraint (LOEUF)")
+p <- p + scale_fill_manual(values = c("Male" = "darkblue", "Female" = "darkred", "No" = "lightgrey"),
+                           name = "sex-DE")
+p <- p + stat_compare_means(method = "wilcox.test", #p.adjust.method="BH",
+                            label = "p.signif", hide.ns = TRUE, angle = 90, vjust = 0.7,
+                            tip.length = 0, na.rm = TRUE, step.increase = 0,
+                            ref.group = "No")
+p
+# save plot
+ggsave("prenatal_sexDE_vs_cons_perExprBin.png",
+       path = "images/5-postprocessing/1-GeneProperties/prenatal/",
+       plot = p, width = 16, height = 8, units = "cm")
+```
+
+## SexDE vs tissue-specificity
+
+Plot the tau specificity score of sex-DE genes vs non sex-DE genes.
+
+```{r violinplot_specificity, echo=FALSE}
+p <- ggplot(results[which(!is.na(results$tau)),], aes(x = sexDE, y = tau, fill = sexDE))
+p <- p + geom_violin(alpha = 0.5, scale = "area", size = 0.01, show.legend = FALSE) 
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + theme_minimal() + xlab("sex-DE") + ylab("Tissue-specificity (tau)")
+p <- p + scale_fill_manual(values = c("Male" = "darkblue", "Female" = "darkred", "No" = "lightgrey"),
+                           name = "sex-DE", )
+p <- p + stat_compare_means(method = "wilcox.test",
+                            label = "p.signif", hide.ns = TRUE, vjust = 0.7,
+                            tip.length = 1, na.rm = TRUE, ref.group = "No")
+p
+# save plot
+ggsave("prenatal_sexDE_vs_tissueSpecificity.png",
+       path = "images/5-postprocessing/1-GeneProperties/prenatal/",
+       width = 8, height = 8, units = "cm")
+```
+
+Plot the brain expression level of sex-DE genes vs non sex-DE genes.
+
+```{r violinplot_brain_expression, echo=FALSE}
+p <- ggplot(results[which(!is.na(results$tau)),], aes(x = sexDE, y = Brain, fill = sexDE))
+p <- p + geom_violin(alpha = 0.5, scale = "area", size = 0.01, show.legend = FALSE) 
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + theme_minimal() + xlab("sex-DE") + ylab("Expression in brain")
+p <- p + scale_fill_manual(values = c("Male" = "darkblue", "Female" = "darkred", "No" = "lightgrey"),
+                           name = "sex-DE", )
+p <- p + stat_compare_means(method = "wilcox.test",
+                            label = "p.signif", hide.ns = TRUE, vjust = 0.7,
+                            tip.length = 1, na.rm = TRUE, ref.group = "No")
+p
+# save plot
+ggsave("prenatal_sexDE_vs_GTExBrainExpression.png",
+       path = "images/5-postprocessing/1-GeneProperties/prenatal/",
+       width = 8, height = 8, units = "cm")
+```
+
+Plot the level of expression in each GTEx tissue of sex-DE genes vs non sex-DE genes.
+
+```{r violinplot_GTEx_expression, echo=FALSE}
+plot_data <- results[,c(1,17,22:51)] %>% 
+  pivot_longer(3:32, names_to = "Tissue", values_to = "Expression")
+p <- ggplot(plot_data, aes(x = sexDE, y = Expression, fill = sexDE))
+p <- p + geom_violin(alpha = 0.5, scale = "area", size = 0.01, show.legend = FALSE, na.rm = TRUE) 
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE, na.rm = TRUE)
+p <- p + facet_grid(cols = vars(Tissue), switch = "both")
+p <- p + theme_minimal() + xlab("Tissue") + ylab("Expression")
+p <- p + theme(axis.text.x=element_blank(),
+               axis.ticks.x=element_blank(),
+               strip.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+p <- p + scale_fill_manual(values = c("Male" = "darkblue", "Female" = "darkred", "No" = "lightgrey"),
+                           name = "sex-DE", )
+p <- p + stat_compare_means(method = "wilcox.test",
+                            label = "p.signif", hide.ns = TRUE, angle = 90, vjust = 0.7,
+                            tip.length = 0, na.rm = TRUE, step.increase = 0,
+                            ref.group = "No")
+p
+# save plot
+ggsave("prenatal_sexDE_vs_GTExExpression.png",
+       path = "images/5-postprocessing/1-GeneProperties/prenatal/",
+       width = 30, height = 8, units = "cm")
+```
+
+This plot is not very informative as in every tissue female-biased genes are more lowly expressed than non sex-DE genes while male-biased genes are more highly expressed...
+
+
+For each gene, if tau is > 0.8, get the tissue with the highest expression. Then, for the 3 genes categories, show a barplot of the number of genes with broad expression or the different tissues (for tissue specific expression).
+
+```{r barplot_GTEx_expressionSpecificity_byCategory, echo=FALSE}
+results$tissueSpecificity <- ifelse(is.na(results$tau_modif), "NA",
+                                    ifelse(results$tau_modif>0.8, 
+                                           unlist(apply(results[,22:51], 1, function(x){unlist(names(results[,22:51])[which.max(x)])})), 
+                                           "No"))
+results$tissueSpecificity <- factor(results$tissueSpecificity, levels = c(NA, "No", names(results[,22:51])))
+# load color for GTEx tissue
+gtex_tissues <- read.table("data/5-postprocessing/1-GeneProperties/gtex_tissue_colors_v8.csv", sep = ",", header = TRUE)
+gtex_tissues <- gtex_tissues[, 4:5]
+gtex_tissues$tissue_color_hex <- paste0("#", gtex_tissues$tissue_color_hex)
+gtex_tissues <- gtex_tissues[!duplicated(gtex_tissues[,1:2]),]
+colors <- gtex_tissues$tissue_color_hex
+names(colors) <- gsub(" ", "_", gtex_tissues$tissue_site)
+colors <- c("NA" = "#Ffffff", "No" = "#F7f7f7", colors)
+# select some tissue for which we want to show the number of genes
+selectedTissues <- c("Brain", "Pituitary", "Testis", "Uterus", "Ovary", "Adipose_Tissue")
+# plot
+results[which(!is.na(results$tau_modif)), ] %>% 
+  dplyr::group_by(sexDE) %>%
+  dplyr::count(tissueSpecificity) %>%
+  dplyr::mutate(proportion = n/sum(n)) %>%
+  ggplot(aes(sexDE, proportion, fill = tissueSpecificity)) + 
+  geom_col(position = position_stack()) + 
+  geom_text(aes(label=ifelse(tissueSpecificity %in% selectedTissues, n, "")), position = position_stack(vjust =0.5), colour = "white", size = 2) + 
+  theme_minimal() + xlab("sexDE") + ylab("Gene proportion") +
+  scale_fill_manual(values = colors,
+                    name = "Tissue specificity")
+# save plot
+ggsave("prenatal_sexDE_vs_GTExTissueSpecificity_byCategory.png",
+       path = "images/5-postprocessing/1-GeneProperties/prenatal/",
+       width = 12, height = 12, units = "cm")
+```
+
+## SexDE vs tissue-specificity per expression bins
+
+As tissue-specificity has been linked to the level of gene expression, we plot both at the same time.
+
+```{r violinplot_expressionSpecificity_exprBin, echo=FALSE}
+p <- ggplot(results[which(!is.na(results$tau)),], aes(x = sexDE, y = tau, fill = sexDE))
+p <- p + geom_violin(alpha = 0.5, scale = "area", size = 0.01) 
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + facet_grid(cols = vars(exprbin), switch = "both")
+p <- p + theme_minimal()
+p <- p + theme(axis.text.x=element_blank(),
+               axis.ticks.x=element_blank())
+p <- p + xlab("Expression bins") + ylab("Tissue-specificity")
+p <- p + scale_fill_manual(values = c("Male" = "darkblue", "Female" = "darkred", "No" = "lightgrey"),
+                           name = "sex-DE")
+p <- p + stat_compare_means(method = "wilcox.test", #p.adjust.method="BH",
+                            label = "p.signif", hide.ns = TRUE, angle = 90, vjust = 0.7,
+                            tip.length = 0, na.rm = TRUE, step.increase = 0,
+                            ref.group = "No")
+p
+# save plot
+ggsave("prenatal_sexDE_vs_GTExTissueSpecificity_perExprBin.png",
+       path = "images/5-postprocessing/1-GeneProperties/prenatal/",
+       plot = p, width = 16, height = 8, units = "cm")
+```
+
+
+## SexDE vs tissue-specificity per constraint bins
+
+To determine if the the group of female-biased genes that are more constraint are the same that are more tissue-specific, we plot both at the same time.
+
+```{r violinplot_expressionSpecificity_constraintBin, echo=FALSE}
+p <- ggplot(results[which(!is.na(results$LOEUF) & !is.na(results$tau)),], aes(x = sexDE, y = tau, fill = sexDE))
+p <- p + geom_violin(alpha = 0.5, scale = "area", size = 0.01) 
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + facet_grid(cols = vars(LOEUF_bin), switch = "both")
+p <- p + theme_minimal()
+p <- p + theme(axis.text.x=element_blank(),
+               axis.ticks.x=element_blank())
+p <- p + xlab("Contraint bins") + ylab("Tissue-specificity")
+p <- p + scale_fill_manual(values = c("Male" = "darkblue", "Female" = "darkred", "No" = "lightgrey"),
+                           name = "sex-DE")
+p <- p + stat_compare_means(method = "wilcox.test", #p.adjust.method="BH",
+                            label = "p.signif", hide.ns = TRUE, angle = 90, vjust = 0.7,
+                            tip.length = 0, na.rm = TRUE, step.increase = 0,
+                            ref.group = "No")
+p
+# save plot
+ggsave("prenatal_sexDE_vs_GTExTissueSpecificity_perConsBin.png",
+       path = "images/5-postprocessing/1-GeneProperties/prenatal/",
+       plot = p, width = 16, height = 8, units = "cm")
+```
+
+
+## SexDE vs sexDE sharing across GTEx tissues
+
+Analyze the overlap between sex-DE genes in forebrain and shared sex-DE genes in GTEx tissues.
+
+```{r analyze_overlap_gtex_sexDE, echo=FALSE}
+# check if the shared effect has the same direction as in our analysis
+overlap_gtexSharing_sexDE$sameDir <- ifelse(overlap_gtexSharing_sexDE$dirGTEx == overlap_gtexSharing_sexDE$sexDE, 1, 0)
+# mean percent sex-DE
+overlap_gtexSharing_sexDE %>% group_by(sexDE) %>% summarise(nb = n(), nb_sameDir = sum(sameDir), mean_percent_sexDE = mean(percent_sexDE))
+# test difference in mean
+compare_means(percent_sexDE~sexDE, overlap_gtexSharing_sexDE, method = "wilcox.test")
+# format data for plot
+overlap_gtexSharing_sexDE$sexDE <- factor(overlap_gtexSharing_sexDE$sexDE, 
+                                         levels = c("No", "Male", "Female"))
+```
+
+Plots
+
+```{r plot_overlap_gtex_sexDE, echo=FALSE}
+# plot
+p <- ggplot(overlap_gtexSharing_sexDE, aes(x = sexDE, y = percent_sexDE, fill = sexDE))
+p <- p + geom_violin(alpha = 0.5, scale = "area", size = 0.01, show.legend = FALSE)
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + scale_fill_manual(values = c("Male" = "darkblue", "Female" = "darkred", "No" = "lightgrey"),
+                           name = "sex-DE", )
+p <- p + theme_minimal() + xlab("") + ylab("% GTEx tissue pairs with\nconsistent sex-DE")
+p <- p + stat_compare_means(method = "wilcox.test", label = "p.signif", 
+                            hide.ns = TRUE, label.x.npc = 'middle',
+                            vjust = 0.1, ref.group = "No")
+p
+# save plot
+ggsave("prenatal_sexDE_sharing_byCat.png",
+       path = "images/5-postprocessing/1-GeneProperties/prenatal/",
+      plot = p, width = 8, height = 8, units = "cm")
+```
+
+
+# Write a file containing all data
+
+```{r write_data, echo=FALSE}
+results_final <- results[, c(1,3:21,54)]
+write.table(results_final, file = "data/5-postprocessing/1-GeneProperties/prenatal/prenatal_forebrain_geneProperties.txt",
+           quote = FALSE, sep = "\t", row.names = FALSE, col.names = TRUE)
+```
+
+
+

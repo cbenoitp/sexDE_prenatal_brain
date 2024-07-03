@@ -1,0 +1,817 @@
+---
+title: "Shared and prenatal-specific sex-DE genes properties"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r load_library, echo=FALSE}
+suppressPackageStartupMessages( library(tidyverse) )
+suppressPackageStartupMessages( library(ggplot2) )
+suppressPackageStartupMessages( library(ggpubr) )
+suppressPackageStartupMessages( library(gghighlight) )
+suppressPackageStartupMessages( library(ggrepel) )
+suppressPackageStartupMessages( library(matrixStats) )
+suppressPackageStartupMessages( library(readxl) )
+suppressPackageStartupMessages( library(rstatix) )
+```
+
+```{r, setup, include=FALSE, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+# Load data
+
+## Linemodel results
+
+```{r load_linemodel_res, echo=FALSE}
+dataLineModel <- read.table("data/4-GTEx/2-comparison/lineModel/lineModel_prenatalVSadult_6models_withAnnotation.txt", 
+                            sep = "\t", header = TRUE)
+```
+
+```{r load_lineModel_RData, echo=FALSE}
+load("data/4-GTEx/2-comparison/lineModel/lineModel_prenatalVSadult_6models.RData")
+```
+
+```{r merge, echo=FALSE}
+fullMerge_spe <- merge(fullMerge, dataLineModel[, c(1,13)], all.x = TRUE)
+```
+
+
+## Load genes properties
+
+Load properties of prenatal and adult sex-DE genes computed previsouly.
+
+```{r load_properties, echo=FALSE}
+prenatal_properties <- read.table("data/5-postprocessing/1-GeneProperties/prenatal/prenatal_forebrain_geneProperties.txt", header = TRUE)
+adult_properties <- read.table("data/5-postprocessing/1-GeneProperties/adult/adult_forebrain_geneProperties.txt", header = TRUE)
+```
+
+Merge these properties with line model results.
+
+```{r merge_properties, echo=FALSE}
+dataToPlotProperties <- merge(dataLineModel, prenatal_properties[, c(1,6,17,18,19,20,21)], by = "ensemblID")
+names(dataToPlotProperties)[23] <- "AveExpr_prenatal"
+names(dataToPlotProperties)[24] <- "exprbin_prenatal"
+dataToPlotProperties <- merge(dataToPlotProperties, adult_properties[, c(1,7,23)])
+names(dataToPlotProperties)[29] <- "AveExpr_adult"
+names(dataToPlotProperties)[30] <- "exprbin_adult"
+```
+
+We want to analyze the properties of these shared and prenatal-specific genes.
+For the rest of the analyses, we only select the genes that were classified as shared or prenatal-specific.
+
+```{r select_genes_properties, echo=FALSE}
+dataToPlotProperties_selected <- dataToPlotProperties[which(dataToPlotProperties$specificity %in% c("Prenatal", "Shared")), ]
+```
+
+
+# Properties
+
+## Level of expression
+
+Compare the prenatal and adult level of expression of shared and prenatal-specific genes.
+
+```{r data_summary_function, echo=FALSE}
+data_summary <- function(x) {
+   m <- mean(x)
+   ymin <- m-sd(x)
+   ymax <- m+sd(x)
+   return(c(y=m,ymin=ymin,ymax=ymax))
+}
+```
+```{r expression_prenatal, echo=FALSE}
+p <- ggplot(dataToPlotProperties_selected, aes(x = specificity, y = AveExpr_prenatal, fill = specificity))
+p <- p + geom_violin(alpha = 0.5, scale = "area", linewidth = 0.01, show.legend = FALSE) 
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + scale_fill_manual(values = c('Prenatal' = "#9729d6", 'Shared' = "#d5952a"))
+p <- p + theme_minimal() + xlab("") + ylab("Expression in prenatal forebrain")
+p <- p + stat_compare_means(method = "wilcox.test", label = "p.signif", label.x = 1.4)
+p
+# save plot
+ggsave("prenatal_expression_byCategory.png",
+       path = "images/5-postprocessing/1-GeneProperties/shared/",
+       width = 6, height = 8, units = "cm")
+```
+
+```{r expression_adult, echo=FALSE}
+p <- ggplot(dataToPlotProperties_selected, aes(x = specificity, y = AveExpr_adult, fill = specificity))
+p <- p + geom_violin(alpha = 0.5, scale = "area", linewidth = 0.01, show.legend = FALSE) 
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + scale_fill_manual(values = c('Prenatal' = "#9729d6", 'Shared' = "#d5952a"))
+p <- p + theme_minimal() + xlab("") + ylab("Expression in adult forebrain")
+p <- p + stat_compare_means(method = "wilcox.test", label = "p.signif", label.x = 1.45)
+p
+# save plot
+ggsave("adult_expression_byCategory.png",
+       path = "images/5-postprocessing/1-GeneProperties/shared/",
+       width = 6, height = 8, units = "cm")
+```
+
+Overall the expression of the prenatal-specific genes is higher in prenatal forebrain, while the shared genes are more highly expressed in adult forebrain.
+
+Same separating male- and female-biased genes.
+
+```{r expression_prenatal_bySex, echo=FALSE}
+dataToPlotProperties_selected$sexDEallFinal <- as.factor(ifelse(dataToPlotProperties_selected$sexDEsimplified != "opposite", dataToPlotProperties_selected$sexDEsimplified, dataToPlotProperties_selected$sexDE_prenatal_direction))
+# stats
+compare_means(AveExpr_prenatal~specificity, dataToPlotProperties_selected,
+              method = "wilcox.test", group.by = "sexDEallFinal")
+# plot
+p <- ggplot(dataToPlotProperties_selected, aes(x = specificity, y = AveExpr_prenatal, fill = specificity))
+p <- p + geom_violin(alpha = 0.5, scale = "area", linewidth = 0.01, show.legend = FALSE) 
+p <- p + facet_grid(cols = vars(sexDEallFinal))
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + scale_fill_manual(values = c('Prenatal' = "#9729d6", 'Shared' = "#d5952a"))
+p <- p + theme_minimal() + xlab("") + ylab("Expression in prenatal forebrain")
+p <- p + stat_compare_means(method = "wilcox.test",
+                            label = "p.signif", hide.ns = TRUE, vjust = 1,
+                            tip.length = 1, na.rm = TRUE)
+p
+# save plot
+ggsave("prenatal_expression_ byCategory_bySex.png",
+       path = "images/5-postprocessing/1-GeneProperties/shared/",
+       width = 8, height = 8, units = "cm")
+```
+
+Only for the male-biased genes, the level of expression in prenatal brain in higher for the prenatal-specific genes compared to the shared ones.
+
+```{r expression_adult_bySex, echo=FALSE}
+# stats
+compare_means(AveExpr_adult~specificity, dataToPlotProperties_selected,
+              method = "wilcox.test", group.by = "sexDEallFinal")
+# plot
+p <- ggplot(dataToPlotProperties_selected, aes(x = specificity, y = AveExpr_adult, fill = specificity))
+p <- p + geom_violin(alpha = 0.5, scale = "area", linewidth = 0.01, show.legend = FALSE) 
+p <- p + facet_grid(cols = vars(sexDEallFinal))
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + scale_fill_manual(values = c('Prenatal' = "#9729d6", 'Shared' = "#d5952a"))
+p <- p + theme_minimal() + xlab("") + ylab("Expression in adult forebrain")
+p <- p + stat_compare_means(method = "wilcox.test",
+                            label = "p.signif", hide.ns = TRUE, vjust = 1,
+                            tip.length = 1, na.rm = TRUE)
+p
+# save plot
+ggsave("adult_expression_ byCategory_bySex.png",
+       path = "images/5-postprocessing/1-GeneProperties/shared/",
+       width = 8, height = 8, units = "cm")
+```
+
+Both for the female-biased and male-biased sex-DE, the shared sex-DE genes have higher adult expression than the prenatal ones.
+
+
+## Level of expression in BrainSpan
+
+We want to compare the overall expression trajectory of prenatal-specific and shared sex-DE genes in BrainSpan.
+
+First, load the brainSpan data: normalized TPM values in the forebrain.
+
+```{r load_brainspan_normalized_tpm, echo=FALSE}
+load("/Users/benoicla/Desktop/Workspace/brainSpan/data/processed_data/normalized_tpm_samples_forebrain.RData")
+```
+
+Formatting by variable (e.g. life stages or brain regions).
+```{r format_byVariable, echo=FALSE}
+format_byVariable <- function(data, phenotypes, variable){
+  values <- levels(phenotypes[, variable])#$lifeStageFull
+  result <- data.frame(Gene = data$Gene)
+  for (curVal in values){
+    # get the index of all the column corresponding to the current value
+    idx <- which(phenotypes[, variable] == curVal)+1
+    # compute the mean and sd of the columns
+    if (length(idx) == 1){
+      mean_expr <- data[, idx]
+      sd_expr <- rep(0, length(data[, idx]))
+    } else{
+      mean_expr <- as.vector(rowMeans(data[, idx]))
+      sd_expr <- rowSds(as.matrix(data[, idx]))
+    }
+    # write the results
+    result[, paste(curVal, "mean", sep = "_")] <- mean_expr
+    result[, paste(curVal, "sd", sep = "_")] <- sd_expr
+  }
+  return(result)
+}
+```
+```{r format_brainspan_data, echo=FALSE}
+normalized_tpm_byLifeStage <- format_byVariable(normalized_tpm, samples, "lifeStageFull2")
+```
+
+Merge this expression data with our data.
+
+```{r merge_brainspan, echo=FALSE}
+dataToPlotProperties_selected_brainspan <- merge(dataToPlotProperties_selected, normalized_tpm_byLifeStage, by.x = "gene_name", by.y = "Gene")
+```
+
+Format data for the plot.
+
+```{r format_BrainSpan_expr, echo=FALSE}
+dataToPlotProperties_selected_brainspan2plot <-  dataToPlotProperties_selected_brainspan[, c(1,13,16,18,32,34,36,38,40,42,44,46)] %>% pivot_longer(5:12, names_to = c("lifeStage", "mean"), names_sep = "_", values_to = "expr") 
+dataToPlotProperties_selected_brainspan2plot_grouped <- dataToPlotProperties_selected_brainspan2plot[,-6] %>% group_by(specificity, lifeStage) %>% summarise("meanExpr" = mean(expr), seExpr = sd(expr)/sqrt(length(expr)), sdExpr = sd(expr), pi2.5Expr = quantile(expr, 0.025), pi97.5Expr = quantile(expr, 0.975))
+# order the lifeStage factor
+dataToPlotProperties_selected_brainspan2plot_grouped$lifeStage <- factor(dataToPlotProperties_selected_brainspan2plot_grouped$lifeStage,
+                                                   levels = c("Early prenatal", "Early mid-prenatal", "Late mid-prenatal", "Late prenatal", "Infancy", "Childhood", "Adolescence", "Adulthood"),
+                                                   labels = c("Early\nprenatal", "Early\nmid-prenatal", "Late\nmid-prenatal", "Late\nprenatal", "Infancy", "Childhood", "Adolescence", "Adulthood"))
+dataToPlotProperties_selected_brainspan2plot$lifeStage <- factor(dataToPlotProperties_selected_brainspan2plot$lifeStage,
+                                           levels = c("Early prenatal", "Early mid-prenatal", "Late mid-prenatal", "Late prenatal", "Infancy", "Childhood", "Adolescence", "Adulthood"),
+                                           labels = c("Early\nprenatal", "Early\nmid-prenatal", "Late\nmid-prenatal", "Late\nprenatal", "Infancy", "Childhood", "Adolescence", "Adulthood"))
+```
+
+```{r violinplot_BrainSpan_expr, echo=FALSE}
+p <- ggplot(dataToPlotProperties_selected_brainspan2plot, aes(x = specificity, y = expr, fill = specificity))
+p <- p + geom_violin(alpha = 0.5, scale = "area", linewidth = 0.01, show.legend = FALSE) 
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + facet_grid(cols = vars(lifeStage))
+p <- p + theme_minimal() + xlab("") + ylab("Mean expression")
+p <- p + scale_fill_manual(values = c('Prenatal' = "#9729d6", 'Shared' = "#d5952a"))
+p <- p + stat_compare_means(method = "wilcox.test",
+                            label = "p.signif", hide.ns = TRUE, vjust = 0.7,
+                            tip.length = 1, na.rm = TRUE)
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+p
+# save plot
+ggsave("BrainSpanExpr_byCategory.png", 
+       path = "images/5-postprocessing/1-GeneProperties/shared/",
+       width = 20, height = 8, units = "cm")
+```
+
+```{r violinplot_BrainSpan_expr_lifestage, echo=FALSE}
+p <- ggplot(dataToPlotProperties_selected_brainspan2plot_grouped, aes(x = lifeStage, y = meanExpr, ymin = pi2.5Expr, ymax = pi97.5Expr,
+                                                fill = specificity, color = specificity, group = specificity))
+p <- p + geom_line(position = position_dodge(width = 0.2)) 
+p <- p + geom_point(position = position_dodge(width = 0.2),  show.legend = FALSE) 
+p <- p + geom_errorbar(position = position_dodge(width = 0.2), width = 0.2)
+p <- p + theme_minimal() + xlab("Life stage") + ylab("Mean expression")
+p <- p + scale_color_manual(values = c('Prenatal' = "#9729d6", 'Shared' = "#d5952a"))
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+p
+# save plot
+ggsave("BrainSpanExpr_byCategory_lifeStage.png",
+       path = "images/5-postprocessing/1-GeneProperties/shared/",
+       width = 12, height = 8, units = "cm")
+```
+
+Just focus on the first and last life stage (early prenatal and adulthood).
+
+```{r violinplot_BrainSpan_consistency, echo=FALSE}
+dataToPlotProperties_selected_brainspan2plot_prenatalVSadult <- dataToPlotProperties_selected_brainspan2plot[which(dataToPlotProperties_selected_brainspan2plot$lifeStage %in% c("Early\nprenatal", "Adulthood")),]
+compare_means(expr~lifeStage, dataToPlotProperties_selected_brainspan2plot_prenatalVSadult,
+              method = "wilcox.test", group.by = "specificity")
+p <- ggplot(dataToPlotProperties_selected_brainspan2plot_prenatalVSadult, aes(x = lifeStage, y = expr))
+p <- p + geom_violin(aes(fill = specificity), alpha = 0.5, scale = "area", linewidth = 0.01, show.legend = FALSE) 
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + facet_grid(cols = vars(specificity))
+p <- p + theme_minimal() + xlab("") + ylab("Mean normalized tpm")
+p <- p + scale_fill_manual(values = c('Prenatal' = "#9729d6", 'Shared' = "#d5952a"))
+p <- p + stat_compare_means(method = "wilcox.test", label = "p.signif", na.rm = TRUE,
+                            hide.ns = TRUE, label.x.npc = "center", vjust = 1)
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+p
+# save plot
+ggsave("BrainSpanExpr_consistencyAcrossLife_byCategory.png", 
+       path = "images/5-postprocessing/1-GeneProperties/shared/",
+       width = 10, height = 8, units = "cm")
+```
+
+
+## Breadth of expression
+
+We load the TPM value per tissue from GTEx and calculate in how many tissues each gene was found expressed. We also need to choose a threshold to define a gene as expressed (TPM>=0.5, 1, 5, 10?).
+Threshold used in human cell atlas: expressed > 0.5 & low expression > 10 
+
+```{r load_format_GTEx_TPM_tissues, echo=FALSE}
+gtex_tpm_byTissues <- read.table("data/5-postprocessing/1-GeneProperties/bulk-gex_v8_rna-seq_GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_median_tpm.gct", skip = 2, header = TRUE, sep = "\t")
+gtex_tpm_byTissues$ensemblID <- sapply(strsplit(as.character(gtex_tpm_byTissues$Name), "\\."), function(x){x[1]})
+# add column corresponding to how many tissue the gene is expressed in
+gtex_tpm_byTissues$nbrTissueExpr <- rowSums(gtex_tpm_byTissues[, c(3:56)] >= 1) # threshold used in the expression atlas
+gtex_tpm_byTissues$propTissueExpr <- gtex_tpm_byTissues$nbrTissueExpr/54
+# remove one occurence of the duplicated ensemblID
+gtex_tpm_byTissues <- gtex_tpm_byTissues[!duplicated(gtex_tpm_byTissues$ensemblID),]
+# merge this information 
+dataToPlotProperties_breadth <- merge(dataToPlotProperties, gtex_tpm_byTissues[, c(57,58,59)], by = "ensemblID")
+```
+
+Compare the breadth of expression between the shared and prenatal-specific genes.
+
+```{r compare_expr_breadth, echo=FALSE}
+compare_means(propTissueExpr~specificity, dataToPlotProperties_breadth[which(dataToPlotProperties_breadth$specificity %in% c('Prenatal', 'Shared')),])
+# plot
+p <- ggplot(dataToPlotProperties_breadth[which(dataToPlotProperties_breadth$specificity %in% c('Prenatal', 'Shared')),], 
+            aes(x = specificity, y = propTissueExpr))
+p <- p + geom_violin(aes(fill = specificity), alpha = 0.5, scale = "area", linewidth = 0.01, show.legend = FALSE)
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + scale_fill_manual(values = c('Prenatal' = "#9729d6", 'Shared' = "#d5952a"))
+p <- p + theme_minimal() + xlab("") + ylab("Expression breadth")
+p <- p + stat_compare_means(method = "wilcox.test", label = "p.signif", label.x = 1.4, hide.ns = TRUE)
+p
+# save plot
+ggsave("gtexExpressionBreadth_byCategory.png", 
+       path = "images/5-postprocessing/1-GeneProperties/shared/",
+       width = 6, height = 8, units = "cm")
+```
+
+The prenatal-specific sex-DE are more broadly expressed across GTEx tissues than the shared sex-DE genes.
+
+
+## Level of constraint
+
+Compare the level of constraint of shared and prenatal-specific genes.
+
+```{r constraint, echo=FALSE}
+p <- ggplot(dataToPlotProperties_selected, aes(x = specificity, y = LOEUF, fill = specificity))
+p <- p + geom_violin(alpha = 0.5, scale = "area", linewidth = 0.01, show.legend = FALSE) 
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + scale_fill_manual(values = c('Prenatal' = "#9729d6", 'Shared' = "#d5952a"))
+p <- p + theme_minimal() + xlab("") + ylab("Constraint (LOEUF)")
+p <- p + stat_compare_means(method = "wilcox.test",
+                            label = "p.signif", hide.ns = TRUE, vjust = 0.7,
+                            tip.length = 1, na.rm = TRUE)
+p
+# save plot
+ggsave("constraint_LOEUF_byCategory.png",
+       path = "images/5-postprocessing/1-GeneProperties/shared/",
+       width = 6, height = 8, units = "cm")
+```
+
+Shared genes are slightly more constraint than unclassified genes, but the difference between shared and prenatal-specific is not significant.
+
+
+## Tissue specificity
+
+Compare the breadth of expression of shared and prenatal-specific genes.
+
+```{r tau, echo=FALSE}
+compare_means(tau~specificity, dataToPlotProperties_selected)
+# plot
+p <- ggplot(dataToPlotProperties_selected, aes(x = specificity, y = tau, fill = specificity))
+p <- p + geom_violin(alpha = 0.5, scale = "area", linewidth = 0.01, show.legend = FALSE) 
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + scale_fill_manual(values = c('Prenatal' = "#9729d6", 'Shared' = "#d5952a"))
+p <- p + theme_minimal() + xlab("") + ylab("Tissue specificity (tau)")
+p <- p + stat_compare_means(method = "wilcox.test", label = "p.signif", label.x = 1.4)
+p
+# save plot
+ggsave("tissueSpe_tau_byCategory.png",
+       path = "images/5-postprocessing/1-GeneProperties/shared/",
+       width = 6, height = 8, units = "cm")
+```
+
+Overall, shared sex-DE genes are more tissue specific, while prenatal-specific are more broadly express across GTEx tissue.
+
+```{r barplot_GTEx_expressionSpecificity_byCategory, echo=FALSE}
+# load color for GTEx tissue
+gtex_tissues <- read.table("data/5-postprocessing/1-GeneProperties/gtex_tissue_colors_v8.csv", sep = ",", header = TRUE)
+gtex_tissues <- gtex_tissues[, 4:5]
+gtex_tissues$tissue_color_hex <- paste0("#", gtex_tissues$tissue_color_hex)
+gtex_tissues <- gtex_tissues[!duplicated(gtex_tissues[,1:2]),]
+colors <- gtex_tissues$tissue_color_hex
+names(colors) <- gsub(" ", "_", gtex_tissues$tissue_site)
+colors <- c("NA" = "#Ffffff", "No" = "#F7f7f7", colors)
+# order the tissues for the plot
+dataToPlotProperties_selected$tissueSpecificity <- factor(dataToPlotProperties_selected$tissueSpecificity, levels = c("NA", "No", unique(gtex_tissues$tissue_site)))
+# select some tissue for which we want to show the number of genes
+selectedTissues <- c("Brain", "Pituitary", "Testis", "Uterus", "Ovary")
+# plot
+dataToPlotProperties_selected %>% 
+  dplyr::group_by(specificity) %>%
+  dplyr::count(tissueSpecificity) %>%
+  dplyr::mutate(proportion = n/sum(n)) %>%
+  ggplot(aes(specificity, proportion, fill = tissueSpecificity)) + 
+  geom_col(position = position_stack()) + 
+  geom_text(aes(label=ifelse(tissueSpecificity %in% selectedTissues, n, "")), position = position_stack(vjust =0.5), colour = "white", size = 2) + 
+  theme_minimal() + xlab("sexDE") + ylab("Gene proportion") +
+  scale_fill_manual(values = colors,
+                    name = "Tissue specificity")
+# save plot
+ggsave("GTExTissueSpecificity_byCategory.png",
+       path = "images/5-postprocessing/1-GeneProperties/shared/",
+       width = 12, height = 12, units = "cm")
+```
+
+
+## Compare the sex-DE sharing across GTEx tissues
+
+### Bayesian method
+
+Load GTEx shared sex-DE genes.
+
+```{r gtex_shared_sexDE, echo=FALSE}
+load("data/5-postprocessing/1-GeneProperties/GTEx_tissues_sexDE_sharing_bayes_6models.RData")
+```
+
+Merge sex-DE results in forebrain with sharing in GTEx tissues.
+
+```{r overlap_gtex_sexDE, echo=FALSE}
+sharing_sexDE_annot$ensemblID <- sapply(strsplit(as.character(sharing_sexDE_annot$gene), "\\."),function(x){x[1]})
+sharing_sexDE_annot$dir <- ifelse(sharing_sexDE_annot$sexDE_coherent == sharing_sexDE_annot$femaleBias, "female",
+                                  ifelse(sharing_sexDE_annot$sexDE_coherent == sharing_sexDE_annot$maleBias, "male", "no"))
+consistent_sexDE$ensemblID <- sapply(strsplit(as.character(consistent_sexDE$gene), "\\."),function(x){x[1]})
+consistent_sexDE$dir <- ifelse(consistent_sexDE$sexDE_coherent == consistent_sexDE$femaleBias, "female",
+                               ifelse(consistent_sexDE$sexDE_coherent == consistent_sexDE$maleBias, "male", "no"))
+overlap_gtex_sexDE <- merge(dataToPlotProperties_selected, sharing_sexDE_annot, by = "ensemblID")
+```
+
+Analyze the overlap between sex-DE genes in forebrain and shared sex-DE genes in GTEx tissues.
+
+```{r analyze_overlap_gtex_sexDE, echo=FALSE}
+# check if the shared effect has the same direction as in our analysis
+overlap_gtex_sexDE$dirForebrain <- ifelse(overlap_gtex_sexDE$specificity %in% c("Shared", "Prenatal"), 
+                                     ifelse(overlap_gtex_sexDE$logFC_prenatal > 0, "female",
+                                            ifelse(overlap_gtex_sexDE$logFC_prenatal < 0, "male", "no")),
+                                     ifelse(overlap_gtex_sexDE$specificity == "GTEX", 
+                                            ifelse(overlap_gtex_sexDE$logFC_adult > 0, "female",
+                                                   ifelse(overlap_gtex_sexDE$logFC_adult < 0, "male", "no")),
+                                            "no"))
+overlap_gtex_sexDE$sameDir <- ifelse(overlap_gtex_sexDE$dir == overlap_gtex_sexDE$dirForebrain, 1, 0)
+# mean percent sex-DE per category and number 
+overlap_gtex_sexDE %>% group_by(specificity) %>% summarise(nb = n(), nb_sameDir = sum(sameDir), mean_percent_sexDE = mean(percent_sexDE))
+overlap_gtex_sexDE %>% group_by(specificity, sameDir) %>% summarise(nb = n(), mean_percent_sexDE = mean(percent_sexDE))
+# test difference in mean
+compare_means(percent_sexDE~specificity, overlap_gtex_sexDE, method = "wilcox.test")
+# format data for plot
+overlap_gtex_sexDE$specificity <- factor(overlap_gtex_sexDE$specificity, 
+                                         levels = c("Prenatal", "Shared"))
+```
+
+Plots
+
+```{r plot_overlap_gtex_sexDE, echo=FALSE}
+# plot
+p <- ggplot(overlap_gtex_sexDE, aes(x = specificity, y = percent_sexDE, fill = specificity))
+p <- p + geom_violin(alpha = 0.5, scale = "area", linewidth = 0.01, show.legend = FALSE)
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + scale_fill_manual(values = c('Prenatal' = "#9729d6", 'Shared' = "#d5952a"))
+p <- p + theme_minimal() + xlab("") + ylab("% GTEx tissue pairs with\nconsistent sex-DE")
+p <- p + stat_compare_means(method = "wilcox.test", label = "p.signif", 
+                            hide.ns = TRUE, label.x.npc = 'middle',
+                            vjust = 0.1)
+p
+# save plot
+ggsave("sexDE_sharing_bayes_byCat.png",
+       path = "images/5-postprocessing/1-GeneProperties/shared/",
+       plot = p, width = 6, height = 8, units = "cm")
+```
+
+This higher sharing across GTEx tissue is not due to the genes on the X chromosome (i.e. genes escaping XCI) as we are only looking at autosomal genes here.
+
+### Simple comparison method
+
+Look at the number of GTEx tissue in which the shared sex-DE genes and the prenatal specific sex-DE genes are sex-DE.
+
+```{r overlap_GTEx_sexDE, echo=FALSE}
+loadRData <- function(fileName){
+    #loads an RData file, and returns it
+    load(fileName)
+    mget(ls()[ls() != "fileName"])
+}
+sexDE_nbrTissues <- loadRData("data/5-postprocessing/1-GeneProperties/GTEx_tissue_sexDE_sharing.RData")
+sexDE_nbrTissues$sharing_sexDE_annot$ensemblID <- sapply(strsplit(as.character(sexDE_nbrTissues$sharing_sexDE_annot$gene), "\\."),function(x){x[1]})
+overlap_gtex_sexDE <- merge(dataToPlotProperties_selected, sexDE_nbrTissues$sharing_sexDE_annot, by = "ensemblID")
+```
+
+Plot
+
+```{r nbr_GTEx_tissues_sexDE, echo=FALSE}
+# plot
+p <- ggplot(overlap_gtex_sexDE, aes(x = specificity, y = percent_sexDE, fill = specificity))
+p <- p + geom_violin(alpha = 0.5, scale = "area", linewidth = 0.01, show.legend = FALSE, bw = 0.05)
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + scale_fill_manual(values = c('Prenatal' = "#9729d6", 'Shared' = "#d5952a"))
+p <- p + theme_minimal() + xlab("") + ylab("% GTEx tissues sex-DE")
+p <- p + stat_compare_means(method = "wilcox.test", label = "p.signif", 
+                            hide.ns = TRUE, label.x.npc = 'middle',
+                            vjust = 0.1)
+p
+# save plot
+ggsave("sexDE_sharing_byCat.png",
+       path = "images/5-postprocessing/1-GeneProperties/shared/",
+       plot = p, width = 6, height = 8, units = "cm")
+```
+
+WARNING: modify starting from here
+
+
+## Cell type enrichment of these gene lists
+
+Check how consistent the expression of these 2 gene lists is across different cell types (neurons, NPC, OPC, Oligo, Astro, ...).
+```{r load_scRNAseq_data, echo=FALSE}
+load("data/5-postprocessing/2-CellType/scRNAseq/song_2021_cellTypeExprProfile.RData")
+```
+
+Compare gene expression levels for the shared and prenatal specific in the different cell type.
+
+```{r compare_expr_cellType, echo=FALSE}
+# format data
+cellTypeExprProfile_formated <- cellTypeExprProfile
+cellTypeExprProfile_formated$gene_name <- rownames(cellTypeExprProfile_formated)
+cellTypeExprProfile_formated <- merge(cellTypeExprProfile_formated, dataToPlotProperties[, c(1:2,13,17,20:22)])
+cellTypeExprProfile_formated <- cellTypeExprProfile_formated %>% 
+                                    pivot_longer(cols = 2:12, names_to = "CellType", values_to = "meanExpr")
+cellTypeExprProfile_formated_selected <- cellTypeExprProfile_formated[which(cellTypeExprProfile_formated$specificity %in% c("Prenatal", "Shared")),]
+compare_means(meanExpr~specificity, cellTypeExprProfile_formated_selected,
+              method = "wilcox.test", group.by = "CellType")
+# plot
+p <- ggplot(cellTypeExprProfile_formated[which(cellTypeExprProfile_formated$specificity %in% c("Prenatal", "Shared")),], aes(x = specificity, y = meanExpr))
+p <- p + geom_violin(aes(fill = specificity), alpha = 0.5, scale = "area", linewidth = 0.01, show.legend = FALSE) 
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + facet_wrap(vars(CellType), scales = "free_y", ncol = 3)
+p <- p + scale_fill_manual(values = c('Prenatal' = "#9729d6", 'Shared' = "#d5952a"))
+p <- p + theme_minimal() + xlab("") + ylab("Mean expression")
+p <- p + stat_compare_means(method = "wilcox.test", label = "p.signif", hide.ns = TRUE,
+                            label.x.npc = "center", label.y.npc = 0.8)
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p
+# save plot
+ggsave("cellType_expression_byCategory.png", 
+       path = "images/5-postprocessing/1-GeneProperties/shared/",
+       width = 10, height = 15, units = "cm")
+```
+
+```{r compare_expr_cellType_mainFig, echo=FALSE}
+# format data
+cellTypeExprProfile_formated <- cellTypeExprProfile
+cellTypeExprProfile_formated$gene_name <- rownames(cellTypeExprProfile_formated)
+cellTypeExprProfile_formated <- merge(cellTypeExprProfile_formated, dataToPlotProperties[, c(1:2,13,17,20:22)])
+cellTypeExprProfile_formated <- cellTypeExprProfile_formated %>% 
+                                    pivot_longer(cols = 2:12, names_to = "CellType", values_to = "meanExpr")
+cellTypeExprProfile_formated_selected <- cellTypeExprProfile_formated[which(cellTypeExprProfile_formated$specificity %in% c("Prenatal", "Shared") & cellTypeExprProfile_formated$CellType %in% c("ExN", "InN", "NPC", "OPC")),]
+compare_means(meanExpr~specificity, cellTypeExprProfile_formated_selected,
+              method = "wilcox.test", group.by = "CellType")
+# plot
+p <- ggplot(cellTypeExprProfile_formated_selected[which(cellTypeExprProfile_formated_selected$specificity %in% c("Prenatal", "Shared")),], aes(x = specificity, y = meanExpr))
+p <- p + geom_violin(aes(fill = specificity), alpha = 0.5, scale = "area", linewidth = 0.01, show.legend = FALSE) 
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + facet_wrap(vars(CellType), scales = "free_y", ncol = 2)
+p <- p + scale_fill_manual(values = c('Prenatal' = "#9729d6", 'Shared' = "#d5952a"))
+p <- p + theme_minimal() + xlab("") + ylab("Mean expression")
+p <- p + stat_compare_means(method = "wilcox.test", label = "p.signif", hide.ns = TRUE,
+                            label.x.npc = "center", label.y.npc = 0.8)
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p
+# save plot
+ggsave("cellType_Neurons_Progenitors_expression_byCategory.png", 
+       path = "images/5-postprocessing/1-GeneProperties/shared/",
+       width = 8, height = 4, units = "cm")
+```
+
+
+```{r compare_expr_cellType_bySex, echo=FALSE}
+# tests
+stat.test <- cellTypeExprProfile_formated[which(cellTypeExprProfile_formated$specificity %in% c("Prenatal", "Shared")),] %>%
+  group_by(CellType, sexDEsimplified) %>%
+  wilcox_test(meanExpr ~ specificity) %>% 
+  add_significance(p.col = "p") %>%
+  add_xy_position(x = "sexDEsimplified", dodge = 0.5, scales = "free_y", step.increase = 0)
+# plot
+p <- ggplot(cellTypeExprProfile_formated[which(cellTypeExprProfile_formated$specificity %in% c("Prenatal", "Shared")),], aes(x = sexDEsimplified, y = meanExpr))
+p <- p + geom_violin(aes(fill = specificity), alpha = 0.5, scale = "area", linewidth = 0.01, show.legend = FALSE) 
+p <- p + stat_summary(aes(group = specificity), fun.data=data_summary, size=0.1, show.legend = FALSE, 
+                      position = position_dodge(width = 0.9))
+p <- p + facet_wrap(vars(CellType), scales = "free_y")
+p <- p + scale_fill_manual(values = c('Prenatal' = "#9729d6", 'Shared' = "#d5952a"))
+p <- p + theme_minimal() + xlab("") + ylab("Mean expression")
+p <- p + stat_pvalue_manual(stat.test, label = "p.signif", hide.ns = TRUE, bracket.size = 0, bracket.nudge.y = -0.1)
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p
+# save plot
+ggsave("cellType_expression_byCategory_bySex.png", 
+       path = "images/5-postprocessing/1-GeneProperties/shared/",
+       width = 14, height = 12, units = "cm")
+```
+
+
+## Focus on X-chromosomal genes
+
+First, add specificity classification detailed.
+
+```{r specificityDetailes, echo=FALSE}
+threshold_classification <- 0.8
+dataToPlotProperties <- dataToPlotProperties %>% mutate(specificityDetailed = case_when(
+  PRENATAL > threshold_classification ~ 'PRENATAL',
+  ADULT > threshold_classification ~ 'ADULT',
+  SHARED0.5 > threshold_classification ~ 'SHARED0.5',
+  SHARED1 > threshold_classification ~ 'SHARED1',
+  SHARED2 > threshold_classification ~ 'SHARED2',
+  OPPOSITE > threshold_classification ~ 'OPPOSITE',
+  SHARED0.5+SHARED1+SHARED2 > threshold_classification ~ 'SHARED_UNSPECIFIED',
+  TRUE ~ 'UNCLASSIFIED'
+))
+dataToPlotProperties$specificityDetailed <- factor(dataToPlotProperties$specificityDetailed, 
+                                                   levels = c("PRENATAL", "ADULT",
+                                                              "SHARED0.5", "SHARED1", "SHARED2", "SHARED_UNSPECIFIED",
+                                                              "OPPOSITE", "UNCLASSIFIED"))
+```
+
+
+Filter only X-chromosomal genes
+
+```{r filter_Xchr, echo=FALSE}
+dataToPlotProperties_Xchr <- dataToPlotProperties[which(dataToPlotProperties$annot == "X chr"),]
+dim(dataToPlotProperties_Xchr)
+```
+
+#### Simple statistics
+
+Some simple statistics of the X-chromosomal genes.
+```{r stats_Xchr, echo=FALSE}
+summary(as.factor(dataToPlotProperties_Xchr$annotXCI))
+table(as.factor(dataToPlotProperties_Xchr$annotXCI), as.factor(dataToPlotProperties_Xchr$specificity))
+```
+
+Test difference in proportion of shared sex-DE genes between escape and inactive genes.
+```{r test_prop_shared_escapeVSinactive, echo=FALSE}
+prop.test(x = c(31, 22), n = c(42, 101))
+```
+
+Look at the detailed specificity (with shared genes separated into the 3 models).
+
+```{r sharingModel_Xchr, echo=FALSE}
+table(as.factor(dataToPlotProperties_Xchr$annotXCI), as.factor(dataToPlotProperties_Xchr$specificityDetailed))
+```
+
+Test difference in proportion of shared sex-DE genes with same effect size between escape and inactive genes.
+```{r test_prop_shared1_escapeVSinactive, echo=FALSE}
+prop.test(x = c(9, 0), n = c(42, 101))
+```
+
+#### Plots
+
+Plot the number of genes assigned to each model for each category as a barplot.
+
+```{r barplot_sharingModel_Xchr, echo=FALSE}
+# reformat the data to get a better visualization:
+# 1/ merge the 2 annotXCI categories: "Unknown" and "NA"
+dataToPlotProperties_Xchr$annotXCI_formatted <- factor(dataToPlotProperties_Xchr$annotXCI, 
+                                                       levels = c("Escape", "Inactive", "Variable", NA, "Unknown"),
+                                                       labels = c("Escape", "Inactive", "Variable", "Unknown", "Unknown"),
+                                                       exclude = NULL)
+# 2/ re-order the different models
+dataToPlotProperties_Xchr$specificityDetailed_formatted <- factor(dataToPlotProperties_Xchr$specificityDetailed,
+                                                                  levels = c("PRENATAL", "SHARED0.5", "SHARED1", "SHARED2", "SHARED_UNSPECIFIED",
+                                                                             "ADULT", "OPPOSITE", "UNCLASSIFIED"),
+                                                                  labels = c('Prenatal specific',
+                                                                             'Shared - higher\nprenatal effect', 
+                                                                             'Shared - equal\neffect', 
+                                                                             'Shared - higher\nadult effect', 
+                                                                             'Shared -\nunspecified',
+                                                                             'Opposite effect',
+                                                                             'Adult specific',
+                                                                             'Unclassified'),
+                                                                  ordered = TRUE)
+# 3/ add total number of genes in each XCI category
+totals_XCI <- dataToPlotProperties_Xchr %>% 
+  group_by(annotXCI_formatted, specificityDetailed_formatted) %>%
+  summarise(n=n())%>%
+  mutate(percent = (n / sum(n)), 
+         cumsum = cumsum(percent), 
+         label = ifelse(specificityDetailed_formatted == "Prenatal specific", as.character(sum(n)),""))
+# plot
+p <- ggplot(totals_XCI, aes(x = annotXCI_formatted, y = percent, fill = specificityDetailed_formatted))
+p <- p + geom_bar(position = 'fill', stat = "identity")
+p <- p + scale_y_continuous(labels = scales::percent)
+p <- p + scale_fill_manual(values = c('Prenatal specific' = "#9729d6", 'Adult specific' = "#2bd494",
+                                      'Shared - higher\nprenatal effect' = "#95681d", 'Shared - equal\neffect' = "#d5952a", 
+                                      'Shared - higher\nadult effect' = "#e6bf7f", 'Shared -\nunspecified' = "#6b4b15",
+                                      'Opposite effect' = "#Fbfd8e", 'Unclassified' = "#898989"),
+                           name = "Genes category")
+p <- p + theme_minimal() + ylab("Percent of genes") + xlab("")
+p <- p + geom_text(aes(y = 1, label = label), vjust = -0.2, size = 3)
+#p <- p + guides(fill = guide_legend(reverse = TRUE))
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p
+# save plot
+ggsave("Xchr_byCategory_stacked_barplot.png", 
+       path = "images/5-postprocessing/1-GeneProperties/shared/",
+       plot = p, width = 8, height = 10, units = "cm")
+```
+
+```{r barplot_sharingModel_Xchr_autosome, echo=FALSE}
+# reformat the data to get a better visualization:
+dataToPlotProperties_full <- dataToPlotProperties
+# 1/ merge the 2 annotXCI categories: "Unknown" and "NA"
+dataToPlotProperties_full$annot_formatted <- factor(ifelse(dataToPlotProperties_full$annot == "Autosome",
+                                                           dataToPlotProperties_full$annot, dataToPlotProperties_full$annotXCI),
+                                                    levels = c("Autosome", "Escape", "Inactive", "Variable", NA, "Unknown"),
+                                                    labels = c("Autosome", "Escape", "Inactive", "Variable", "Unknown", "Unknown"),
+                                                    exclude = NULL)
+# 2/ re-order the different models
+dataToPlotProperties_full$specificityDetailed_formatted <- factor(dataToPlotProperties_full$specificityDetailed,
+                                                                  levels = c("PRENATAL", "SHARED0.5", "SHARED1", "SHARED2", "SHARED_UNSPECIFIED",
+                                                                             "ADULT", "OPPOSITE", "UNCLASSIFIED"),
+                                                                  labels = c('Prenatal specific',
+                                                                             'Shared - higher\nprenatal effect', 
+                                                                             'Shared - equal\neffect', 
+                                                                             'Shared - higher\nadult effect', 
+                                                                             'Shared -\nunspecified',
+                                                                             'Opposite effect',
+                                                                             'Adult specific',
+                                                                             'Unclassified'),
+                                                                  ordered = TRUE)
+# 3/ add total number of genes in each XCI category
+totals_all <- dataToPlotProperties_full %>% 
+  group_by(annot_formatted, specificityDetailed_formatted) %>%
+  summarise(n=n())%>%
+  mutate(percent = (n / sum(n)), 
+         cumsum = cumsum(percent), 
+         label = ifelse(specificityDetailed_formatted == "Prenatal specific", as.character(sum(n)),""))
+totals_all$category <- as.factor(ifelse(totals_all$annot_formatted != "Autosome", "X-chromosome", ""))
+totals_all$category <- factor(totals_all$category, levels = c("X-chromosome", ""), ordered = TRUE)
+# plot
+p <- ggplot(totals_all, aes(x = annot_formatted, y = percent, fill = specificityDetailed_formatted))
+p <- p + geom_bar(position = 'fill', stat = "identity")
+p <- p + scale_y_continuous(labels = scales::percent)
+p <- p + scale_fill_manual(values = c('Prenatal specific' = "#9729d6", 'Adult specific' = "#2bd494",
+                                      'Shared - higher\nprenatal effect' = "#95681d", 'Shared - equal\neffect' = "#d5952a", 
+                                      'Shared - higher\nadult effect' = "#e6bf7f", 'Shared -\nunspecified' = "#6b4b15",
+                                      'Opposite effect' = "#Fbfd8e", 'Unclassified' = "#898989"),
+                           name = "Genes category")
+p <- p + theme_minimal() + ylab("Percent of genes") + xlab("")
+p <- p + geom_text(aes(y = 1, label = label), vjust = -0.2, size = 3)
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p <- p + facet_grid(cols = vars(category), scales = "free_x", space = "free_x")
+p
+# save plot
+ggsave("Xchr_autosome_byCategory_stacked_barplot.png", 
+       path = "images/5-postprocessing/1-GeneProperties/shared/",
+       plot = p, width = 9, height = 10, units = "cm")
+```
+
+
+#### Properties of non significant escape genes
+
+How many escape genes did not show significant sex bias in either adult or prenatal brain.
+```{r nonSexDE_escape, echo=FALSE}
+fullMerge_spe_Xchr <- fullMerge_spe[which(fullMerge_spe$annot == "X chr"),]
+fullMerge_spe_Xchr_ns <- fullMerge_spe_Xchr[which(fullMerge_spe_Xchr$sexDE_adult == "ns" & fullMerge_spe_Xchr$sexDE_prenatal == "ns"), ]
+summary(as.factor(fullMerge_spe_Xchr_ns$annotXCI))
+fullMerge_spe_Xchr_ns_escape <- fullMerge_spe_Xchr_ns[which(fullMerge_spe_Xchr_ns$annotXCI == "Escape"),]
+```
+
+Enrichment of these non-significant sex-DE escape genes in female-biased expression?
+```{r enrichment_femaleBias_nonSexDE_escape, echo=FALSE}
+fullMerge_spe_Xchr_escape <- fullMerge_spe_Xchr[which(fullMerge_spe_Xchr$annotXCI == "Escape"),]
+number_escape <- dim(fullMerge_spe_Xchr_escape)[1]
+# for prenatal dataset
+nbr_female_ns_escape_prenatal <- dim(fullMerge_spe_Xchr_ns_escape[which(fullMerge_spe_Xchr_ns_escape$logFC_prenatal > 0),])[1]
+nbr_female_escape_prenatal <- dim(fullMerge_spe_Xchr_escape[which(fullMerge_spe_Xchr_escape$logFC_prenatal > 0),])[1]
+phyper(q = nbr_female_ns_escape_prenatal, m = 25, n = 42, k = nbr_female_escape_prenatal)
+nbr_female_ns_escape_prenatal/25
+# for adult dataset
+nbr_female_ns_escape_adult <- dim(fullMerge_spe_Xchr_ns_escape[which(fullMerge_spe_Xchr_ns_escape$logFC_adult > 0),])[1]
+nbr_female_escape_adult <- dim(fullMerge_spe_Xchr_escape[which(fullMerge_spe_Xchr_escape$logFC_adult > 0),])[1]
+phyper(q = nbr_female_ns_escape_adult, m = 25, n = 42, k = nbr_female_escape_adult)
+nbr_female_ns_escape_adult/25
+```
+There is not a significant enrichment of these non-significant sex-DE escape genes in female-biased expression.
+
+Look at the mean level of expression of the significant and non-significant escape genes:
+```{r level_expr_signif_VS_ns_escape, echo=FALSE}
+fullMerge_spe_Xchr_escape_sign <- fullMerge_spe_Xchr_escape[which(fullMerge_spe_Xchr_escape$sexDE_prenatal != "ns" | fullMerge_spe_Xchr_escape$sexDE_adult != "ns"),]
+# in prenatal brain
+mean(fullMerge_spe_Xchr_ns_escape$AveExpr_prenatal)
+mean(fullMerge_spe_Xchr_escape_sign$AveExpr_prenatal)
+wilcox.test(fullMerge_spe_Xchr_ns_escape$AveExpr_prenatal, fullMerge_spe_Xchr_escape_sign$AveExpr_prenatal)
+# in adult brain
+mean(fullMerge_spe_Xchr_ns_escape$AveExpr_adult)
+mean(fullMerge_spe_Xchr_escape_sign$AveExpr_adult)
+wilcox.test(fullMerge_spe_Xchr_ns_escape$AveExpr_adult, fullMerge_spe_Xchr_escape_sign$AveExpr_adult)
+```
+
+The non-significant escape genes are more lowly expressed (both in adult and prenatal forebrain) than the significant escape genes.
+
+Look at the number of GTEx tissue in which the non-sex-DE escape genes and the sex-DE escape genes are sex-DE.
+
+```{r overlap_GTEx_sexDE_Xchr, echo=FALSE}
+loadRData <- function(fileName){
+    #loads an RData file, and returns it
+    load(fileName)
+    mget(ls()[ls() != "fileName"])
+}
+sexDE_nbrTissues <- loadRData("data/5-postprocessing/1-GeneProperties/GTEx_tissue_sexDE_sharing.RData")
+sexDE_nbrTissues$sharing_sexDE_annot$ensemblID <- sapply(strsplit(as.character(sexDE_nbrTissues$sharing_sexDE_annot$gene), "\\."),function(x){x[1]})
+overlap_gtex_sexDE_Xchr <- merge(fullMerge_spe_Xchr_escape, sexDE_nbrTissues$sharing_sexDE_annot, by = "ensemblID")
+```
+
+Compare the genes that were found sex-DE in one of the 2 datasets (prenatal or adult) or in neither of the 2.
+
+```{r nbr_GTEx_tissues_sexDE_escape, echo=FALSE}
+overlap_gtex_sexDE_Xchr$isSignif <- ifelse(overlap_gtex_sexDE_Xchr$sexDE_prenatal != "ns" | overlap_gtex_sexDE_Xchr$sexDE_adult != "ns", "Yes", "No")
+p <- ggplot(overlap_gtex_sexDE_Xchr, aes(x = isSignif, y = percent_sexDE))
+p <- p + geom_boxplot(fill = "grey")
+p <- p + theme_minimal() + ylab("Percent of GTEx tissues sex-DE") + xlab("Sex-DE in adult or prenatal forebrain")
+p
+# save
+ggsave("Xchr_escape_GTEx_nbrTissueSexDE.png", 
+       path = "images/5-postprocessing/1-GeneProperties/shared/",
+       width = 10, height = 8, units = "cm")
+```
+
+
+# Session info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```
