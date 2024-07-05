@@ -1,0 +1,366 @@
+---
+title: "Create disease gene lists"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+---
+
+
+```{r load_library, echo=FALSE}
+suppressPackageStartupMessages( library(readxl) )
+suppressPackageStartupMessages( library(tibble) )
+suppressPackageStartupMessages( library(dplyr) )
+suppressPackageStartupMessages( library(genefilter) )
+suppressPackageStartupMessages( library(biomaRt) )
+```
+
+```{r, setup, include=FALSE, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+# Load data
+
+Load DE results.
+
+```{r load_DE_results_hdbr, echo=FALSE}
+de_results_hdbr <- read.table("data/3-DE/VoomDream_topTable_forebrain_pseudotime_sva_ind_interaction.txt",
+                         header = TRUE, check.names=FALSE)
+# keep only autosomal genes
+de_results_hdbr <- de_results_hdbr[which(!de_results_hdbr$chr %in% c("chrX", "chrY", "chrM")),]
+# remove the version number from the ensembl id
+de_results_hdbr$gene_id <-sapply(strsplit(as.character(de_results_hdbr$gene_id), "\\."), function(x){x[1]})
+```
+
+```{r load_DE_results_gtex, echo=FALSE}
+de_results_gtex <- read.table( "data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_VoomDream_topTable_with_sva_ind_pseudotime_interaction.txt",
+                         header = TRUE, check.names=FALSE)
+# keep only autosomal genes
+de_results_gtex <- de_results_gtex[which(!de_results_gtex$chr %in% c("chrX", "chrY", "chrM")),]
+# remove the version number from the ensembl id
+de_results_gtex$gene_id <-sapply(strsplit(as.character(de_results_gtex$gene_id), "\\."), function(x){x[1]})
+```
+
+Function to check if the selected genes are present in the list of analyzed genes (and not in the sex chromosomes).
+
+```{r check_genes_present, echo=FALSE}
+getOnlyGenesAnalyzed <- function(x, genesAnalyzed){
+  return(x[which(x %in% genesAnalyzed)])
+}
+```
+
+Initisalize biomart connection.
+
+```{r init_biomart, echo=FALSE}
+ensembl <- useEnsembl(biomart="ensembl", dataset="hsapiens_gene_ensembl", GRCh=37)
+```
+
+
+# Prepare genesets
+
+Initialize gene lists
+
+```{r init, echo=FALSE}
+genesLists <- list()
+```
+
+## Schizophrenia
+
+Load data from: http://schema.broadinstitute.org/.
+
+```{r load_scz, echo=FALSE}
+scz_gene_list <- read.table("data/5-postprocessing/4-DiseaseEnrichment/geneLists/SCHEMA_gene_results.tsv", header=TRUE, sep = "\t")
+```
+
+Select only the schizophrenia gene with a p-value less than 0.01.
+
+```{r xelect_scz, echo=FALSE}
+scz_gene_selected <- scz_gene_list$gene_id[which(scz_gene_list$P.meta < 0.01)]
+scz_gene_name_selected <- getBM(filters = "ensembl_gene_id", attributes = c("hgnc_symbol"), 
+                                values = scz_gene_selected, mart = ensembl)[,1]
+```
+
+
+Add to gene list.
+
+```{r add_scz, echo=FALSE}
+genesLists$scz <- scz_gene_name_selected
+```
+
+## Autism and Developmental Diseases
+
+Load data from Fu et al 2021 MedRxiv.
+
+```{r load_Fu, echo=FALSE}
+# load data
+autism_gene_list <- read_excel('data/5-postprocessing/4-DiseaseEnrichment/geneLists/Fu_2021_MedRxiv_TabSupp.xlsx', sheet = 4)
+```
+
+Format data
+
+```{r format_gene_name_Fu, echo=FALSE}
+format_gene_name <- function(x){
+  return(sub("G:", "", x))
+}
+```
+
+```{r format_Fu, echo=FALSE}
+ASD_genes <- unlist(lapply(autism_gene_list$gene[which(autism_gene_list$FDR_TADA_ASD <= 0.05)], format_gene_name))
+NDD_genes <- unlist(lapply(autism_gene_list$gene[which(autism_gene_list$FDR_TADA_NDD <= 0.05)], format_gene_name))
+DD_genes <- unlist(lapply(autism_gene_list$gene[which(autism_gene_list$FDR_TADA_DD <= 0.05)], format_gene_name))
+```
+
+Load the secondsheet from Fu et al, preprint.
+
+```{r load_Fu2, echo=FALSE}
+# load data
+autism_gene_list2 <- read_excel('data/5-postprocessing/4-DiseaseEnrichment/geneLists/Fu_2021_MedRxiv_TabSupp.xlsx', sheet = 6)
+```
+
+```{r format_Fu2, echo=FALSE}
+ASD_specific_genes <- unlist(lapply(autism_gene_list$gene[which(unlist(lapply(autism_gene_list$gene, format_gene_name)) %in%
+                                                    autism_gene_list2$gene[which(autism_gene_list2$PP.asd > 0.99)])],
+                                    format_gene_name))
+DD_specific_genes <- unlist(lapply(autism_gene_list$gene[which(unlist(lapply(autism_gene_list$gene, format_gene_name)) %in%
+                                                    autism_gene_list2$gene[which(autism_gene_list2$PP.asd < 0.01)])],
+                                   format_gene_name))
+```
+
+
+Add to gene list.
+
+```{r add_asd, echo=FALSE}
+genesLists$ASD <- ASD_genes
+genesLists$DD <- DD_genes
+genesLists$NDD <- NDD_genes
+genesLists$ASDspe <- ASD_specific_genes
+genesLists$DDspe <- DD_specific_genes
+```
+
+## Epilepsy
+
+Load data from Epi25, 2019
+
+```{r load_epilepsy, echo=FALSE}
+epilepsy_gene_list <- read.table('data/5-postprocessing/4-DiseaseEnrichment/geneLists/Epi25_gene_results.tsv', header=TRUE)
+```
+
+Select genes significant for each group of epilepsy.
+
+```{r select_epi25, echo=FALSE}
+EPI_genes <- getBM(filters = "ensembl_gene_id", attributes = c("hgnc_symbol"), 
+                   values = epilepsy_gene_list$gene_id[which(epilepsy_gene_list$group == "EPI" & 
+                                                               epilepsy_gene_list$pval < 0.01)],
+                   mart = ensembl)[,1]
+DEE_genes <- getBM(filters = "ensembl_gene_id", attributes = c("hgnc_symbol"), 
+                   values = epilepsy_gene_list$gene_id[which(epilepsy_gene_list$group == "DEE" & 
+                                                               epilepsy_gene_list$pval < 0.01)],
+                   mart = ensembl)[,1]
+GGE_genes <- getBM(filters = "ensembl_gene_id", attributes = c("hgnc_symbol"), 
+                   values = epilepsy_gene_list$gene_id[which(epilepsy_gene_list$group == "GGE" & 
+                                                               epilepsy_gene_list$pval < 0.01)],
+                   mart = ensembl)[,1]
+NAFE_genes <- getBM(filters = "ensembl_gene_id", attributes = c("hgnc_symbol"), 
+                    values = epilepsy_gene_list$gene_id[which(epilepsy_gene_list$group == "NAFE" & 
+                                                                epilepsy_gene_list$pval < 0.01)],
+                    mart = ensembl)[,1]
+```
+
+Add to gene list.
+
+```{r add_epilepsy, echo=FALSE}
+genesLists$EPI <- EPI_genes
+genesLists$DEE <- DEE_genes
+genesLists$GGE <- GGE_genes
+genesLists$NAFE <- NAFE_genes
+```
+
+Load data from Heyne et al 2018 Nature Genet
+
+```{r load_epilepsy_neuro, echo=FALSE}
+epilepsy_ndd_gene_list <- read.table('data/5-postprocessing/4-DiseaseEnrichment/geneLists/Epilepsy_33genes_Heyne_2018_NatureGenet.csv',
+                            header=FALSE, stringsAsFactors=FALSE)
+epilepsy_dee_gene_list <- read.table('data/5-postprocessing/4-DiseaseEnrichment/geneLists/Heyne_2018_NatGenet_Table_S3.tsv',
+                            header=FALSE, stringsAsFactors=FALSE)
+```
+
+
+Add to gene list.
+
+```{r add_epilepsy_neuro, echo=FALSE}
+genesLists$epilepsy_ndd <- epilepsy_ndd_gene_list$V1
+genesLists$epilepsy_dee <- epilepsy_dee_gene_list$V1
+```
+
+
+## Bipolar disorder
+
+Load Bipolar disorder data from https://bipex.broadinstitute.org/.
+
+```{r load_BipEx, echo=FALSE}
+bipolar_gene_list <- read.table('data/5-postprocessing/4-DiseaseEnrichment/geneLists/BipEx_gene_results.tsv', header=TRUE, sep = "\t")
+```
+
+Select genes significant for each group of bipolar disorder.
+
+```{r select_BipEx, echo=FALSE}
+BP_genes <- getBM(filters = "ensembl_gene_id", attributes = c("hgnc_symbol"), 
+                   values = bipolar_gene_list$gene_id[which(bipolar_gene_list$group == "Bipolar Disorder" &
+                                                      (bipolar_gene_list$damaging_missense_fisher_gnom_non_psych_pval < 0.01 | 
+                                                      bipolar_gene_list$ptv_fisher_gnom_non_psych_pval < 0.01))],
+                   mart = ensembl)[,1]
+BP1_genes <- getBM(filters = "ensembl_gene_id", attributes = c("hgnc_symbol"), 
+                   values = bipolar_gene_list$gene_id[which(bipolar_gene_list$group == "Bipolar Disorder 1" &
+                                                      (bipolar_gene_list$damaging_missense_fisher_gnom_non_psych_pval < 0.01 | 
+                                                      bipolar_gene_list$ptv_fisher_gnom_non_psych_pval < 0.01))],
+                   mart = ensembl)[,1]
+BP2_genes <- getBM(filters = "ensembl_gene_id", attributes = c("hgnc_symbol"), 
+                   values = bipolar_gene_list$gene_id[which(bipolar_gene_list$group == "Bipolar Disorder 2" &
+                                                      (bipolar_gene_list$damaging_missense_fisher_gnom_non_psych_pval < 0.01 | 
+                                                      bipolar_gene_list$ptv_fisher_gnom_non_psych_pval < 0.01))],
+                   mart = ensembl)[,1]
+BPSchizo_genes <- getBM(filters = "ensembl_gene_id", attributes = c("hgnc_symbol"), 
+                    values = bipolar_gene_list$gene_id[which(bipolar_gene_list$group == "Bipolar Disorder (including Schizoaffective)" &
+                                                      (bipolar_gene_list$damaging_missense_fisher_gnom_non_psych_pval < 0.01 | 
+                                                      bipolar_gene_list$ptv_fisher_gnom_non_psych_pval < 0.01))],
+                    mart = ensembl)[,1]
+BPwithPsycho_genes <- getBM(filters = "ensembl_gene_id", attributes = c("hgnc_symbol"), 
+                   values = bipolar_gene_list$gene_id[which(bipolar_gene_list$group == "Bipolar Disorder with Psychosis" &
+                                                      (bipolar_gene_list$damaging_missense_fisher_gnom_non_psych_pval < 0.01 | 
+                                                      bipolar_gene_list$ptv_fisher_gnom_non_psych_pval < 0.01))],
+                   mart = ensembl)[,1]
+BPwithoutPsycho_genes <- getBM(filters = "ensembl_gene_id", attributes = c("hgnc_symbol"), 
+                   values = bipolar_gene_list$gene_id[which(bipolar_gene_list$group == "Bipolar Disorder without Psychosis" &
+                                                      (bipolar_gene_list$damaging_missense_fisher_gnom_non_psych_pval < 0.01 | 
+                                                      bipolar_gene_list$ptv_fisher_gnom_non_psych_pval < 0.01))],
+                   mart = ensembl)[,1]
+```
+
+Add to gene list.
+
+```{r add_BipEx, echo=FALSE}
+genesLists$BP <- BP_genes
+genesLists$BP1 <- BP1_genes
+genesLists$BP2 <- BP2_genes
+genesLists$BPSchizo <- BPSchizo_genes
+genesLists$BPwithPsycho <- BPwithPsycho_genes
+genesLists$BPwithoutPsycho <- BPwithoutPsycho_genes
+```
+
+## Multiple sclerosis
+
+List of genes coming from Horjus et al., 2022 and International Multiple Sclerosis Genetics Consortium, 2018.
+
+```{r MS, echo=FALSE}
+MS_genes <- c("MBP", "PLK1", "MECP2", "MTMR7", "TOX3", "CPT1A", "SORCS1", "TRIM66", "ITPR3", "TTC28", "CACNA1F", "PRAM1", 
+              "PRF1", "PRKRA", "NLRP8", "HDAC7", 
+              "PLAU", "MASP1", "NLRP12", "UBR2", "CTNNA3", "NFATC2", "RNF213", "KCNG4", "NCOA3", "KCNG4", "SLC24A6", "SlC8B1")
+```
+
+Add to gene list.
+
+```{r add_MS, echo=FALSE}
+genesLists$MS <- MS_genes
+```
+
+## Alzheimer
+
+Load alzheimer data from Ma et al, 2019.
+
+```{r load_alzheimer, echo=FALSE}
+alzheimer_gene_list <- read.table('data/5-postprocessing/4-DiseaseEnrichment/geneLists/Alzheimer_21genes_Ma_2019_JAMAneurology.txt',
+                                 header=FALSE, stringsAsFactors=FALSE)
+
+```
+
+Add to gene list.
+
+```{r add_alzheimer, echo=FALSE}
+genesLists$alzheimer <- alzheimer_gene_list$V1
+```
+
+
+## Amyotrophic lateral sclerosis
+
+Load data.
+
+```{r load_als, echo=FALSE}
+ALS_list <- read_excel('data/5-postprocessing/4-DiseaseEnrichment/geneLists/Cirulli_2015_Science_ALS_Table1_gene.xlsx')
+```
+
+Add to gene list.
+
+```{r add_als, echo=FALSE}
+genesLists$ALS <- ALS_list$Gene
+```
+
+## Constraint genes
+
+Load the LOEUF data and merge it with the DE results.
+
+```{r load_LOEUF, echo=FALSE}
+# load loeuf score
+constraint_data <- read.table("data/5-postprocessing/1-GeneProperties/gnomad.v4.1.constraint_metrics.tsv", 
+                              header = TRUE, sep = "\t")
+constraint_data <- constraint_data[c("gene_id", "canonical", "mane_select", "lof.oe_ci.upper")]
+# keep MANE transcript or canonical if no MANE transcript for a gene
+constraint_data <- constraint_data[which((constraint_data$mane_select == "true" | constraint_data$canonical == "true") & startsWith(constraint_data$gene_id, "ENSG")), ]
+constraint_data <- constraint_data[c("gene_id", "lof.oe_ci.upper")]
+names(constraint_data) <- c("gene_id", "LOEUF")
+# merge with results
+de_results_hdbr <- merge(de_results_hdbr, constraint_data, by.x = "gene_id", by.y = "gene_id", all.x = TRUE)
+de_results_gtex <- merge(de_results_gtex, constraint_data, by.x = "gene_id", by.y = "gene_id", all.x = TRUE)
+```
+
+
+Add to gene list.
+
+```{r add_constraintGenes, echo=FALSE}
+genesLists$constraint_genes <- de_results_hdbr$gene_name[which(de_results_hdbr$LOEUF < 0.35)]
+```
+
+
+## High expressed genes
+
+Create a list of the 10% genes more expressed in this dataset.
+
+Compute the bin of expression of each genes
+
+```{r exprBin, echo=FALSE}
+de_results_hdbr$exprbin <- cut(de_results_hdbr$AveExpr, 
+                               quantile(de_results_hdbr$AveExpr, seq(0,1,0.1)), 
+                               labels=c(1:10), include.lowest=T)
+de_results_gtex$exprbin <- cut(de_results_gtex$AveExpr, 
+                               quantile(de_results_gtex$AveExpr, seq(0,1,0.1)), 
+                               labels=c(1:10), include.lowest=T)
+```
+
+Add to the gene list the list of the highly expressed genes.
+
+```{r add_highExpressedGenes, echo=FALSE}
+genesLists$prenatal_high_expressed_genes <- de_results_hdbr$gene_name[which(de_results_hdbr$exprbin == 10)]
+genesLists$adult_high_expressed_genes <- de_results_gtex$gene_name[which(de_results_gtex$exprbin == 10)]
+```
+
+
+# Save gene list
+
+```{r save_geneList, echo=FALSE}
+save(genesLists, file = "data/5-postprocessing/4-diseaseEnrichment/geneLists/diseaseGeneLists.RData")
+```
+
+
+# Some statistics of the gene sets
+
+```{r stat_geneList, echo=FALSE}
+unlist(lapply(genesLists, length))
+```
+
+
+# Session info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```

@@ -1,0 +1,644 @@
+---
+title: "Disease enrichment analysis with fgsea"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r load_library, echo=FALSE}
+suppressPackageStartupMessages( library(edgeR) )
+suppressPackageStartupMessages( library(limma) )
+suppressPackageStartupMessages( library(qvalue) )
+suppressPackageStartupMessages( library(SummarizedExperiment) )
+suppressPackageStartupMessages( library(variancePartition) )
+suppressPackageStartupMessages( library(tibble) )
+suppressPackageStartupMessages( library(matrixStats) )
+suppressPackageStartupMessages( library(tidyverse) )
+suppressPackageStartupMessages( library(ggnewscale) )
+suppressPackageStartupMessages( library(fgsea) )
+suppressPackageStartupMessages( library(gridExtra) )
+suppressPackageStartupMessages( library(data.table) )
+suppressPackageStartupMessages( library(fastmatch) )
+suppressPackageStartupMessages( library(scales) )
+```
+
+```{r, setup, include=FALSE, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+
+# Load data and functions
+
+## Load functions for GSEA analysis with control
+
+```{r load_gsea_withCtrl_function, echo=FALSE}
+source("scripts/analyses/5-postprocessing/4-DiseaseEnrichment/gsea_withCtrl.R")
+```
+
+## Load genesets
+
+```{r load_geneList, echo=FALSE}
+load("data/5-postprocessing/4-DiseaseEnrichment/geneLists/diseaseGeneLists.RData")
+main_genesLists <- genesLists[c("scz", "ASD", "NDD", "EPI", "epilepsy_ndd", "BP", "MS", "alzheimer", "ALS", "constraint_genes", "prenatal_high_expressed_genes", "adult_high_expressed_genes")]
+```
+
+
+## Load constraint data
+
+LOEUF score
+
+```{r load_LOEUF, echo=FALSE}
+# load loeuf score
+constraint_data <- read.table("data/5-postprocessing/1-GeneProperties/gnomad.v4.1.constraint_metrics.tsv", 
+                              header = TRUE, sep = "\t")
+constraint_data <- constraint_data[c("gene_id", "canonical", "mane_select", "lof.oe_ci.upper")]
+# keep MANE transcript or canonical if no MANE transcript for a gene
+constraint_data <- constraint_data[which((constraint_data$mane_select == "true" | constraint_data$canonical == "true") & startsWith(constraint_data$gene_id, "ENSG")), ]
+constraint_data <- constraint_data[c("gene_id", "lof.oe_ci.upper")]
+names(constraint_data) <- c("gene_id", "LOEUF")
+```
+
+
+
+# Enrichment analyses
+
+Number of enrichment analyses to do:
+- 7 datasets: HDBR (sex-DE & pseudotime-DE), GTEx (sex-DE & pseudotime-DE), shared, prenatal specific and adult specific
+- 2 types of scoring: signed t-statistic and unsigned t-statistic
+- 3 types of enrichment analyses: without control, controlling for gene expression and controlling for gene constraint
+- 2 genesets: full and main
+
+In total, that makes 84 analyses to run...
+
+-> 7 datasets as input
+-> 2 genesets
+-> 6 analysis per input 
+
+## Load data
+
+### HDBR
+
+Load HDBR sex-DE data.
+
+```{r load_data_HDBR_sexDE, echo=FALSE}
+hdbr_sexDE_results <- read.table("data/3-DE/VoomDream_topTable_forebrain_pseudotime_sva_ind_interaction.txt",
+                         header = TRUE, check.names=FALSE)
+# remove genes used for sex assignment
+genes2remove <- c("XIST", as.character(hdbr_sexDE_results$gene_name[which(hdbr_sexDE_results$chr == "chrY" & hdbr_sexDE_results$gene_type == "protein_coding")]))
+hdbr_sexDE_results <- hdbr_sexDE_results[which(!hdbr_sexDE_results$gene_name %in% genes2remove),]
+```
+
+Load HDBR pseudotime-DE data.
+
+```{r load_data_HDBR_pseudotimeDE, echo=FALSE}
+hdbr_pseudotimeDE_results <- read.table("data/3-DE/VoomDream_topTable_forebrain_pseudotime_sva_ind_interaction_pseudotime.txt",
+                         header = TRUE, check.names=FALSE)
+# remove genes used to infer pseudotime
+load("data/2-pseudotime/forebrain_pseudotime_analysis.RData")
+genes2remove <- rownames(selectedCounts)
+hdbr_pseudotimeDE_results <- hdbr_pseudotimeDE_results[which(!hdbr_pseudotimeDE_results$gene_name %in% genes2remove),]
+```
+
+
+### GTEx
+
+Load GTEx sex-DE data.
+
+```{r load_data_GTEx_sexDE, echo=FALSE}
+gtex_sexDE_results <- read.table("data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_VoomDream_topTable_with_sva_ind_pseudotime_interaction.txt",
+                         header = TRUE, check.names=FALSE)
+# remove genes used for sex assignment
+genes2remove <- c("XIST", as.character(gtex_sexDE_results$gene_name[which(gtex_sexDE_results$chr == "chrY" & gtex_sexDE_results$gene_type == "protein_coding")]))
+gtex_sexDE_results <- gtex_sexDE_results[which(!gtex_sexDE_results$gene_name %in% genes2remove),]
+```
+
+
+Load GTEx pseudotime-DE data.
+
+```{r load_data_GTEx_pseudotimeDE, echo=FALSE}
+gtex_pseudotimeDE_results <- read.table("data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_VoomDream_topTable_with_sva_ind_pseudotime_interaction_pseudotime.txt",
+                         header = TRUE, check.names=FALSE)
+# remove genes used to infer pseudotime
+load("data/4-GTEx/1-GTEx_analysis/GTEx_v8_forebrain_pseudotime_analysis.RData")
+genes2remove <- rownames(selectedCounts)
+gtex_pseudotimeDE_results <- gtex_pseudotimeDE_results[which(!gtex_pseudotimeDE_results$gene_name %in% genes2remove),]
+```
+
+### Bayesian score
+
+```{r load_bayes_results, echo=FALSE}
+bayesResults <- read.table("data/4-GTEx/2-comparison/lineModel/lineModel_prenatalVSadult_6models.txt", header = TRUE)
+```
+
+
+## Launch enrichment analyses
+
+
+Launch analysis
+
+```{r enrichment_analyses, echo=FALSE}
+# init all parameters
+listDEdata <- list(hdbr_sexDE_results, hdbr_pseudotimeDE_results,
+                   gtex_sexDE_results, gtex_pseudotimeDE_results,
+                   hdbr_sexDE_results, hdbr_sexDE_results, gtex_sexDE_results)
+listTypeData <- c("sexDE", "pseudotimeDE", "sexDE", "pseudotimeDE", "shared", "prenatal specific", "adult specific")
+listDataset <- c("hdbr", "hdbr", "gtex", "gtex", "hdbr", "hdbr", "gtex")
+listGeneSetName <- c("full", "main")
+listAnalyses <-  c("withoutCtrl", "ctrlExpr", "ctrlConst")
+# loop to launch all enrichment
+i <- 1
+for (de_results in listDEdata){
+  # for each geneset
+  j <- 1
+  listGeneSet <- list(genesLists, main_genesLists)
+  for (genesetAnalysis in listGeneSet){
+    # for the 6 types of analysis
+    for (analysisType in listAnalyses){
+      for (signedAnalysis in c(TRUE, FALSE)){
+        print(">>> Enrichment analysis:")
+        print(paste0("gsea_", analysisType, "_", listDataset[i], "_", listTypeData[i], "_", listGeneSetName[j],
+                     "DiseaseGeneSet_", ifelse(signedAnalysis, "signed", "unsigned")))
+        res <- enrichment1dataset(bayes_results = bayesResults, de_results = de_results, typeData = listTypeData[i], 
+                                  typeAnalysis = analysisType, genesets = genesetAnalysis, genesetName = listGeneSetName[j], 
+                                  dataName = listDataset[i], signed = signedAnalysis, constraint_data = constraint_data, 
+                                  outputResults = "data/5-postprocessing/4-DiseaseEnrichment/results_disease_fgsea/")
+      }
+    }
+    j <- j + 1
+  }
+  i <- i + 1
+}
+print(i-1)
+```
+
+
+
+
+## Merge and plot enrichment results
+
+### Functions
+
+```{r function_loadNmerge_results, echo=FALSE}
+loadNmerge_gsea_results <- function(typeAnalysis, genesetName, dataName, typeData, signed){
+  myPattern <-""
+  if (is.vector(typeData)){
+    tmp <- paste0('gsea_', typeAnalysis, '_', genesetName, 'DiseaseGeneSet_',
+                        dataName, '_', typeData, '_', signed, '.txt')
+    myPattern <- paste(tmp, collapse = '|')
+  } else{
+    myPattern <- paste0('gsea_', typeAnalysis, '_', genesetName, 'DiseaseGeneSet_',
+                        dataName, '_', typeData, '_', signed, '.txt')
+  }
+  listFiles <- list.files("data/5-postprocessing/4-DiseaseEnrichment/results_disease_fgsea/",
+                          pattern = myPattern,
+                          full.names = TRUE)
+  print(listFiles)
+  merged_res <- data.frame(matrix(ncol = 7, nrow = 0))
+  colnames(merged_res) <- c('pathway', 'pval', 'padj', 'ES', 'NES', 'nMoreExtreme', 'size')
+  for (myFile in listFiles){
+    curRes <- read.table(myFile, header = TRUE, fill=TRUE)
+    curRes$data <- strsplit(strsplit(myFile, "DiseaseGeneSet_")[[1]][2], "_")[[1]][1]
+    curRes$type <- strsplit(strsplit(myFile, "DiseaseGeneSet_")[[1]][2], "_")[[1]][2]
+    merged_res <- rbind(merged_res, curRes)
+  }
+  
+  return(merged_res)
+}
+```
+
+```{r format_data_multiAnalysis, echo=FALSE}
+format_data_multiAnalysis <- function(mergedData, dataName, typeData, padj_threshold = 0.05){
+  dataOrdered <- order_pathways(mergedData[which(mergedData$data == dataName & mergedData$type == typeData), ], 
+                                inverse = TRUE)
+  mergedData$pathway <- as.factor(mergedData$pathway)
+  levels(mergedData$pathway) <- list("Constraint genes" = "constraint_genes",
+                                     "Highly expressed genes\nin prenatal brain" = "prenatal_high_expressed_genes",
+                                     "Highly expressed genes\nin adult brain" = "adult_high_expressed_genes", 
+                                     "Alzheimer" = "alzheimer", 
+                                     "Amyotrophic lateral\nsclerosis" = "ALS",
+                                     "Multiple sclerosis" = "MS",
+                                     "Bipolar disorder" = "BP",
+                                     "Bipolar I disorder" = "BP1",
+                                     "Bipolar II disorder" = "BP2",
+                                     "Bipolar disorder\n(including Schizoaffective)" = "BPSchizo",
+                                     "Bipolar disorder\nwith psychosis" = "BPwithPsycho",
+                                     "Bipolar disorder\nwithout psychosis" = "BPwithoutPsycho",
+                                     "Neurodevelopmental disorders\nwith epilepsy" = "epilepsy_ndd",
+                                     "Dominant DEE symdrome" = "epilepsy_dee",
+                                     "Non-acquired focal\nepilepsy" = "NAFE",
+                                     "Genetic generalized\nepilepsy" = "GGE",
+                                     "Severe developmental and\nepileptic encephalopathies" = "DEE", 
+                                     "Epilepsy\n(all types)" = "EPI", 
+                                     "Schizophrenia" = "scz",
+                                     "Developmental\nDisorder specific" = "DDspe",
+                                     "Autism specific" = "ASDspe",
+                                     "Developmental\nDisorder" = "DD",
+                                     "Neurodevelopmental\nDisorder" = "NDD",
+                                     "Autism" = "ASD")
+  mergedData$pathway <- factor(mergedData$pathway, levels = levels(dataOrdered$pathway))
+  
+  # add signif sign
+  mergedData$signif <- ifelse(mergedData$padj < padj_threshold, "*", "")
+  # add direction
+  mergedData$direction <- as.factor(ifelse(mergedData$type %in% c("sexDE", "shared", "prenatal specific", "adult specific"), 
+                                           ifelse(mergedData$NES < 0, "maleBiased", "femaleBiased"),
+                                           ifelse(mergedData$type == "pseudotimeDE",
+                                                  ifelse(mergedData$NES < 0, "downregulated", "upregulated"),
+                                                  "-")))
+  # order data type
+  if (typeData %in% c("sexDE", "pseudotimeDE")){
+    mergedData$type <- factor(mergedData$type, levels = c("sexDE", "pseudotimeDE"))
+  }
+  
+  return(mergedData)
+}
+```
+
+
+```{r lollipop_plot_multianalysis, echo=FALSE}
+lollipop_plot_multianalysis <- function(gseaRes, bayes = FALSE){
+  if (bayes){
+    p <- ggplot(gseaRes, aes(x = NES, y = pathway, xmin = pmin(0, NES), xmax = pmax(0, NES), 
+                             group = type))
+    p <- p + geom_linerange(color = "grey50", position = position_dodge(width = 0.75))
+    p <- p + geom_point(aes(color = direction, fill = direction, shape = type), size = 6, 
+                        position = position_dodge(width = 0.75))
+  } else{
+    p <- ggplot(gseaRes, aes(x = NES, y = pathway, xmin = pmin(0, NES), xmax = pmax(0, NES), 
+                             group = data))
+    p <- p + geom_linerange(color = "grey50", position = position_dodge(width = 0.75))
+    p <- p + geom_point(aes(color = direction, fill = direction, shape = data), size = 6, 
+                        position = position_dodge(width = 0.75))
+  }
+  p <- p + geom_text(aes(x = NES+sign(NES)*0.5, y = pathway, label = signif, color = direction), 
+                     size = 10, position = position_dodge(width = 0.75))
+  p <- p + geom_vline(xintercept = 0, color ="grey25")
+  p <- p + theme_minimal() + theme(text = element_text(size=15))
+  p <- p + labs(y = "", x = "Normalized enrichment score")
+  if (bayes){
+    p <- p + scale_color_manual(values = c("maleBiased" = 'darkblue', "femaleBiased" = 'darkred'), 
+                                labels = c("maleBiased" = 'Male biased', "femaleBiased" = 'Female biased'),
+                                name = "Direction of effect")
+    p <- p + scale_fill_manual(values = c("maleBiased" = 'darkblue', "femaleBiased" = 'darkred'), 
+                               labels = c("maleBiased" = 'Male biased', "femaleBiased" = 'Female biased'),
+                               name = "Direction of effect")
+    p <- p + scale_shape_manual(values = c("shared" = 22, "prenatal specific" = 21, "adult specific" = 24), 
+                                labels = c("shared" = "Shared effect", 
+                                           "prenatal specific" = "Prenatal specific", 
+                                           "adult specific" = "Adult specific"),
+                                name = "Dataset")
+    p <- p + guides(size="none", shape = guide_legend(override.aes = list(shape = c(22, 21, 24), fill = "#919191")))
+  } else{
+    p <- p + scale_color_manual(values = c("maleBiased" = 'darkblue', "femaleBiased" = 'darkred',
+                                           "upregulated" = 'aquamarine4', "downregulated" = "chocolate"), 
+                                labels = c("maleBiased" = 'Male biased', "femaleBiased" = 'Female biased',
+                                           "upregulated" = 'Pseudotime upreg', "downregulated" = "Pseudotime downreg"),
+                                name = "Direction of effect")
+    p <- p + scale_fill_manual(values = c("maleBiased" = 'darkblue', "femaleBiased" = 'darkred',
+                                          "upregulated" = 'aquamarine4', "downregulated" = "chocolate"), 
+                               labels = c("maleBiased" = 'Male biased', "femaleBiased" = 'Female biased',
+                                          "upregulated" = 'Pseudotime upreg', "downregulated" = "Pseudotime downreg"),
+                               name = "Direction of effect")
+    p <- p + scale_shape_manual(values = c("hdbr" = 21, "gtex" = 24), 
+                                labels = c("hdbr" = 'Prenatal', "gtex" = 'Adult'),
+                                name = "Dataset")
+    p <- p + guides(size="none", shape = guide_legend(override.aes = list(shape = c(21, 24), fill = "#919191"))) 
+    p <- p + facet_grid(cols = vars(type))
+  }
+  
+  return(p)
+}
+```
+
+
+```{r heatmap_plot_multianalysis, echo=FALSE}
+heatmap_plot_multianalysis <- function(gseaRes, bayes = FALSE) {
+  if (bayes){
+    p <- ggplot(gseaRes, aes(x = type, y = pathway))
+    p <- p + geom_tile(aes(fill = NES), colour = "white")
+    p <- p + scale_fill_gradient2(low = 'darkblue', mid = "white", high = 'darkred', midpoint = 0, name = "")
+  } else{
+    sexDE_data <- gseaRes[which(gseaRes$type == "sexDE"), ]
+    pseudotimeDE_data <- gseaRes[which(gseaRes$type == "pseudotimeDE"), ]
+    p <- ggplot(mapping = aes(x = type, y = pathway))
+    p <- p + geom_tile(data = sexDE_data, aes(fill = NES), colour = "white")
+    p <- p + facet_grid(cols = vars(data))
+    p <- p + scale_fill_gradient2(low = 'darkblue', mid = "white", high = 'darkred', midpoint = 0, name = "")
+    p <- p + new_scale_fill()
+    p <- p + geom_tile(data = pseudotimeDE_data, aes(fill = NES), colour = "white")
+    p <- p + scale_fill_gradient2(low = 'chocolate', mid = "white", high = 'aquamarine4', midpoint = 0, name = "")
+  }
+  p <- p + theme_minimal() + theme(text = element_text(size=15), 
+                                   axis.text.x = element_text(angle = 45, hjust = 1),
+                                   panel.grid.major = element_blank(), 
+                                   panel.grid.minor = element_blank())
+  p <- p + geom_text(data = gseaRes, mapping = aes(x = type, y = pathway, label = signif), 
+                     color = "grey", size = 10, nudge_y = -0.2)
+  p <- p + labs(y = "", x = "")
+  
+  return(p)
+}
+
+```
+
+
+```{r full_multianalysis_pipeline, echo=FALSE}
+multianalysis_pipeline <- function(typeAnalysis, genesetName, dataName, typeData, dataNameFormat, typeDataFormat, signed = 'signed', bayes = FALSE,
+                                   fileName, plotType = "lollipop", figWidth = 20, figHeight = 25){
+  # load and prepare data
+  merged_res <- loadNmerge_gsea_results(typeAnalysis = typeAnalysis, genesetName = genesetName, dataName = dataName,
+                                      typeData = typeData, signed = signed)
+  merged_res_formated <- format_data_multiAnalysis(merged_res, dataName = dataNameFormat, typeData = typeDataFormat)
+  # plot
+  if (plotType == "lollipop"){
+    p <- lollipop_plot_multianalysis(merged_res_formated, bayes = bayes)
+  } else if (plotType == "heatmap"){
+    p <- heatmap_plot_multianalysis(merged_res_formated, bayes = bayes)
+  }
+  ggsave(fileName, plot = p, width = figWidth, height = figHeight, units = "cm")
+  return(p)
+}
+```
+
+
+
+
+### Merging results of sex-DE and pseudotime-DE for the 2 life stages
+
+#### Main disease genesets without control
+
+```{r results_main_signed_withouCtrl, echo=FALSE}
+p <- multianalysis_pipeline(typeAnalysis = 'withoutCtrl', genesetName = 'main', dataName = '[[:alpha:]]+', typeData = '[[:alpha:]]+DE', 
+                       dataNameFormat = "hdbr", typeDataFormat = "sexDE", signed = 'signed', bayes = FALSE, figWidth = 20, figHeight = 25, plotType = "lollipop",
+                       fileName = "images/5-postprocessing/4-DiseaseEnrichment/disease_fgsea/gsea_withoutCtrl_byLifeStage_byDE_mainDiseaseGeneSet_signed_lollipop.png")
+p
+```
+
+```{r results_main_signed_withouCtrl_heatmap, echo=FALSE}
+p <- multianalysis_pipeline(typeAnalysis = 'withoutCtrl', genesetName = 'main', dataName = '[[:alpha:]]+', typeData = '[[:alpha:]]+DE', 
+                            dataNameFormat = "hdbr", typeDataFormat = "sexDE", signed = 'signed', bayes = FALSE, figWidth = 15, figHeight = 15, plotType = "heatmap",
+                            fileName = "images/5-postprocessing/4-DiseaseEnrichment/disease_fgsea/gsea_withoutCtrl_byLifeStage_byDE_mainDiseaseGeneSet_signed_heatmap.png")
+p
+```
+
+Save the merged fgsea results in a file.
+
+```{r results_main_signed_withouCtrl_save, echo=FALSE}
+gsea_results_DE_main_withoutCtrl <- loadNmerge_gsea_results(typeAnalysis = 'withoutCtrl', genesetName = 'main', 
+                                                            dataName = '[[:alpha:]]+', typeData = '[[:alpha:]]+DE', 
+                                                            signed = 'signed')
+write.table(gsea_results_DE_main_withoutCtrl, 
+            file = "images/5-postprocessing/4-DiseaseEnrichment/disease_fgsea/gsea_withoutCtrl_mainDiseaseGeneSet_allDE_signed.txt",
+            quote = FALSE, row.names = FALSE, col.names = TRUE, sep = "\t")
+```
+
+
+
+#### Full disease genesets without control
+
+```{r results_full_signed_withouCtrl, echo=FALSE}
+p <- multianalysis_pipeline(typeAnalysis = 'withoutCtrl', genesetName = 'full', dataName = '[[:alpha:]]+', typeData = '[[:alpha:]]+DE', 
+                       dataNameFormat = "hdbr", typeDataFormat = "sexDE", signed = 'signed', bayes = FALSE, figWidth = 20, figHeight = 28, plotType = "lollipop",
+                       fileName = "images/5-postprocessing/4-DiseaseEnrichment/disease_fgsea/gsea_withoutCtrl_byLifeStage_byDE_fullDiseaseGeneSet_signed_lollipop.png")
+p
+```
+
+```{r results_full_signed_withouCtrl_heatmap, echo=FALSE}
+p <- multianalysis_pipeline(typeAnalysis = 'withoutCtrl', genesetName = 'full', dataName = '[[:alpha:]]+', typeData = '[[:alpha:]]+DE', 
+                       dataNameFormat = "hdbr", typeDataFormat = "sexDE", signed = 'signed', bayes = FALSE, figWidth = 18, figHeight = 24, plotType = "heatmap",
+                       fileName = "images/5-postprocessing/4-DiseaseEnrichment/disease_fgsea/gsea_withoutCtrl_byLifeStage_byDE_fullDiseaseGeneSet_signed_heatmap.png")
+p
+```
+
+#### Main disease genesets controlling expression
+
+```{r results_main_signed_ctrlExpr, echo=FALSE}
+p <- multianalysis_pipeline(typeAnalysis = 'ctrlExpr', genesetName = 'main', dataName = '[[:alpha:]]+', typeData = '[[:alpha:]]+DE', 
+                       dataNameFormat = "hdbr", typeDataFormat = "sexDE", signed = 'signed', bayes = FALSE, figWidth = 20, figHeight = 25, plotType = "lollipop",
+                       fileName = "images/5-postprocessing/4-DiseaseEnrichment/disease_fgsea/gsea_ctrlExpr_byLifeStage_byDE_mainDiseaseGeneSet_signed_lollipop.png")
+p
+```
+
+```{r results_main_signed_ctrlExpr_heatmap, echo=FALSE}
+p <- multianalysis_pipeline(typeAnalysis = 'ctrlExpr', genesetName = 'main', dataName = '[[:alpha:]]+', typeData = '[[:alpha:]]+DE', 
+                       dataNameFormat = "hdbr", typeDataFormat = "sexDE", signed = 'signed', bayes = FALSE, figWidth = 18, figHeight = 15, plotType = "heatmap",
+                       fileName = "images/5-postprocessing/4-DiseaseEnrichment/disease_fgsea/gsea_ctrlExpr_byLifeStage_byDE_mainDiseaseGeneSet_signed_heatmap.png")
+p
+```
+
+Save the merged fgsea results in a file.
+
+```{r results_main_signed_ctrlExpr_save, echo=FALSE}
+gsea_results_DE_main_ctrlExpr <- loadNmerge_gsea_results(typeAnalysis = 'ctrlExpr', genesetName = 'main', 
+                                                            dataName = '[[:alpha:]]+', typeData = '[[:alpha:]]+DE', 
+                                                            signed = 'signed')
+write.table(gsea_results_DE_main_ctrlExpr, 
+            file = "data/5-postprocessing/4-DiseaseEnrichment/results_disease_fgsea/gsea_ctrlExpr_mainDiseaseGeneSet_allDE_signed.txt",
+            quote = FALSE, row.names = FALSE, col.names = TRUE, sep = "\t")
+```
+
+
+#### Full disease genesets controlling expression
+
+```{r results_full_signed_ctrlExpr, echo=FALSE}
+p <- multianalysis_pipeline(typeAnalysis = 'ctrlExpr', genesetName = 'full', dataName = '[[:alpha:]]+', typeData = '[[:alpha:]]+DE', 
+                       dataNameFormat = "hdbr", typeDataFormat = "sexDE", signed = 'signed', bayes = FALSE, figWidth = 20, figHeight = 28, plotType = "lollipop",
+                       fileName = "images/5-postprocessing/4-DiseaseEnrichment/disease_fgsea/gsea_ctrlExpr_byLifeStage_byDE_fullDiseaseGeneSet_signed_lollipop.png")
+p
+```
+
+```{r results_full_signed_ctrlExpr_heatmap, echo=FALSE}
+p <- multianalysis_pipeline(typeAnalysis = 'ctrlExpr', genesetName = 'full', dataName = '[[:alpha:]]+', typeData = '[[:alpha:]]+DE', 
+                       dataNameFormat = "hdbr", typeDataFormat = "sexDE", signed = 'signed', bayes = FALSE, figWidth = 18, figHeight = 24, plotType = "heatmap",
+                       fileName = "images/5-postprocessing/4-DiseaseEnrichment/disease_fgsea/gsea_ctrlExpr_byLifeStage_byDE_fullDiseaseGeneSet_signed_lollipop_heatmap.png")
+p
+```
+
+#### Main disease genesets controlling constraint
+
+```{r results_main_signed_ctrlConst, echo=FALSE}
+p <- multianalysis_pipeline(typeAnalysis = 'ctrlConst', genesetName = 'main', dataName = '[[:alpha:]]+', typeData = '[[:alpha:]]+DE', 
+                       dataNameFormat = "hdbr", typeDataFormat = "sexDE", signed = 'signed', bayes = FALSE, figWidth = 20, figHeight = 25, plotType = "lollipop",
+                       fileName = "images/5-postprocessing/4-DiseaseEnrichment/disease_fgsea/gsea_ctrlConst_byLifeStage_byDE_mainDiseaseGeneSet_signed_lollipop.png")
+p
+```
+
+```{r results_main_signed_ctrlConst_heatmap, echo=FALSE}
+p <- multianalysis_pipeline(typeAnalysis = 'ctrlConst', genesetName = 'main', dataName = '[[:alpha:]]+', typeData = '[[:alpha:]]+DE', 
+                       dataNameFormat = "hdbr", typeDataFormat = "sexDE", signed = 'signed', bayes = FALSE, figWidth = 18, figHeight = 15, plotType = "heatmap",
+                       fileName = "images/5-postprocessing/4-DiseaseEnrichment/disease_fgsea/gsea_ctrlConst_byLifeStage_byDE_mainDiseaseGeneSet_signed_heatmap.png")
+p
+```
+
+Save the merged fgsea results in a file.
+
+```{r results_main_signed_ctrlConst_save, echo=FALSE}
+gsea_results_DE_main_ctrlConst <- loadNmerge_gsea_results(typeAnalysis = 'ctrlConst', genesetName = 'main', 
+                                                            dataName = '[[:alpha:]]+', typeData = '[[:alpha:]]+DE', 
+                                                            signed = 'signed')
+write.table(gsea_results_DE_main_ctrlConst, 
+            file = "data/5-postprocessing/4-DiseaseEnrichment/results_disease_fgsea/gsea_ctrlConst_mainDiseaseGeneSet_allDE_signed.txt",
+            quote = FALSE, row.names = FALSE, col.names = TRUE, sep = "\t")
+```
+
+
+#### Full disease genesets controlling constraint
+
+```{r results_full_signed_ctrlConst, echo=FALSE}
+p <- multianalysis_pipeline(typeAnalysis = 'ctrlConst', genesetName = 'full', dataName = '[[:alpha:]]+', typeData = '[[:alpha:]]+DE', 
+                       dataNameFormat = "hdbr", typeDataFormat = "sexDE", signed = 'signed', bayes = FALSE, figWidth = 20, figHeight = 25, plotType = "lollipop",
+                       fileName = "images/5-postprocessing/4-DiseaseEnrichment/disease_fgsea/gsea_ctrlConst_byLifeStage_byDE_fullDiseaseGeneSet_signed_lollipop.png")
+p
+```
+
+```{r results_full_signed_ctrlConst_heatmap, echo=FALSE}
+p <- multianalysis_pipeline(typeAnalysis = 'ctrlConst', genesetName = 'full', dataName = '[[:alpha:]]+', typeData = '[[:alpha:]]+DE', 
+                       dataNameFormat = "hdbr", typeDataFormat = "sexDE", signed = 'signed', bayes = FALSE, figWidth = 18, figHeight = 24, plotType = "heatmap",
+                       fileName = "images/5-postprocessing/4-DiseaseEnrichment/disease_fgsea/gsea_ctrlConst_byLifeStage_byDE_fullDiseaseGeneSet_signed_heatmap.png")
+p
+```
+
+### Merging life stage specific and shared results
+
+#### Main disease genesets without control
+
+```{r results_bayes_main_signed_withouCtrl, echo=FALSE}
+p <- multianalysis_pipeline(typeAnalysis = 'withoutCtrl', genesetName = 'main', dataName = '[[:alpha:]]+', typeData = c('shared', 'prenatal specific', 'adult specific'), 
+                       dataNameFormat = "hdbr", typeDataFormat = "shared", signed = 'signed', bayes = TRUE, figWidth = 20, figHeight = 25, plotType = "lollipop",
+                       fileName = "images/5-postprocessing/4-DiseaseEnrichment/disease_fgsea/gsea_withoutCtrl_bayesRes_mainDiseaseGeneSet_signed_lollipop.png")
+p
+```
+
+```{r results_bayes_main_signed_withouCtrl_heatmap, echo=FALSE}
+p <- multianalysis_pipeline(typeAnalysis = 'withoutCtrl', genesetName = 'main', dataName = '[[:alpha:]]+', typeData = c('shared', 'prenatal specific', 'adult specific'), 
+                       dataNameFormat = "hdbr", typeDataFormat = "shared", signed = 'signed', bayes = TRUE, figWidth = 13, figHeight = 15, plotType = "heatmap",
+                       fileName = "images/5-postprocessing/4-DiseaseEnrichment/disease_fgsea/gsea_withoutCtrl_bayesRes_mainDiseaseGeneSet_signed_heatmap.png")
+p
+```
+
+
+Save the merged fgsea results in a file.
+
+```{r results_bayes_main_signed_withouCtrl_save, echo=FALSE}
+gsea_results_bayes_main_withoutCtrl <- loadNmerge_gsea_results(typeAnalysis = 'withoutCtrl', genesetName = 'main', 
+                                                            dataName = '[[:alpha:]]+', typeData = c('shared', 'prenatal specific', 'adult specific'), 
+                                                            signed = 'signed')
+write.table(gsea_results_bayes_main_withoutCtrl, 
+            file = "data/5-postprocessing/4-DiseaseEnrichment/results_disease_fgsea/gsea_withoutCtrl_mainDiseaseGeneSet_allbayes_signed.txt",
+            quote = FALSE, row.names = FALSE, col.names = TRUE, sep = "\t")
+```
+
+
+#### Full disease genesets without control
+
+```{r results_bayes_full_signed_withouCtrl, echo=FALSE}
+p <- multianalysis_pipeline(typeAnalysis = 'withoutCtrl', genesetName = 'full', dataName = '[[:alpha:]]+', typeData = c('shared', 'prenatal specific', 'adult specific'), 
+                       dataNameFormat = "hdbr", typeDataFormat = "shared", signed = 'signed', bayes = TRUE, figWidth = 20, figHeight = 28, plotType = "lollipop",
+                       fileName = "images/5-postprocessing/4-DiseaseEnrichment/disease_fgsea/gsea_withoutCtrl_bayesRes_fullDiseaseGeneSet_signed_lollipop.png")
+p
+```
+
+```{r results_bayes_full_signed_withouCtrl_heatmap, echo=FALSE}
+p <- multianalysis_pipeline(typeAnalysis = 'withoutCtrl', genesetName = 'full', dataName = '[[:alpha:]]+', typeData = c('shared', 'prenatal specific', 'adult specific'), 
+                       dataNameFormat = "hdbr", typeDataFormat = "shared", signed = 'signed', bayes = TRUE, figWidth = 15, figHeight = 24, plotType = "heatmap",
+                       fileName = "images/5-postprocessing/4-DiseaseEnrichment/disease_fgsea/gsea_withoutCtrl_bayesRes_fullDiseaseGeneSet_signed_heatmap.png")
+p
+```
+
+#### Main disease genesets controlling expression
+
+```{r results_bayes_main_signed_ctrlExpr, echo=FALSE}
+p <- multianalysis_pipeline(typeAnalysis = 'ctrlExpr', genesetName = 'main', dataName = '[[:alpha:]]+', typeData = c('shared', 'prenatal specific', 'adult specific'), 
+                       dataNameFormat = "hdbr", typeDataFormat = "shared", signed = 'signed', bayes = TRUE, figWidth = 20, figHeight = 25, plotType = "lollipop",
+                       fileName = "images/5-postprocessing/4-DiseaseEnrichment/disease_fgsea/gsea_ctrlExpr_bayesRes_mainDiseaseGeneSet_signed_lollipop.png")
+p
+```
+
+```{r results_bayes_main_signed_ctrlExpr_heatmap, echo=FALSE}
+p <- multianalysis_pipeline(typeAnalysis = 'ctrlExpr', genesetName = 'main', dataName = '[[:alpha:]]+', typeData = c('shared', 'prenatal specific', 'adult specific'), 
+                       dataNameFormat = "hdbr", typeDataFormat = "shared", signed = 'signed', bayes = TRUE, figWidth = 15, figHeight = 15, plotType = "heatmap",
+                       fileName = "images/5-postprocessing/4-DiseaseEnrichment/disease_fgsea/gsea_ctrlExpr_bayesRes_mainDiseaseGeneSet_signed_heatmap.png")
+p
+```
+
+Save the merged fgsea results in a file.
+
+```{r results_bayes_main_signed_ctrlExpr_save, echo=FALSE}
+gsea_results_bayes_main_ctrlExpr <- loadNmerge_gsea_results(typeAnalysis = 'ctrlExpr', genesetName = 'main', 
+                                                            dataName = '[[:alpha:]]+', typeData = c('shared', 'prenatal specific', 'adult specific'), 
+                                                            signed = 'signed')
+write.table(gsea_results_bayes_main_ctrlExpr, 
+            file = "data/5-postprocessing/4-DiseaseEnrichment/results_disease_fgsea/gsea_ctrlExpr_mainDiseaseGeneSet_allbayes_signed.txt",
+            quote = FALSE, row.names = FALSE, col.names = TRUE, sep = "\t")
+```
+
+
+
+#### Full disease genesets controlling expression
+
+```{r results_bayes_full_signed_ctrlExpr, echo=FALSE}
+p <- multianalysis_pipeline(typeAnalysis = 'ctrlExpr', genesetName = 'full', dataName = '[[:alpha:]]+', typeData = c('shared', 'prenatal specific', 'adult specific'), 
+                       dataNameFormat = "hdbr", typeDataFormat = "shared", signed = 'signed', bayes = TRUE, figWidth = 20, figHeight = 25, plotType = "lollipop",
+                       fileName = "images/5-postprocessing/4-DiseaseEnrichment/disease_fgsea//gsea_ctrlExpr_bayesRes_fullDiseaseGeneSet_signed_lollipop.png")
+p
+```
+
+```{r results_bayes_full_signed_ctrlExpr_heatmap, echo=FALSE}
+p <- multianalysis_pipeline(typeAnalysis = 'ctrlExpr', genesetName = 'full', dataName = '[[:alpha:]]+', typeData = c('shared', 'prenatal specific', 'adult specific'), 
+                       dataNameFormat = "hdbr", typeDataFormat = "shared", signed = 'signed', bayes = TRUE, figWidth = 15, figHeight = 24, plotType = "heatmap",
+                       fileName = "images/5-postprocessing/4-DiseaseEnrichment/disease_fgsea/gsea_ctrlExpr_bayesRes_fullDiseaseGeneSet_signed_heatmap.png")
+p
+```
+
+#### Main disease genesets controlling constraint
+
+```{r results_bayes_main_signed_ctrlConst, echo=FALSE}
+p <- multianalysis_pipeline(typeAnalysis = 'ctrlConst', genesetName = 'main', dataName = '[[:alpha:]]+', typeData = c('shared', 'prenatal specific', 'adult specific'), 
+                       dataNameFormat = "hdbr", typeDataFormat = "shared", signed = 'signed', bayes = TRUE, figWidth = 20, figHeight = 25, plotType = "lollipop",
+                       fileName = "images/5-postprocessing/4-DiseaseEnrichment/disease_fgsea/gsea_ctrlConst_bayesRes_mainDiseaseGeneSet_signed_lollipop.png")
+p
+```
+
+```{r results_bayes_main_signed_ctrlConst_heatmap, echo=FALSE}
+p <- multianalysis_pipeline(typeAnalysis = 'ctrlConst', genesetName = 'main', dataName = '[[:alpha:]]+', typeData = c('shared', 'prenatal specific', 'adult specific'), 
+                       dataNameFormat = "hdbr", typeDataFormat = "shared", signed = 'signed', bayes = TRUE, figWidth = 15, figHeight = 15, plotType = "heatmap",
+                       fileName = "images/5-postprocessing/4-DiseaseEnrichment/disease_fgsea/gsea_ctrlConst_bayesRes_mainDiseaseGeneSet_signed_heatmap.png")
+p
+```
+
+Save the merged fgsea results in a file.
+
+```{r results_bayes_main_signed_ctrlConst_save, echo=FALSE}
+gsea_results_bayes_main_ctrlConst <- loadNmerge_gsea_results(typeAnalysis = 'ctrlConst', genesetName = 'main', 
+                                                            dataName = '[[:alpha:]]+', typeData = c('shared', 'prenatal specific', 'adult specific'), 
+                                                            signed = 'signed')
+write.table(gsea_results_bayes_main_ctrlConst, 
+            file = "data/5-postprocessing/4-DiseaseEnrichment/results_disease_fgsea/gsea_ctrlConst_mainDiseaseGeneSet_allbayes_signed.txt",
+            quote = FALSE, row.names = FALSE, col.names = TRUE, sep = "\t")
+```
+
+
+
+#### Full disease genesets controlling constraint
+
+```{r results_bayes_full_signed_ctrlConst, echo=FALSE}
+p <- multianalysis_pipeline(typeAnalysis = 'ctrlConst', genesetName = 'full', dataName = '[[:alpha:]]+', typeData = c('shared', 'prenatal specific', 'adult specific'), 
+                       dataNameFormat = "hdbr", typeDataFormat = "shared", signed = 'signed', bayes = TRUE, figWidth = 20, figHeight = 25, plotType = "lollipop",
+                       fileName = "images/5-postprocessing/4-DiseaseEnrichment/disease_fgsea/gsea_ctrlConst_bayesRes_fullDiseaseGeneSet_signed_lollipop.png")
+p
+```
+
+```{r results_bayes_full_signed_ctrlConst_heatmap, echo=FALSE}
+p <- multianalysis_pipeline(typeAnalysis = 'ctrlConst', genesetName = 'full', dataName = '[[:alpha:]]+', typeData = c('shared', 'prenatal specific', 'adult specific'), 
+                       dataNameFormat = "hdbr", typeDataFormat = "shared", signed = 'signed', bayes = TRUE, figWidth = 15, figHeight = 24, plotType = "heatmap",
+                       fileName = "images/5-postprocessing/4-DiseaseEnrichment/disease_fgsea/gsea_ctrlConst_bayesRes_fullDiseaseGeneSet_signed_heatmap.png")
+p
+```
+
+
+# Session info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```
+

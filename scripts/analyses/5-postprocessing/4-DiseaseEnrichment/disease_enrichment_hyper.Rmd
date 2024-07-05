@@ -1,0 +1,450 @@
+---
+title: "Disease enrichment with hypergeometric test"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r load_library, echo=FALSE}
+suppressPackageStartupMessages( library(edgeR) )
+suppressPackageStartupMessages( library(limma) )
+suppressPackageStartupMessages( library(qvalue) )
+suppressPackageStartupMessages( library(tidyverse) )
+```
+
+```{r, setup, include=FALSE, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+# Load data and functions
+
+## Load functions
+
+```{r load_function, echo=FALSE}
+source("scripts/analyses/5-postprocessing/4-DiseaseEnrichment/enrichment_hyper.R")
+```
+
+
+## Load DE results
+
+### HDBR
+
+Load HDBR sex-DE data.
+
+```{r load_data_HDBR_sexDE, echo=FALSE}
+hdbr_sexDE_results <- read.table("data/3-DE/VoomDream_topTable_forebrain_pseudotime_sva_ind_interaction.txt",
+                         header = TRUE, check.names=FALSE)
+# remove genes used for sex assignment
+genes2remove <- c("XIST", as.character(hdbr_sexDE_results$gene_name[which(hdbr_sexDE_results$chr == "chrY" & hdbr_sexDE_results$gene_type == "protein_coding")]))
+hdbr_sexDE_results <- hdbr_sexDE_results[which(!hdbr_sexDE_results$gene_name %in% genes2remove),]
+# format
+hdbr_sexDE_results$ensemblID <- sapply(strsplit(as.character(hdbr_sexDE_results$gene_id), "\\."), function(x){x[1]})
+hdbr_sexDE_results$exprbin <- cut(hdbr_sexDE_results$AveExpr, quantile(hdbr_sexDE_results$AveExpr, seq(0,1,0.1)), 
+                                  labels=c(1:10), include.lowest=T) # add expression bins
+```
+
+Load HDBR pseudotime-DE data.
+
+```{r load_data_HDBR_pseudotimeDE, echo=FALSE}
+hdbr_pseudotimeDE_results <- read.table("data/3-DE/VoomDream_topTable_forebrain_pseudotime_sva_ind_interaction_pseudotime.txt",
+                         header = TRUE, check.names=FALSE)
+# remove genes used to infer pseudotime
+load("data/2-pseudotime/forebrain_pseudotime_analysis.RData")
+genes2remove <- rownames(selectedCounts)
+hdbr_pseudotimeDE_results <- hdbr_pseudotimeDE_results[which(!hdbr_pseudotimeDE_results$gene_name %in% genes2remove),]
+# format
+hdbr_pseudotimeDE_results$ensemblID <- sapply(strsplit(as.character(hdbr_pseudotimeDE_results$gene_id), "\\."), function(x){x[1]})
+hdbr_pseudotimeDE_results$exprbin <- cut(hdbr_pseudotimeDE_results$AveExpr, quantile(hdbr_pseudotimeDE_results$AveExpr, seq(0,1,0.1)), 
+                                         labels=c(1:10), include.lowest=T) # add expression bins
+```
+
+
+### GTEx
+
+Load GTEx sex-DE data.
+
+```{r load_data_GTEx_sexDE, echo=FALSE}
+gtex_sexDE_results <- read.table("data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_VoomDream_topTable_with_sva_ind_pseudotime_interaction.txt",
+                         header = TRUE, check.names=FALSE)
+# remove genes used for sex assignment
+genes2remove <- c("XIST", as.character(gtex_sexDE_results$gene_name[which(gtex_sexDE_results$chr == "chrY" & gtex_sexDE_results$gene_type == "protein_coding")]))
+gtex_sexDE_results <- gtex_sexDE_results[which(!gtex_sexDE_results$gene_name %in% genes2remove),]
+# format
+gtex_sexDE_results$ensemblID <- sapply(strsplit(as.character(gtex_sexDE_results$gene_id), "\\."), function(x){x[1]})
+gtex_sexDE_results$exprbin <- cut(gtex_sexDE_results$AveExpr, quantile(gtex_sexDE_results$AveExpr, seq(0,1,0.1)), 
+                                  labels=c(1:10), include.lowest=T) # add expression bins
+```
+
+Load GTEx pseudotime-DE data.
+
+```{r load_data_GTEx_pseudotimeDE, echo=FALSE}
+gtex_pseudotimeDE_results <- read.table("data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_VoomDream_topTable_with_sva_ind_pseudotime_interaction_pseudotime.txt",
+                                        header = TRUE, check.names=FALSE)
+# remove genes used to infer pseudotime
+load("data/4-GTEx/1-GTEx_analysis/GTEx_v8_forebrain_pseudotime_analysis.RData")
+genes2remove <- rownames(selectedCounts)
+gtex_pseudotimeDE_results <- gtex_pseudotimeDE_results[which(!gtex_pseudotimeDE_results$gene_name %in% genes2remove),]
+# format
+gtex_pseudotimeDE_results$ensemblID <- sapply(strsplit(as.character(gtex_pseudotimeDE_results$gene_id), "\\."), function(x){x[1]})
+gtex_pseudotimeDE_results$exprbin <- cut(gtex_pseudotimeDE_results$AveExpr, quantile(gtex_pseudotimeDE_results$AveExpr, seq(0,1,0.1)), 
+                                         labels=c(1:10), include.lowest=T) # add expression bins
+```
+
+
+### Bayesian score
+
+```{r load_bayes_results, echo=FALSE}
+bayesResults <- read.table("data/4-GTEx/2-comparison/lineModel/lineModel_prenatalVSadult_6models.txt", header = TRUE)
+# merge bayes results with prenatal sex-DE results
+bayesResults_merged <- merge(bayesResults, hdbr_sexDE_results, by = "ensemblID", suffixes = c("", "_DE"))
+# format specificity variable
+bayesResults_merged$specificity <- factor(bayesResults_merged$specificity,
+                                          levels = c("ADULT", "OPPOSITE", "PRENATAL", "SHARED_UNSPECIFIED", 
+                                                     "SHARED0.5", "SHARED1", "SHARED2", "UNCLASSIFIED"),
+                                          labels = c("adult_specific", "opposite", "prenatal_specific", "shared", 
+                                                     "shared", "shared", "shared", "unclassified"))
+```
+
+
+## Load genesets
+
+```{r load_geneList, echo=FALSE}
+load("data/5-postprocessing/4-DiseaseEnrichment/geneLists/diseaseGeneLists.RData")
+main_genesLists <- genesLists[c("scz", "ASD", "NDD", "EPI", "epilepsy_ndd", "BP", "MS", "alzheimer", "ALS", "constraint_genes", "prenatal_high_expressed_genes", "adult_high_expressed_genes")]
+```
+
+
+## Load constraint data
+
+LOEUF score
+
+```{r load_LOEUF, echo=FALSE}
+# load loeuf score
+constraint_data <- read.table("data/5-postprocessing/1-GeneProperties/gnomad.v4.1.constraint_metrics.tsv", 
+                              header = TRUE, sep = "\t")
+constraint_data <- constraint_data[c("gene_id", "canonical", "mane_select", "lof.oe_ci.upper")]
+# keep MANE transcript or canonical if no MANE transcript for a gene
+constraint_data <- constraint_data[which((constraint_data$mane_select == "true" | constraint_data$canonical == "true") & startsWith(constraint_data$gene_id, "ENSG")), ]
+constraint_data <- constraint_data[c("gene_id", "lof.oe_ci.upper")]
+names(constraint_data) <- c("gene_id", "LOEUF")
+```
+
+
+# Enrichment analysis
+
+The enrichment analysis is done for the following condition:
+- 6 analyses lists: prenatal sex-DE and pseudotime-DE, adult sex-DE and pseudotime-DE, shared sex-DE and prenatal-specific sex-DE genes.
+- 3 directions: both, female-biased and male-biased
+- with or without controlling for gene expression level
+
+```{r enrichment_analyses, echo=FALSE}
+enrichRes <- data.frame("analysis" = NA, "direction" = NA, "geneList" = NA, "nbr_DE" = NA, "nbr_geneList" = NA, 
+                        "overlap" = NA, "N" = NA, "pval_enrich" = NA, "pval_deple" = NA, "relative_enrich" = NA,
+                        "pval_enrich_random" = NA, "pval_deple_random" = NA, "relative_enrich_random" = NA, 
+                        "ctrlExpr" = NA)
+enrichRes <- enrichRes[0,]
+
+analysesList <- list(hdbr_sexDE_results, hdbr_pseudotimeDE_results, gtex_sexDE_results, gtex_pseudotimeDE_results, bayesResults_merged, bayesResults_merged)
+analysesNameList <- c("prenatal_sexDE", "prenatal_pseudotimeDE", "adult_sexDE", "adult_pseudotimeDE", "prenatal_specific", "shared")
+analysesTypeList <- c("sexDE", "pseudotimeDE", "sexDE", "pseudotimeDE", "sexDE", "sexDE")
+directions <- c("both", "up", "down")
+ctrlExprList <- c(FALSE, TRUE)
+for (i in 1:length(analysesList)){
+  analyseData <- analysesList[[i]]
+  analyseName <- analysesNameList[i]
+  analyseType <- analysesTypeList[i]
+  print(paste0(">>>>> ", analyseName))
+  for (ctrlExpr in ctrlExprList){
+    print(paste0(">>> ctrlExpr=", as.character(ctrlExpr)))
+    for (myDirection in directions){
+      print(paste0("> direction=", myDirection))
+      bayes <- FALSE
+      bayesDataType <- NULL
+      if (analyseName %in% c("prenatal_specific", "shared")){
+        bayes <- TRUE
+        bayesDataType <- analyseName
+      }
+      resTmp <- enrichment_analysis_permut(DEresults = analyseData, geneList = main_genesLists, 
+                                           analysisName = analyseName, geneListNames = names(main_genesLists),
+                                           nbr_permut = 1000, pval_threshold = 0.05, direction = myDirection, 
+                                           bayes = bayes, bayesDataType = bayesDataType, ctrlExpr = ctrlExpr)
+      if (analyseType == "sexDE"){
+        if (myDirection == "up"){
+          resTmp$direction <- "male"
+        } else if (myDirection == "down"){
+          resTmp$direction <- "female"
+        }
+      }
+      # add results to the global enrichment abject
+      enrichRes <- rbind(enrichRes, resTmp)
+    }
+  }
+}
+```
+
+# Write results
+
+Add percentage of the DE genes are in gene list.
+
+```{r add_percent, echo=FALSE}
+enrichRes$percent <- enrichRes$overlap/enrichRes$nbr_DE*100
+```
+
+Write the complete enrichment results into a file.
+
+```{r write_res, echo=FALSE}
+write.table(enrichRes, file = "data/5-postprocessing/4-DiseaseEnrichment/results_disease_hyper/enrichment_results.txt", 
+            quote = FALSE, row.names = FALSE, col.names = TRUE, sep = "\t")
+```
+
+
+# Plot the results
+
+What is the best layout to plot all these information?
+We do 2 different plots: one for the bayes results and another for the other results
+For both plots, we plot the phenotypes on the y axis and separate the adult and prenatal results on the x axis as well as the sex-DE and pseudotime-DE for each dataset. For each combination, we plot both the relative enrichment value for the geneset of interest as well as a violinplot of the 1000 relative enrichment value for the random genesets.
+
+## Plot for sex-DE and pseudotime-DE results without controlling for gene level of expression
+
+We plot the results for all phenotypes with both direction (up/down or male/female) in the pseudotime-DE and sex-DE analyses for the adult and the prenatal dataset.
+
+First, we format a bit more the data. The chosen threshold to consider a result as significant is 0.05/6 datasets * 2 directions * 12 phenotypes (~144 analyses) = 0.0003.
+
+```{r format4plot, echo=FALSE}
+enrichRes_formated <- enrichRes[which(enrichRes$analysis %in% c("prenatal_sexDE", "prenatal_pseudotimeDE", "adult_sexDE", "adult_pseudotimeDE") & enrichRes$direction != "both" & !enrichRes$ctrlExpr), ]
+# create groups for facet
+enrichRes_formated$dataset <- ifelse(enrichRes_formated$analysis %in% c("prenatal_sexDE", "prenatal_pseudotimeDE"), "prenatal", "adult")
+# add * for signif enrichment or depletion (with a threshold of 0.05/144=0.0003)
+enrichRes_formated$signif <- ifelse(enrichRes_formated$relative_enrich > 1, 
+                                    ifelse(enrichRes_formated$pval_enrich<0.0003 & enrichRes_formated$permut_pval < 0.0003, "*", ""),
+                                    ifelse(enrichRes_formated$pval_deple<0.0003 & enrichRes_formated$permut_pval < 0.0003, "*", ""))
+# order the different direction of effect
+enrichRes_formated$direction <- factor(enrichRes_formated$direction,
+                                       levels = c("female", "male", "down", "up"))
+# order the different phenotype
+enrichRes_formated$geneList <- factor(enrichRes_formated$geneList,
+                                      levels = c("ASD", "NDD", "epilepsy_ndd", "EPI", "scz", "BP", "MS", "ALS", "alzheimer", 
+                                                 "prenatal_high_expressed_genes", "adult_high_expressed_genes", "constraint_genes"),
+                                      labels = c("Autism", "Neurodevelopmental\ndisorder","Neurodevelopmental disorder\nwith epilepsy", "Epilepsy", 
+                                                 "Schizophrenia", "Bipolar disorder", "Multiple sclerosis", "Amyotrophic lateral\nsclerosis", "Alzheimer",
+                                                 "Highly expressed genes\nin prenatal brain", "Highly expressed genes\nin adult brain", "Constraint genes"))
+# rename the 4 analyses
+enrichRes_formated$analysis <- factor(enrichRes_formated$analysis,
+                                      levels = c("adult_pseudotimeDE", "adult_sexDE", "prenatal_pseudotimeDE", "prenatal_sexDE"),
+                                      labels = c("Adult\nPseudotime-DE", "Adult\nSex-DE", "Prenatal\nPseudotime-DE", "Prenatal\nSex-DE"))
+
+# extract and transform the results for the random set of genes
+enrichRes_random_formated <- enrichRes_formated[, c("geneList", "analysis", "direction", "dataset", "pval_enrich_random", "pval_deple_random", "relative_enrich_random")] %>% separate_longer_delim(cols = c(pval_enrich_random, pval_deple_random, relative_enrich_random), delim = ";")
+enrichRes_random_formated$pval_enrich_random <- as.numeric(enrichRes_random_formated$pval_enrich_random)
+enrichRes_random_formated$pval_deple_random <- as.numeric(enrichRes_random_formated$pval_deple_random)
+enrichRes_random_formated$relative_enrich_random <- as.numeric(enrichRes_random_formated$relative_enrich_random)
+```
+
+
+```{r plot, echo=FALSE}
+p <- ggplot(enrichRes_random_formated, aes(y = geneList, x = relative_enrich_random, fill = direction, alpha = 0.4))
+p <- p + geom_violin(linewidth = 0.1)
+p <- p + geom_vline(xintercept = 1)
+p <- p + scale_fill_manual(values = c("female" = "darkred", "male" = "darkblue", "down" = "chocolate", "up" = "aquamarine4"))
+p <- p + geom_point(data = enrichRes_formated, aes(y = geneList, x = relative_enrich, color = direction), 
+                    position = position_dodge(0.9), size = 2, alpha = 1)
+p <- p + geom_text(data = enrichRes_formated, aes(y = geneList, x = ifelse(relative_enrich>1, relative_enrich + 0.5, relative_enrich - 0.5), label = signif),
+                   position = position_dodge(0.9), size = 4, alpha = 1)
+p <- p + scale_color_manual(values = c("female" = "darkred", "male" = "darkblue", "down" = "chocolate", "up" = "aquamarine4"))
+p <- p + facet_grid(cols = vars(analysis), scales = "free", space = "free")
+p <- p + theme_minimal()
+p <- p + ylab("") + xlab("Relative enrichment")
+p <- p + guides(alpha="none")
+p <- p + coord_cartesian(xlim = c(0,4))
+p <- p + scale_y_discrete(limits = rev(levels(enrichRes_random_formated$geneList))) # reverse order of phenotype
+p
+# save plot
+ggsave("enrichment_plot_sexDE_pseudotimeDE_adult_prenatal.png",
+      path = "images/5-postprocessing/4-DiseaseEnrichment/disease_hyper/",
+      units = "cm", width = 20, height = 12)
+```
+
+## Plot for bayes results without controlling for gene level of expression
+
+We plot the results for all phenotypes with both direction (male/female) in the prenatal-specific and shared sex-DE genes.
+
+First, we format a bit more the data. The chosen threshold to consider a result as significant is 0.05/6 datasets * 2 directions * 12 phenotypes (~144 analyses) = 0.0003.
+
+```{r format4plot_bayes, echo=FALSE}
+enrichRes_formated_bayes <- enrichRes[which(enrichRes$analysis %in% c("prenatal_specific", "shared") & enrichRes$direction != "both" & !enrichRes$ctrlExpr), ]
+# add * for signif enrichment or depletion (with a threshold of 0.05/144=0.0003)
+enrichRes_formated_bayes$signif <- ifelse(enrichRes_formated_bayes$relative_enrich > 1, 
+                                    ifelse(enrichRes_formated_bayes$pval_enrich<0.0003 & enrichRes_formated_bayes$permut_pval < 0.0003, "*", ""),
+                                    ifelse(enrichRes_formated_bayes$pval_deple<0.0003 & enrichRes_formated_bayes$permut_pval < 0.0003, "*", ""))
+# order the different direction of effect
+enrichRes_formated_bayes$direction <- factor(enrichRes_formated_bayes$direction,
+                                       levels = c("female", "male"))
+# order the different phenotype
+enrichRes_formated_bayes$geneList <- factor(enrichRes_formated_bayes$geneList,
+                                      levels = c("ASD", "NDD", "epilepsy_ndd", "EPI", "scz", "BP", "MS", "ALS", "alzheimer", 
+                                                 "prenatal_high_expressed_genes", "adult_high_expressed_genes", "constraint_genes"),
+                                      labels = c("Autism", "Neurodevelopmental\ndisorder","Neurodevelopmental disorder\nwith epilepsy", "Epilepsy", 
+                                                 "Schizophrenia", "Bipolar disorder", "Multiple sclerosis", "Amyotrophic lateral\nsclerosis", "Alzheimer",
+                                                 "Highly expressed genes\nin prenatal brain", "Highly expressed genes\nin adult brain", "Constraint genes"))
+# rename the 4 analyses
+enrichRes_formated_bayes$analysis <- factor(enrichRes_formated_bayes$analysis,
+                                      levels = c("prenatal_specific", "shared"),
+                                      labels = c("Prenatal\nspecific", "Shared"))
+
+# extract and transform the results for the random set of genes
+enrichRes_random_formated_bayes <- enrichRes_formated_bayes[, c("geneList", "analysis", "direction", "pval_enrich_random", "pval_deple_random", "relative_enrich_random")] %>% separate_longer_delim(cols = c(pval_enrich_random, pval_deple_random, relative_enrich_random), delim = ";")
+enrichRes_random_formated_bayes$pval_enrich_random <- as.numeric(enrichRes_random_formated_bayes$pval_enrich_random)
+enrichRes_random_formated_bayes$pval_deple_random <- as.numeric(enrichRes_random_formated_bayes$pval_deple_random)
+enrichRes_random_formated_bayes$relative_enrich_random <- as.numeric(enrichRes_random_formated_bayes$relative_enrich_random)
+```
+
+
+```{r plot_bayes, echo=FALSE}
+p <- ggplot(enrichRes_random_formated_bayes, aes(y = geneList, x = relative_enrich_random, fill = direction, alpha = 0.4))
+p <- p + geom_violin(linewidth = 0.1)
+p <- p + geom_vline(xintercept = 1)
+p <- p + scale_fill_manual(values = c("female" = "darkred", "male" = "darkblue"))
+p <- p + geom_point(data = enrichRes_formated_bayes, aes(y = geneList, x = relative_enrich, color = direction), 
+                    position = position_dodge(0.9), size = 2, alpha = 1)
+p <- p + geom_text(data = enrichRes_formated_bayes, aes(y = geneList, x = ifelse(relative_enrich>1, relative_enrich + 0.2, relative_enrich - 0.2), label = signif),
+                   position = position_dodge(0.9), size = 4, alpha = 1)
+p <- p + scale_color_manual(values = c("female" = "darkred", "male" = "darkblue"))
+p <- p + facet_grid(cols = vars(analysis), scales = "free", space = "free")
+p <- p + theme_minimal()
+p <- p + ylab("") + xlab("Relative enrichment")
+p <- p + guides(alpha="none")
+p <- p + coord_cartesian(xlim = c(0,5))
+p <- p + scale_y_discrete(limits = rev(levels(enrichRes_random_formated_bayes$geneList))) # reverse order of phenotype
+p
+# save plot
+ggsave("enrichment_plot_sexDE_bayes.png",
+      path = "images/5-postprocessing/4-DiseaseEnrichment/disease_hyper/",
+      units = "cm", width = 15, height = 12)
+```
+
+## Plot for sex-DE and pseudotime-DE results controlling for gene level of expression
+
+We plot the results for all phenotypes with both direction (up/down or male/female) in the pseudotime-DE and sex-DE analyses for the adult and the prenatal dataset.
+
+First, we format a bit more the data. The chosen threshold to consider a result as significant is 0.05/6 datasets * 2 directions * 12 phenotypes (~144 analyses) = 0.0003.
+
+```{r format4plot_ctrlExpr, echo=FALSE}
+enrichRes_formated_ctrlExpr <- enrichRes[which(enrichRes$analysis %in% c("prenatal_sexDE", "prenatal_pseudotimeDE", "adult_sexDE", "adult_pseudotimeDE") & enrichRes$direction != "both" & enrichRes$ctrlExpr), ]
+# create groups for facet
+enrichRes_formated_ctrlExpr$dataset <- ifelse(enrichRes_formated_ctrlExpr$analysis %in% c("prenatal_sexDE", "prenatal_pseudotimeDE"), "prenatal", "adult")
+# add * for signif enrichment or depletion (with a threshold of 0.05/144=0.0003)
+enrichRes_formated_ctrlExpr$signif <- ifelse(enrichRes_formated_ctrlExpr$relative_enrich > 1, 
+                                             ifelse(enrichRes_formated_ctrlExpr$pval_enrich<0.0003 & enrichRes_formated_ctrlExpr$permut_pval < 0.0003, "*", ""),
+                                             ifelse(enrichRes_formated_ctrlExpr$pval_deple<0.0003 & enrichRes_formated_ctrlExpr$permut_pval < 0.0003, "*", ""))
+# order the different direction of effect
+enrichRes_formated_ctrlExpr$direction <- factor(enrichRes_formated_ctrlExpr$direction,
+                                                levels = c("female", "male", "down", "up"))
+# order the different phenotype
+enrichRes_formated_ctrlExpr$geneList <- factor(enrichRes_formated_ctrlExpr$geneList,
+                                               levels = c("ASD", "NDD", "epilepsy_ndd", "EPI", "scz", "BP", "MS", "ALS", "alzheimer", 
+                                                          "prenatal_high_expressed_genes", "adult_high_expressed_genes", "constraint_genes"),
+                                               labels = c("Autism", "Neurodevelopmental\ndisorder","Neurodevelopmental disorder\nwith epilepsy", "Epilepsy", 
+                                                          "Schizophrenia", "Bipolar disorder", "Multiple sclerosis", "Amyotrophic lateral\nsclerosis", "Alzheimer",
+                                                          "Highly expressed genes\nin prenatal brain", "Highly expressed genes\nin adult brain", "Constraint genes"))
+# rename the 4 analyses
+enrichRes_formated_ctrlExpr$analysis <- factor(enrichRes_formated_ctrlExpr$analysis,
+                                               levels = c("adult_pseudotimeDE", "adult_sexDE", "prenatal_pseudotimeDE", "prenatal_sexDE"),
+                                               labels = c("Adult\nPseudotime-DE", "Adult\nSex-DE", "Prenatal\nPseudotime-DE", "Prenatal\nSex-DE"))
+
+# extract and transform the results for the random set of genes
+enrichRes_random_formated_ctrlExpr <- enrichRes_formated_ctrlExpr[, c("geneList", "analysis", "direction", "dataset", "pval_enrich_random", "pval_deple_random", "relative_enrich_random")] %>% separate_longer_delim(cols = c(pval_enrich_random, pval_deple_random, relative_enrich_random), delim = ";")
+enrichRes_random_formated_ctrlExpr$pval_enrich_random <- as.numeric(enrichRes_random_formated_ctrlExpr$pval_enrich_random)
+enrichRes_random_formated_ctrlExpr$pval_deple_random <- as.numeric(enrichRes_random_formated_ctrlExpr$pval_deple_random)
+enrichRes_random_formated_ctrlExpr$relative_enrich_random <- as.numeric(enrichRes_random_formated_ctrlExpr$relative_enrich_random)
+```
+
+
+```{r plot_ctrlExpr, echo=FALSE}
+p <- ggplot(enrichRes_random_formated_ctrlExpr, aes(y = geneList, x = relative_enrich_random, fill = direction, alpha = 0.4))
+p <- p + geom_violin(linewidth = 0.1)
+p <- p + geom_vline(xintercept = 1)
+p <- p + scale_fill_manual(values = c("female" = "darkred", "male" = "darkblue", "down" = "chocolate", "up" = "aquamarine4"))
+p <- p + geom_point(data = enrichRes_formated_ctrlExpr, aes(y = geneList, x = relative_enrich, color = direction), 
+                    position = position_dodge(0.9), size = 2, alpha = 1)
+p <- p + geom_text(data = enrichRes_formated_ctrlExpr, aes(y = geneList, x = ifelse(relative_enrich>1, relative_enrich + 0.5, relative_enrich - 0.5), label = signif),
+                   position = position_dodge(0.9), size = 4, alpha = 1)
+p <- p + scale_color_manual(values = c("female" = "darkred", "male" = "darkblue", "down" = "chocolate", "up" = "aquamarine4"))
+p <- p + facet_grid(cols = vars(analysis), scales = "free", space = "free")
+p <- p + theme_minimal()
+p <- p + ylab("") + xlab("Relative enrichment")
+p <- p + guides(alpha="none")
+p <- p + coord_cartesian(xlim = c(0,4))
+p <- p + scale_y_discrete(limits = rev(levels(enrichRes_random_formated_ctrlExpr$geneList))) # reverse order of phenotype
+p
+# save plot
+ggsave("enrichment_plot_sexDE_pseudotimeDE_adult_prenatal_ctrlExpr.png",
+      path = "images/5-postprocessing/4-DiseaseEnrichment/disease_hyper/",
+      units = "cm", width = 20, height = 12)
+```
+
+
+## Plot for bayes results controlling for gene level of expression
+
+We plot the results for all phenotypes with both direction (male/female) in the prenatal-specific and shared sex-DE genes.
+
+First, we format a bit more the data. The chosen threshold to consider a result as significant is 0.05/6 datasets * 2 directions * 12 phenotypes (~144 analyses) = 0.0003.
+
+```{r format4plot_bayes_ctrlExpr, echo=FALSE}
+enrichRes_formated_bayes_ctrlExpr <- enrichRes[which(enrichRes$analysis %in% c("prenatal_specific", "shared") & enrichRes$direction != "both" & enrichRes$ctrlExpr), ]
+# add * for signif enrichment or depletion (with a threshold of 0.05/144=0.0003)
+enrichRes_formated_bayes_ctrlExpr$signif <- ifelse(enrichRes_formated_bayes_ctrlExpr$relative_enrich > 1, 
+                                                   ifelse(enrichRes_formated_bayes_ctrlExpr$pval_enrich<0.0003 & enrichRes_formated_bayes_ctrlExpr$permut_pval < 0.0003, "*", ""),
+                                                   ifelse(enrichRes_formated_bayes_ctrlExpr$pval_deple<0.0003 & enrichRes_formated_bayes_ctrlExpr$permut_pval < 0.0003, "*", ""))
+# order the different direction of effect
+enrichRes_formated_bayes_ctrlExpr$direction <- factor(enrichRes_formated_bayes_ctrlExpr$direction,
+                                                      levels = c("female", "male"))
+# order the different phenotype
+enrichRes_formated_bayes_ctrlExpr$geneList <- factor(enrichRes_formated_bayes_ctrlExpr$geneList,
+                                                     levels = c("ASD", "NDD", "epilepsy_ndd", "EPI", "scz", "BP", "MS", "ALS", "alzheimer", 
+                                                                "prenatal_high_expressed_genes", "adult_high_expressed_genes", "constraint_genes"),
+                                                     labels = c("Autism", "Neurodevelopmental\ndisorder","Neurodevelopmental disorder\nwith epilepsy", "Epilepsy", 
+                                                                "Schizophrenia", "Bipolar disorder", "Multiple sclerosis", "Amyotrophic lateral\nsclerosis", "Alzheimer",
+                                                                "Highly expressed genes\nin prenatal brain", "Highly expressed genes\nin adult brain", "Constraint genes"))
+# rename the 4 analyses
+enrichRes_formated_bayes_ctrlExpr$analysis <- factor(enrichRes_formated_bayes_ctrlExpr$analysis,
+                                                     levels = c("prenatal_specific", "shared"),
+                                                     labels = c("Prenatal\nspecific", "Shared"))
+
+# extract and transform the results for the random set of genes
+enrichRes_random_formated_bayes_ctrlExpr <- enrichRes_formated_bayes_ctrlExpr[, c("geneList", "analysis", "direction", "pval_enrich_random", "pval_deple_random", "relative_enrich_random")] %>% separate_longer_delim(cols = c(pval_enrich_random, pval_deple_random, relative_enrich_random), delim = ";")
+enrichRes_random_formated_bayes_ctrlExpr$pval_enrich_random <- as.numeric(enrichRes_random_formated_bayes_ctrlExpr$pval_enrich_random)
+enrichRes_random_formated_bayes_ctrlExpr$pval_deple_random <- as.numeric(enrichRes_random_formated_bayes_ctrlExpr$pval_deple_random)
+enrichRes_random_formated_bayes_ctrlExpr$relative_enrich_random <- as.numeric(enrichRes_random_formated_bayes_ctrlExpr$relative_enrich_random)
+```
+
+
+```{r plot_bayes_ctrlExpr, echo=FALSE}
+p <- ggplot(enrichRes_random_formated_bayes_ctrlExpr, aes(y = geneList, x = relative_enrich_random, fill = direction, alpha = 0.4))
+p <- p + geom_violin(linewidth = 0.1)
+p <- p + geom_vline(xintercept = 1)
+p <- p + scale_fill_manual(values = c("female" = "darkred", "male" = "darkblue"))
+p <- p + geom_point(data = enrichRes_formated_bayes_ctrlExpr, aes(y = geneList, x = relative_enrich, color = direction), 
+                    position = position_dodge(0.9), size = 2, alpha = 1)
+p <- p + geom_text(data = enrichRes_formated_bayes_ctrlExpr, aes(y = geneList, x = ifelse(relative_enrich>1, relative_enrich + 0.2, relative_enrich - 0.2), label = signif),
+                   position = position_dodge(0.9), size = 4, alpha = 1)
+p <- p + scale_color_manual(values = c("female" = "darkred", "male" = "darkblue"))
+p <- p + facet_grid(cols = vars(analysis), scales = "free", space = "free")
+p <- p + theme_minimal()
+p <- p + ylab("") + xlab("Relative enrichent")
+p <- p + guides(alpha="none")
+p <- p + coord_cartesian(xlim = c(0,5))
+p <- p + scale_y_discrete(limits = rev(levels(enrichRes_random_formated_bayes_ctrlExpr$geneList))) # reverse order of phenotype
+p
+# save plot
+ggsave("enrichment_plot_sexDE_bayes_ctrlExpr.png",
+      path = "images/5-postprocessing/4-DiseaseEnrichment/disease_hyper/",
+      units = "cm", width = 15, height = 12)
+```
+
+
+# Session info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```
+

@@ -202,6 +202,12 @@ phyper(nbr_sexDE_sexChr_signif, dim(de_results_sexChr)[1], dim(de_results_autoso
        lower.tail = FALSE, log.p = FALSE)
 ```
 
+## Enrichment of male-baised genes in sex-DE genes?
+
+Is the proportion of male-biased genes higher than expected by chance?
+```{r enrich_maleBiased, echo=FALSE}
+binom.test(1864,3187, p = 0.5)$p.value
+```
 
 
 # Visualize
