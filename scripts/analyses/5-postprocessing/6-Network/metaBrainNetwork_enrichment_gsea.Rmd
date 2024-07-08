@@ -1,0 +1,491 @@
+---
+title: "MetaBrain network enrichment analysis"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r load_library, echo=FALSE}
+suppressPackageStartupMessages( library(edgeR) )
+suppressPackageStartupMessages( library(limma) )
+suppressPackageStartupMessages( library(qvalue) )
+suppressPackageStartupMessages( library(variancePartition) )
+suppressPackageStartupMessages( library(tibble) )
+suppressPackageStartupMessages( library(tidyverse) )
+suppressPackageStartupMessages( library(ggnewscale) )
+suppressPackageStartupMessages( library(fgsea) )
+suppressPackageStartupMessages( library(gridExtra) )
+suppressPackageStartupMessages( library(data.table) )
+suppressPackageStartupMessages( library(fastmatch) )
+suppressPackageStartupMessages( library(scales) )
+suppressPackageStartupMessages( library(readxl) )
+```
+
+```{r, setup, include=FALSE, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+
+# Load data and functions
+
+## Load functions for GSEA analysis with control
+
+```{r load_gsea_withCtrl_function, echo=FALSE}
+source("scripts/analyses/5-postprocessing/4-DiseaseEnrichment/gsea_withCtrl.R")
+```
+
+
+## Create genesets from metabrain data
+
+Load dowstreamer results from the metaBrain paper for each diseases: ALS, Parkinson, Alzheimer, Schizophrenia and MS.
+And create genesets from the loaded data.
+
+```{r load_downstreamer_function, echo=FALSE}
+load_downstreamer <- function(file, sheetName){
+  my_data <- read_excel(file, sheet = sheetName)
+  return(my_data)
+}
+```
+
+```{r generate_geneset_function, echo=FALSE}
+generate_geneset <- function(myData){
+  return(myData$`Gene ID`[which(myData$`FDR 5% significant` == "TRUE")])
+}
+```
+
+
+```{r loadNformat_downstreamer_data, echo=FALSE}
+excel_files <- c("data/5-postprocessing/6-Network/deKlein_2023_MetaBrain/Supplementary Table 25 - Downstreamer - ALS EUR_ASIA enrichments.xlsx",
+                 "data/5-postprocessing/6-Network/deKlein_2023_MetaBrain/Supplementary Table 26 - Downstreamer - Parkinsons Nalls2019 enrichments.xlsx",
+                 "data/5-postprocessing/6-Network/deKlein_2023_MetaBrain/Supplementary Table 27 - Downstreamer - Schizophrenia Ripke2014 enrichments.xlsx",
+                 "data/5-postprocessing/6-Network/deKlein_2023_MetaBrain/Supplementary Table 28 - Downstreamer - Alzheimers Kunkle enrichments.xlsx",
+                 "data/5-postprocessing/6-Network/deKlein_2023_MetaBrain/Supplementary Table 29 - Downstreamer - Multiple sclerosis Patsopoulos enrichments.xlsx")
+sheet_names <- c("GenePrioritization_MetaBrain", "GenePrioritization_MetaBrainCor", "GenePrioritization_MetaBrainCer")
+traits <- c("ALS", "Parkinsons", "Schizophrenia", "Alzheimer", "MS")
+datasets <- c("MetaBrain", "MetaBrainCortex", "MetaBrainCerebellum")
+# for each trait, load the 3 downstreamer results
+downstreamer_data <- list()
+downstreamer_genesets <- list()
+i <- 1
+for (myFile in excel_files){
+  j <- 1
+  for (mySheet in sheet_names){
+    myTrait <- traits[i]
+    myData <- datasets[j]
+    loaded_data <- load_downstreamer(myFile, mySheet)
+    downstreamer_data[[myTrait]][[myData]] <- loaded_data
+    myGeneset <- generate_geneset(loaded_data)
+    downstreamer_genesets[[myTrait]][[myData]] <- myGeneset
+    j <- j + 1
+  }
+  i <- i + 1
+}
+```
+
+Filtered the created genesets to keep only the ones with at least 5 genes.
+
+```{r filter_genesets, echo=FALSE}
+downstreamer_genesets_unlist <- unlist(downstreamer_genesets, recursive = FALSE)
+downstreamer_data_unlist <- unlist(downstreamer_data, recursive = FALSE)
+genesets_length <- lapply(downstreamer_genesets_unlist, length)
+downstreamer_genesets_filtered <- list()
+downstreamer_data_filtered <- list()
+for (geneset in names(downstreamer_genesets_unlist)){
+  if (genesets_length[[geneset]] >= 10){
+    downstreamer_genesets_filtered[[geneset]] <- downstreamer_genesets_unlist[[geneset]]
+    downstreamer_data_filtered[[geneset]] <- downstreamer_data_unlist[[geneset]]
+  }
+}
+```
+
+Get the list of genes analyzed in every downstreamer analysis used in the enrichment analysis.
+
+```{r background_downstreamer, echo=FALSE}
+analyses <- strsplit(names(downstreamer_genesets_filtered), split = "[.]")
+# for each analysis, get all ensembl gene id
+background_tmp <- c()
+for (i in 1:length(analyses)){
+  background_tmp <- c(background_tmp, downstreamer_data_filtered[[i]]$`Gene ID`)
+}
+background <- unique(background_tmp)
+```
+
+
+
+## Load constraint data
+
+LOEUF score
+
+```{r load_LOEUF, echo=FALSE}
+# load loeuf score
+constraint_data <- read.table("data/5-postprocessing/1-GeneProperties/gnomad.v4.1.constraint_metrics.tsv", 
+                              header = TRUE, sep = "\t")
+constraint_data <- constraint_data[c("gene_id", "canonical", "mane_select", "lof.oe_ci.upper")]
+# keep MANE transcript or canonical if no MANE transcript for a gene
+constraint_data <- constraint_data[which((constraint_data$mane_select == "true" | constraint_data$canonical == "true") & startsWith(constraint_data$gene_id, "ENSG")), ]
+constraint_data <- constraint_data[c("gene_id", "lof.oe_ci.upper")]
+names(constraint_data) <- c("gene_id", "LOEUF")
+```
+
+
+## Load DE and bayes data
+
+For each analysis, keep only the genes that were analyzed in the metaBrain analysis.
+
+### HDBR
+
+Load HDBR sex-DE data.
+
+```{r load_data_HDBR_sexDE, echo=FALSE}
+hdbr_sexDE_results <- read.table("data/3-DE/VoomDream_topTable_forebrain_pseudotime_sva_ind_interaction.txt",
+                         header = TRUE, check.names=FALSE)
+# remove genes used for sex assignment
+genes2remove <- c("XIST", as.character(hdbr_sexDE_results$gene_name[which(hdbr_sexDE_results$chr == "chrY" & hdbr_sexDE_results$gene_type == "protein_coding")]))
+hdbr_sexDE_results <- hdbr_sexDE_results[which(!hdbr_sexDE_results$gene_name %in% genes2remove),]
+# format
+hdbr_sexDE_results$ensemblID <- sapply(strsplit(as.character(hdbr_sexDE_results$gene_id), "\\."), function(x){x[1]})
+hdbr_sexDE_results_filtered <- hdbr_sexDE_results[which(hdbr_sexDE_results$ensemblID %in% background), ]
+```
+
+Load HDBR pseudotime-DE data.
+
+```{r load_data_HDBR_pseudotimeDE, echo=FALSE}
+hdbr_pseudotimeDE_results <- read.table("data/3-DE/VoomDream_topTable_forebrain_pseudotime_sva_ind_interaction_pseudotime.txt",
+                         header = TRUE, check.names=FALSE)
+# remove genes used to infer pseudotime
+load("data/2-pseudotime/forebrain_pseudotime_analysis.RData")
+genes2remove <- rownames(selectedCounts)
+hdbr_pseudotimeDE_results <- hdbr_pseudotimeDE_results[which(!hdbr_pseudotimeDE_results$gene_name %in% genes2remove),]
+# format
+hdbr_pseudotimeDE_results$ensemblID <- sapply(strsplit(as.character(hdbr_pseudotimeDE_results$gene_id), "\\."), function(x){x[1]})
+hdbr_pseudotimeDE_results_filtered <- hdbr_pseudotimeDE_results[which(hdbr_pseudotimeDE_results$ensemblID %in% background), ]
+```
+
+
+### GTEx
+
+Load GTEx sex-DE data.
+
+```{r load_data_GTEx_sexDE, echo=FALSE}
+gtex_sexDE_results <- read.table("data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_VoomDream_topTable_with_sva_ind_pseudotime_interaction.txt",
+                         header = TRUE, check.names=FALSE)
+# remove genes used for sex assignment
+genes2remove <- c("XIST", as.character(gtex_sexDE_results$gene_name[which(gtex_sexDE_results$chr == "chrY" & gtex_sexDE_results$gene_type == "protein_coding")]))
+gtex_sexDE_results <- gtex_sexDE_results[which(!gtex_sexDE_results$gene_name %in% genes2remove),]
+# format
+gtex_sexDE_results$ensemblID <- sapply(strsplit(as.character(gtex_sexDE_results$gene_id), "\\."), function(x){x[1]})
+gtex_sexDE_results_filtered <- gtex_sexDE_results[which(gtex_sexDE_results$ensemblID %in% background), ]
+```
+
+
+Load GTEx pseudotime-DE data.
+
+```{r load_data_GTEx_pseudotimeDE, echo=FALSE}
+gtex_pseudotimeDE_results <- read.table("data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_VoomDream_topTable_with_sva_ind_pseudotime_interaction_pseudotime.txt",
+                         header = TRUE, check.names=FALSE)
+# remove genes used to infer pseudotime
+load("data/4-GTEx/1-GTEx_analysis/GTEx_v8_forebrain_pseudotime_analysis.RData")
+genes2remove <- rownames(selectedCounts)
+gtex_pseudotimeDE_results <- gtex_pseudotimeDE_results[which(!gtex_pseudotimeDE_results$gene_name %in% genes2remove),]
+# format
+gtex_pseudotimeDE_results$ensemblID <- sapply(strsplit(as.character(gtex_pseudotimeDE_results$gene_id), "\\."), function(x){x[1]})
+gtex_pseudotimeDE_results_filtered <- gtex_pseudotimeDE_results[which(gtex_pseudotimeDE_results$ensemblID %in% background), ]
+```
+
+### Bayesian score
+
+```{r load_bayes_results, echo=FALSE}
+bayesResults <- read.table("data/4-GTEx/2-comparison/lineModel/lineModel_prenatalVSadult_6models.txt", header = TRUE)
+bayesResults_filtered <- bayesResults[which(bayesResults$ensemblID %in% background), ]
+```
+
+
+# Enrichment analyses
+
+## Launch enrichment analyses
+
+Number of enrichment analyses to do:
+- 7 datasets: HDBR (sex-DE & pseudotime-DE), GTEx (sex-DE & pseudotime-DE), shared, prenatal specific and adult specific
+- 2 types of scoring: signed t-statistic and unsigned t-statistic
+- 3 types of enrichment analyses: without control, controlling for gene expression and controlling for gene constraint
+- 1 genesets: downstreamer
+
+```{r enrichment_analyses, echo=FALSE}
+# init all parameters
+listDEdata <- list(hdbr_sexDE_results_filtered, hdbr_pseudotimeDE_results_filtered,
+                   gtex_sexDE_results_filtered, gtex_pseudotimeDE_results_filtered,
+                   hdbr_sexDE_results_filtered, hdbr_sexDE_results_filtered, gtex_sexDE_results_filtered)
+listTypeData <- c("sexDE", "pseudotimeDE", "sexDE", "pseudotimeDE", "shared", "prenatal specific", "adult specific")
+listDataset <- c("hdbr", "hdbr", "gtex", "gtex", "hdbr", "hdbr", "gtex")
+listGeneSetName <- c("downstreamer")
+listAnalyses <-  c("withoutCtrl", "ctrlExpr", "ctrlConst")
+# loop to launch all enrichment
+i <- 1
+for (de_results in listDEdata){
+  # for each geneset
+  j <- 1
+  listGeneSet <- list(downstreamer_genesets_filtered)
+  for (genesetAnalysis in listGeneSet){
+    # for the 6 types of analysis
+    for (analysisType in listAnalyses){
+      for (signedAnalysis in c(TRUE, FALSE)){
+        print(">>> Enrichment analysis:")
+        print(paste0("gsea_", analysisType, "_", listDataset[i], "_", listTypeData[i], "_", listGeneSetName[j],
+                     "GeneSet_", ifelse(signedAnalysis, "signed", "unsigned")))
+        res <- enrichment1dataset(bayes_results = bayesResults, de_results = de_results, typeData = listTypeData[i], 
+                                  typeAnalysis = analysisType, genesets = genesetAnalysis, genesetName = listGeneSetName[j], 
+                                  dataName = listDataset[i], signed = signedAnalysis, constraint_data = constraint_data, useEnsemblID = TRUE,
+                                  outputResults = "data/5-postprocessing/6-Network/results_fgsea/")
+      }
+    }
+    j <- j + 1
+  }
+  i <- i + 1
+}
+print(i-1)
+```
+
+
+## Merge and plot enrichment results
+
+### Functions
+
+```{r function_loadNmerge_results, echo=FALSE}
+loadNmerge_gsea_results <- function(typeAnalysis, genesetName, dataName, typeData, signed){
+  myPattern <-""
+  if (is.vector(typeData)){
+    tmp <- paste0('gsea_', typeAnalysis, '_', genesetName, 'DiseaseGeneSet_',
+                        dataName, '_', typeData, '_', signed, '.txt')
+    myPattern <- paste(tmp, collapse = '|')
+  } else{
+    myPattern <- paste0('gsea_', typeAnalysis, '_', genesetName, 'DiseaseGeneSet_',
+                        dataName, '_', typeData, '_', signed, '.txt')
+  }
+  listFiles <- list.files("data/5-postprocessing/6-Network/results_fgsea/",
+                          pattern = myPattern,
+                          full.names = TRUE)
+  print(listFiles)
+  merged_res <- data.frame(matrix(ncol = 7, nrow = 0))
+  colnames(merged_res) <- c('pathway', 'pval', 'padj', 'ES', 'NES', 'nMoreExtreme', 'size')
+  for (myFile in listFiles){
+    curRes <- read.table(myFile, header = TRUE, fill=TRUE)
+    curRes$data <- strsplit(strsplit(myFile, "DiseaseGeneSet_")[[1]][2], "_")[[1]][1]
+    curRes$type <- strsplit(strsplit(myFile, "DiseaseGeneSet_")[[1]][2], "_")[[1]][2]
+    merged_res <- rbind(merged_res, curRes)
+  }
+  
+  return(merged_res)
+}
+```
+
+```{r format_data_multiAnalysis, echo=FALSE}
+format_data_multiAnalysis <- function(mergedData, dataName, typeData, padj_threshold = 0.05){
+  # split pathway names into disease and metaBrain Dataset
+  mergedData2 <- separate_wider_delim(data = mergedData, cols = "pathway", delim = ".", names = c("disease", "metaBrainData")) 
+  # rename metaBrainData into shorter version
+  mergedData2$metaBrainData <- factor(mergedData2$metaBrainData, 
+                                      levels = c("MetaBrain", "MetaBrainCerebellum", "MetaBrainCortex"), 
+                                      labels = c("MetaBrain" = "AllBrain", "MetaBrainCerebellum" = "Cerebellum", "MetaBrainCortex" = "Cortex"))
+  # order pathways
+  mergedData2$disease <- as.factor(mergedData2$disease)
+  levels(mergedData2$disease) <- list("Amyotrophic lateral\nsclerosis" = "ALS",
+                                     "Multiple sclerosis" = "MS",
+                                     "Schizophrenia" = "Schizophrenia")
+  # add signif sign
+  mergedData2$signif <- ifelse(!is.na(mergedData2$padj) & mergedData2$padj < padj_threshold, "*", "")
+  # add direction
+  mergedData2$direction <- as.factor(ifelse(mergedData2$type %in% c("sexDE", "shared", "prenatal specific", "adult specific"), 
+                                           ifelse(mergedData2$NES < 0, "maleBiased", "femaleBiased"),
+                                           ifelse(mergedData2$type == "pseudotimeDE",
+                                                  ifelse(mergedData2$NES < 0, "downregulated", "upregulated"),
+                                                  "-")))
+  # order data type
+  if (typeData %in% c("sexDE", "pseudotimeDE")){
+    mergedData2$type <- factor(mergedData2$type, levels = c("sexDE", "pseudotimeDE"))
+  }
+  
+  return(mergedData2)
+}
+```
+
+```{r heatmap_plot_multianalysis, echo=FALSE}
+heatmap_plot_multianalysis <- function(gseaRes, bayes = FALSE) {
+  if (bayes){
+    p <- ggplot(gseaRes, aes(x = type, y = disease))
+    p <- p + geom_tile(aes(fill = NES), colour = "white")
+    p <- p + facet_grid(rows = vars(metaBrainData), scales = "free", space = "free_y")
+    p <- p + scale_fill_gradient2(low = 'darkblue', mid = "white", high = 'darkred', midpoint = 0, name = "")
+  } else{
+    sexDE_data <- gseaRes[which(gseaRes$type == "sexDE"), ]
+    pseudotimeDE_data <- gseaRes[which(gseaRes$type == "pseudotimeDE"), ]
+    p <- ggplot(mapping = aes(x = type, y = disease))
+    p <- p + geom_tile(data = sexDE_data, aes(fill = NES), colour = "white")
+    p <- p + facet_grid(cols = vars(data), rows = vars(metaBrainData), scales = "free_y", space = "free_y")
+    p <- p + scale_fill_gradient2(low = 'darkblue', mid = "white", high = 'darkred', midpoint = 0, name = "")
+    p <- p + new_scale_fill()
+    p <- p + geom_tile(data = pseudotimeDE_data, aes(fill = NES), colour = "white")
+    p <- p + scale_fill_gradient2(low = 'chocolate', mid = "white", high = 'aquamarine4', midpoint = 0, name = "")
+  }
+  p <- p + theme_minimal() + theme(text = element_text(size=15), 
+                                   axis.text.x = element_text(angle = 45, hjust = 1),
+                                   panel.grid.major = element_blank(), 
+                                   panel.grid.minor = element_blank())
+  p <- p + geom_text(data = gseaRes, mapping = aes(x = type, y = disease, label = signif), 
+                     color = "grey", size = 10, nudge_y = -0.2)
+  p <- p + labs(y = "", x = "")
+  
+  return(p)
+}
+
+```
+
+
+```{r full_multianalysis_pipeline, echo=FALSE}
+multianalysis_pipeline <- function(typeAnalysis, genesetName, dataName, typeData, dataNameFormat, typeDataFormat, signed = 'signed', bayes = FALSE,
+                                   fileName, figWidth = 20, figHeight = 25){
+  # load and prepare data
+  merged_res <- loadNmerge_gsea_results(typeAnalysis = typeAnalysis, genesetName = genesetName, dataName = dataName,
+                                      typeData = typeData, signed = signed)
+  merged_res_formated <- format_data_multiAnalysis(merged_res, dataName = dataNameFormat, typeData = typeDataFormat)
+  # plot
+  p <- heatmap_plot_multianalysis(merged_res_formated, bayes = bayes)
+  ggsave(fileName, plot = p, width = figWidth, height = figHeight, units = "cm")
+  return(p)
+}
+```
+
+
+### Merging results of sex-DE and pseudotime-DE for the 2 life stages
+
+#### Without control
+
+```{r results_signed_withouCtrl_heatmap, echo=FALSE}
+p <- multianalysis_pipeline(typeAnalysis = 'withoutCtrl', genesetName = 'downstreamer', dataName = '[[:alpha:]]+', typeData = '[[:alpha:]]+DE', 
+                            dataNameFormat = "hdbr", typeDataFormat = "sexDE", signed = 'signed', bayes = FALSE, figWidth = 11, figHeight = 11,
+                            fileName = "images/5-postprocessing/6-Network/network_fgsea/gsea_withoutCtrl_byLifeStage_byDE_downstreamerDiseaseGeneSet_signed_heatmap.png")
+p
+```
+
+Save the merged fgsea results in a file.
+
+```{r results_main_signed_withouCtrl_save, echo=FALSE}
+gsea_results_DE_withoutCtrl <- loadNmerge_gsea_results(typeAnalysis = 'withoutCtrl', genesetName = 'downstreamer', 
+                                                       dataName = '[[:alpha:]]+', typeData = '[[:alpha:]]+DE', 
+                                                       signed = 'signed')
+write.table(gsea_results_DE_withoutCtrl, 
+            file = "data/5-postprocessing/6-Network/results_fgsea/gsea_withoutCtrl_downstreamerDiseaseGeneSet_allDE_signed.txt",
+            quote = FALSE, row.names = FALSE, col.names = TRUE, sep = "\t")
+```
+
+
+#### Controling for level of expression
+
+```{r results_signed_ctrlExpr_heatmap, echo=FALSE}
+p <- multianalysis_pipeline(typeAnalysis = 'ctrlExpr', genesetName = 'downstreamer', dataName = '[[:alpha:]]+', typeData = '[[:alpha:]]+DE', 
+                            dataNameFormat = "hdbr", typeDataFormat = "sexDE", signed = 'signed', bayes = FALSE, figWidth = 11, figHeight = 11,
+                            fileName = "images/5-postprocessing/6-Network/network_fgsea/gsea_ctrlExpr_byLifeStage_byDE_downstreamerDiseaseGeneSet_signed_heatmap.png")
+p
+```
+
+Save the merged fgsea results in a file.
+
+```{r results_main_signed_ctrlExpr_save, echo=FALSE}
+gsea_results_DE_ctrlExpr <- loadNmerge_gsea_results(typeAnalysis = 'ctrlExpr', genesetName = 'downstreamer', 
+                                                       dataName = '[[:alpha:]]+', typeData = '[[:alpha:]]+DE', 
+                                                       signed = 'signed')
+write.table(gsea_results_DE_ctrlExpr, 
+            file = "data/5-postprocessing/6-Network/results_fgsea/gsea_ctrlExpr_downstreamerDiseaseGeneSet_allDE_signed.txt",
+            quote = FALSE, row.names = FALSE, col.names = TRUE, sep = "\t")
+```
+
+
+#### Controling for level of constraint
+
+```{r results_signed_ctrlConst_heatmap, echo=FALSE}
+p <- multianalysis_pipeline(typeAnalysis = 'ctrlConst', genesetName = 'downstreamer', dataName = '[[:alpha:]]+', typeData = '[[:alpha:]]+DE', 
+                            dataNameFormat = "hdbr", typeDataFormat = "sexDE", signed = 'signed', bayes = FALSE, figWidth = 11, figHeight = 11,
+                            fileName = "images/5-postprocessing/6-Network/network_fgsea/gsea_ctrlConst_byLifeStage_byDE_downstreamerDiseaseGeneSet_signed_heatmap.png")
+p
+```
+
+Save the merged fgsea results in a file.
+
+```{r results_main_signed_ctrlConst_save, echo=FALSE}
+gsea_results_DE_ctrlConst <- loadNmerge_gsea_results(typeAnalysis = 'ctrlConst', genesetName = 'downstreamer', 
+                                                       dataName = '[[:alpha:]]+', typeData = '[[:alpha:]]+DE', 
+                                                       signed = 'signed')
+write.table(gsea_results_DE_ctrlConst, 
+            file = "data/5-postprocessing/6-Network/results_fgsea/gsea_ctrlConst_downstreamerDiseaseGeneSet_allDE_signed.txt",
+            quote = FALSE, row.names = FALSE, col.names = TRUE, sep = "\t")
+```
+
+
+### Merging life stage specific and shared results
+
+#### Without control
+
+```{r results_bayes_signed_withouCtrl_heatmap, echo=FALSE}
+p <- multianalysis_pipeline(typeAnalysis = 'withoutCtrl', genesetName = 'downstreamer', dataName = '[[:alpha:]]+', typeData = c('shared', 'prenatal specific', 'adult specific'), 
+                       dataNameFormat = "hdbr", typeDataFormat = "shared", signed = 'signed', bayes = TRUE, figWidth = 10, figHeight = 11,
+                       fileName = "images/5-postprocessing/6-Network/network_fgsea/gsea_withoutCtrl_bayesRes_downstreamerDiseaseGeneSet_signed_heatmap.png")
+p
+```
+
+Save the merged fgsea results in a file.
+
+```{r results_bayes_signed_withouCtrl_save, echo=FALSE}
+gsea_results_bayes_withoutCtrl <- loadNmerge_gsea_results(typeAnalysis = 'withoutCtrl', genesetName = 'downstreamer', 
+                                                       dataName = '[[:alpha:]]+', signed = 'signed',
+                                                       typeData = c('shared', 'prenatal specific', 'adult specific'))
+write.table(gsea_results_bayes_withoutCtrl, 
+            file = "data/5-postprocessing/6-Network/results_fgsea/gsea_withoutCtrl_downstreamerDiseaseGeneSet_bayes_signed.txt",
+            quote = FALSE, row.names = FALSE, col.names = TRUE, sep = "\t")
+```
+
+#### Controling for level of expression
+
+```{r results_bayes_signed_ctrlExpr_heatmap, echo=FALSE}
+p <- multianalysis_pipeline(typeAnalysis = 'ctrlExpr', genesetName = 'downstreamer', dataName = '[[:alpha:]]+', typeData = c('shared', 'prenatal specific', 'adult specific'), 
+                       dataNameFormat = "hdbr", typeDataFormat = "shared", signed = 'signed', bayes = TRUE, figWidth = 10, figHeight = 11,
+                       fileName = "images/5-postprocessing/6-Network/network_fgsea/gsea_ctrlExpr_bayesRes_downstreamerDiseaseGeneSet_signed_heatmap.png")
+p
+```
+
+Save the merged fgsea results in a file.
+
+```{r results_bayes_signed_ctrlExpr_save, echo=FALSE}
+gsea_results_bayes_ctrlExpr <- loadNmerge_gsea_results(typeAnalysis = 'ctrlExpr', genesetName = 'downstreamer', 
+                                                       dataName = '[[:alpha:]]+', signed = 'signed',
+                                                       typeData = c('shared', 'prenatal specific', 'adult specific'))
+write.table(gsea_results_bayes_ctrlExpr, 
+            file = "data/5-postprocessing/6-Network/results_fgsea/gsea_ctrlExpr_downstreamerDiseaseGeneSet_bayes_signed.txt",
+            quote = FALSE, row.names = FALSE, col.names = TRUE, sep = "\t")
+```
+
+
+#### Controling for level of constraint
+
+```{r results_bayes_signed_ctrlConst_heatmap, echo=FALSE}
+p <- multianalysis_pipeline(typeAnalysis = 'ctrlConst', genesetName = 'downstreamer', dataName = '[[:alpha:]]+', typeData = c('shared', 'prenatal specific', 'adult specific'), 
+                       dataNameFormat = "hdbr", typeDataFormat = "shared", signed = 'signed', bayes = TRUE, figWidth = 10, figHeight = 11,
+                       fileName = "images/5-postprocessing/6-Network/network_fgsea/gsea_ctrlConst_bayesRes_downstreamerDiseaseGeneSet_signed_heatmap.png")
+p
+```
+
+Save the merged fgsea results in a file.
+
+```{r results_bayes_signed_ctrlConst_save, echo=FALSE}
+gsea_results_bayes_ctrlConst <- loadNmerge_gsea_results(typeAnalysis = 'ctrlConst', genesetName = 'downstreamer', 
+                                                       dataName = '[[:alpha:]]+', signed = 'signed',
+                                                       typeData = c('shared', 'prenatal specific', 'adult specific'))
+write.table(gsea_results_bayes_ctrlConst, 
+            file = "data/5-postprocessing/6-Network/results_fgsea/gsea_ctrlExpr_downstreamerDiseaseGeneSet_bayes_signed.txt",
+            quote = FALSE, row.names = FALSE, col.names = TRUE, sep = "\t")
+```
+
+
+# Session info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```
