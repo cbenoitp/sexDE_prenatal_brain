@@ -161,20 +161,20 @@ ggsave("nbrGenes_specificity_stackedBarplot.png",
 ```
 
 
-Do a barplot with the number of genes in each category, coloring by the direction of sex bias for each bar.
+Do a barplot with the number of genes in each category, coloring by the direction of sex bias for each bar and adding the proportion of the specific category the each direction correspond to.
 
-```{r barplot_nbrGenes_perCategory_sexBiasDirection, echo=FALSE}
+```{r barplot_nbrGenes_perCategory_sexBiasDirection_prop, echo=FALSE}
 # define the color merging information from prenatal sex-DE direction and adult sex-DE direction
 dataToPlot$sexDE <- ifelse(dataToPlot$sexDE_prenatal_direction == "female-biased",
                            ifelse(dataToPlot$sexDE_adult_direction == "female-biased", "common female-biased",
-                           ifelse(dataToPlot$sexDE_adult_direction == "male-biased", "opposite", "prenatal female-biased")),
-                    ifelse(dataToPlot$sexDE_prenatal_direction == "male-biased",
-                           ifelse(dataToPlot$sexDE_adult_direction == "male-biased", "common male-biased",
-                           ifelse(dataToPlot$sexDE_adult_direction == "female-biased", "opposite", "prenatal male-biased")),
-                    ifelse(dataToPlot$sexDE_prenatal_direction == "ns",
-                           ifelse(dataToPlot$sexDE_adult_direction == "male-biased", "adult male-biased",
-                           ifelse(dataToPlot$sexDE_adult_direction == "female-biased", "adult female-biased", "ns")),
-                           NA)))
+                                  ifelse(dataToPlot$sexDE_adult_direction == "male-biased", "opposite", "prenatal female-biased")),
+                           ifelse(dataToPlot$sexDE_prenatal_direction == "male-biased",
+                                  ifelse(dataToPlot$sexDE_adult_direction == "male-biased", "common male-biased", 
+                                         ifelse(dataToPlot$sexDE_adult_direction == "female-biased", "opposite", "prenatal male-biased")),
+                                  ifelse(dataToPlot$sexDE_prenatal_direction == "ns",
+                                         ifelse(dataToPlot$sexDE_adult_direction == "male-biased", "adult male-biased",
+                                                ifelse(dataToPlot$sexDE_adult_direction == "female-biased", "adult female-biased", "ns")),
+                                         NA)))
 dataToPlot$sexDEsimplified <- ifelse(dataToPlot$sexDE == "common female-biased" | dataToPlot$sexDE == "prenatal female-biased" | dataToPlot$sexDE == "adult female-biased",
                                      "female-biased",
                                      ifelse(dataToPlot$sexDE == "common male-biased" | dataToPlot$sexDE == "prenatal male-biased" | dataToPlot$sexDE == "adult male-biased",
@@ -187,22 +187,6 @@ dataToPlot$sexDEfinal <- ifelse(dataToPlot$specificity == "Shared", dataToPlot$s
                                               dataToPlot$sexDE_adult_direction,
                                               ifelse(dataToPlot$specificity == "Opposite", "opposite",
                                                      dataToPlot$sexDEsimplified))))
-# plot
-p <- ggplot(dataToPlot, aes(x = specificity, fill = sexDEsimplified))
-p <- p + geom_bar(stat = "count")
-p <- p + scale_fill_manual(values = c("male-biased" = "darkblue", "female-biased" = "darkred", 'opposite' = "#000000"))
-p <- p + theme_minimal() + ylab("Number of genes") + xlab("")
-p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
-p
-# save plot
-ggsave("nbrGenes_specificity_barplot_colorDirection.png", 
-       path = 'images/4-GTEx/2-comparison/lineModel/barplot/', 
-       plot = p, width = 13, height = 12, units = "cm")
-```
-
-Do a similar barplot with the number of genes in each category, coloring by the direction of sex bias for each bar and adding the proportion of the specific category the each direction correspond to.
-
-```{r barplot_nbrGenes_perCategory_sexBiasDirection_prop, echo=FALSE}
 # summary data for the plot
 dataToPlotSummary <- dataToPlot %>% group_by(specificity, sexDEsimplified) %>% summarise(nbr = n()) %>% mutate(freq = nbr / sum(nbr))
 # plot
@@ -239,7 +223,7 @@ ggsave("nbrGenes_specificitySimple_barplot_colorDirection_prop.png",
 
 Test if the proportion of male and female-biased genes in these 2 categories are significantly different.
 
-```{r test_propDirection_}
+```{r test_perCategory_sexBiasDirection, echo=FALSE}
 totCounts <- dataToPlotSummary %>% group_by(specificity) %>% summarise(totNbr = sum(nbr))
 # for female-biased genes
 prop.test(x = c(dataToPlotSummary$nbr[1], dataToPlotSummary$nbr[4]), n = totCounts$totNbr,alternative = "two.sided", correct = TRUE)
@@ -249,8 +233,52 @@ prop.test(x = c(dataToPlotSummary$nbr[2], dataToPlotSummary$nbr[5]), n = totCoun
 
 There is no difference in proportion of male and female-biased genes in the prenatal and shared categories.
 
-Do similar plots looking at autosomal vs sex-chr genes.
+Do a similar analysis and plots looking at autosomal vs X-chr genes.
 
+```{r barplot_nbrGenes_perCategory_autoVSXchr_prop, echo=FALSE}
+# summary data for the plot
+dataToPlotSummary <- dataToPlot %>% group_by(specificity, annot) %>% summarise(nbr = n()) %>% mutate(freq = nbr / sum(nbr))
+# plot
+p <- ggplot(dataToPlotSummary, aes(x = specificity, y = nbr, fill = annot))
+p <- p + geom_bar(stat = "identity")
+p <- p + geom_text(aes(label = scales::percent(freq, accuracy = 0.01)), size = 3, color = "white", position = position_stack(vjust = 0.5))
+p <- p + scale_fill_manual(values = c("Autosome" = "grey", 'X chr' = "black"))
+p <- p + theme_minimal() + ylab("Number of genes") + xlab("")
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p
+# save plot
+ggsave("nbrGenes_specificity_barplot_colorAnnot_prop.png", 
+       path = 'images/4-GTEx/2-comparison/lineModel/barplot/', 
+       plot = p, width = 15, height = 12, units = "cm")
+```
+
+```{r barplot_nbrGenes_perCategory_autoVSXchr_prop2, echo=FALSE}
+# summary data for the plot
+dataToPlotSummary <- dataToPlot %>% group_by(specificity, annot) %>% summarise(nbr = n()) %>% mutate(freq = nbr / sum(nbr))
+dataToPlotSummary <- dataToPlotSummary[which(dataToPlotSummary$specificity %in% c("Prenatal", "Shared")),]
+# plot
+p <- ggplot(dataToPlotSummary, aes(x = specificity, y = nbr, fill = annot))
+p <- p + geom_bar(stat = "identity")
+p <- p + geom_text(aes(label = scales::percent(freq, accuracy = 0.01)), size = 3, color = "white", position = position_stack(vjust = 0.5))
+p <- p + scale_fill_manual(values = c("Autosome" = "grey", 'X chr' = "black"))
+p <- p + theme_minimal() + ylab("Number of genes") + xlab("")
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p
+# save plot
+ggsave("nbrGenes_specificitySimple_barplot_colorAnnot_prop.png", 
+       path = 'images/4-GTEx/2-comparison/lineModel/barplot/',
+       plot = p, width = 10, height = 12, units = "cm")
+```
+
+Test if the proportion of X-chr and autosomal genes in these 2 categories are significantly different.
+
+```{r test_perCategory_autoVSXchr, echo=FALSE}
+totCounts <- dataToPlotSummary %>% group_by(specificity) %>% summarise(totNbr = sum(nbr))
+# for autosomal genes
+prop.test(x = c(dataToPlotSummary$nbr[1], dataToPlotSummary$nbr[3]), n = totCounts$totNbr,alternative = "two.sided", correct = TRUE)
+# for X-chr genes
+prop.test(x = c(dataToPlotSummary$nbr[2], dataToPlotSummary$nbr[4]), n = totCounts$totNbr,alternative = "two.sided", correct = TRUE)
+```
 
 
 # Barplot of the origin of sexDE genes

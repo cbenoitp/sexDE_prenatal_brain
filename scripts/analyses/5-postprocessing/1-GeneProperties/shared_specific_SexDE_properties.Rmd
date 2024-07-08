@@ -782,6 +782,9 @@ wilcox.test(fullMerge_spe_Xchr_ns_escape$AveExpr_adult, fullMerge_spe_Xchr_escap
 
 The non-significant escape genes are more lowly expressed (both in adult and prenatal forebrain) than the significant escape genes.
 
+TODO: plot this result for supp figure...
+
+
 Look at the number of GTEx tissue in which the non-sex-DE escape genes and the sex-DE escape genes are sex-DE.
 
 ```{r overlap_GTEx_sexDE_Xchr, echo=FALSE}
