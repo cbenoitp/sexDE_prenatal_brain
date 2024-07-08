@@ -1,0 +1,61 @@
+trait	analysis	direction	beta_adult	beta_prenatal	pval
+Alzheimer	sexDE	maleBiased	0.018665	0.01904	0.993867934696719
+Anorexia	sexDE	maleBiased	-0.007885	0.021581	0.5575276245695
+Tourette	sexDE	maleBiased	0.034298	-0.010573	0.338198783929492
+Major depressive disorder	sexDE	maleBiased	0.02205	-0.012002	0.483108391245245
+Bipolar	sexDE	maleBiased	0.11585	0.037606	0.163233476764532
+Schizophrenia	sexDE	maleBiased	0.11318	0.024841	0.139611016906524
+Epilepsy	sexDE	maleBiased	0.066595	-0.018406	0.0815357229200932
+ADHD	sexDE	maleBiased	-0.0031432	-0.0061887	0.951867479351322
+Autism	sexDE	maleBiased	0.038061	-0.016878	0.269662859411024
+Subcortical volume	sexDE	maleBiased	0.0957	0.0028279	0.107401378913396
+Cortical thickness	sexDE	maleBiased	0.019745	0.0038826	0.757688648275927
+Cortical area	sexDE	maleBiased	0.0094804	0.015595	0.912256046865246
+Brain morphology all	sexDE	maleBiased	0.063056	0.0075483	0.373485835625886
+Height	sexDE	maleBiased	-0.14206	0.083347	0.0169441268597496
+Educational attainment	sexDE	maleBiased	0.13323	0.0057684	0.0465159483863025
+Alzheimer	sexDE	femaleBiased	0.012886	-0.029711	0.493864760025937
+Anorexia	sexDE	femaleBiased	-0.030349	-0.015541	0.817000208684442
+Tourette	sexDE	femaleBiased	0.00603	-0.028982	0.556886247848647
+Major depressive disorder	sexDE	femaleBiased	0.046167	0.0058712	0.512545526477582
+Bipolar	sexDE	femaleBiased	-0.021735	0.017499	0.57934540137575
+Schizophrenia	sexDE	femaleBiased	0.052721	-0.0082101	0.422445088722924
+Epilepsy	sexDE	femaleBiased	0.030086	-0.026699	0.343652029597146
+ADHD	sexDE	femaleBiased	0.0020654	-0.023463	0.691650714337503
+Autism	sexDE	femaleBiased	-0.033498	-0.03205	0.981707361074368
+Subcortical volume	sexDE	femaleBiased	0.031222	-0.01436	0.534353786247588
+Cortical thickness	sexDE	femaleBiased	0.01338	0.037135	0.716343513115871
+Cortical area	sexDE	femaleBiased	-0.12659	0.025742	0.0308402680411347
+Brain morphology all	sexDE	femaleBiased	-0.024801	0.030054	0.489163968266017
+Height	sexDE	femaleBiased	0.043887	0.15969	0.340123200512391
+Educational attainment	sexDE	femaleBiased	0.0081533	-0.045156	0.539547298811509
+Alzheimer	pseudotimeDE	upRegulated	0.027616	0.03896	0.658103423429059
+Anorexia	pseudotimeDE	upRegulated	0.011602	0.010481	0.965979171587123
+Tourette	pseudotimeDE	upRegulated	0.0096759	0.00055615	0.709657026635561
+Major depressive disorder	pseudotimeDE	upRegulated	-0.047839	0.010353	0.0222512245704692
+Bipolar	pseudotimeDE	upRegulated	0.028748	0.052337	0.419514113115886
+Schizophrenia	pseudotimeDE	upRegulated	0.050161	0.092591	0.17608769823644
+Epilepsy	pseudotimeDE	upRegulated	0.016083	0.042622	0.295302509931545
+ADHD	pseudotimeDE	upRegulated	0.012617	-0.0033603	0.546581737532214
+Autism	pseudotimeDE	upRegulated	-0.017891	0.0015816	0.452166743867254
+Subcortical volume	pseudotimeDE	upRegulated	0.090152	0.07743	0.670338192019286
+Cortical thickness	pseudotimeDE	upRegulated	0.032679	0.042602	0.70958847556324
+Cortical area	pseudotimeDE	upRegulated	0.013675	0.029982	0.570698790703846
+Brain morphology all	pseudotimeDE	upRegulated	0.064434	0.075811	0.724822418121584
+Height	pseudotimeDE	upRegulated	0.23183	0.15894	0.139669195331563
+Educational attainment	pseudotimeDE	upRegulated	0.021411	0.036957	0.638435181626473
+Alzheimer	pseudotimeDE	downRegulated	0.033596	-0.0088408	0.144894990589901
+Anorexia	pseudotimeDE	downRegulated	-0.00056542	0.016468	0.570354103366658
+Tourette	pseudotimeDE	downRegulated	0.01545	-0.017995	0.22980293390194
+Major depressive disorder	pseudotimeDE	downRegulated	0.057094	-0.0024808	0.039372470034452
+Bipolar	pseudotimeDE	downRegulated	0.10569	0.0058391	0.00256066073466316
+Schizophrenia	pseudotimeDE	downRegulated	0.095294	-0.0069398	0.00388647282665546
+Epilepsy	pseudotimeDE	downRegulated	0.085066	0.012281	0.0115846573628921
+ADHD	pseudotimeDE	downRegulated	-0.033465	-0.014044	0.519876639565374
+Autism	pseudotimeDE	downRegulated	-0.017203	-0.00090293	0.578984207570433
+Subcortical volume	pseudotimeDE	downRegulated	0.055078	0.066485	0.738903624408478
+Cortical thickness	pseudotimeDE	downRegulated	0.044094	0.029091	0.622839238806699
+Cortical area	pseudotimeDE	downRegulated	-0.00010249	0.033014	0.31449055008599
+Brain morphology all	pseudotimeDE	downRegulated	0.035747	0.067257	0.394474058397324
+Height	pseudotimeDE	downRegulated	-0.051128	0.17688	5.35069799951703e-05
+Educational attainment	pseudotimeDE	downRegulated	0.11467	-0.0072556	0.00123672675844045

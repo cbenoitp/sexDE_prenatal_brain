@@ -1,0 +1,34 @@
+#!/bin/sh
+#$ -S /bin/sh
+#$ -N magma_gene_level_analysis
+#$ -q all.q
+#$ -M clara.benoit-pilven@helsinki.fi
+#$ -o /fas/tukiainen/clara/Magma/logs/magma_gene_level_analysis.OU
+#$ -e /fas/tukiainen/clara/Magma/logs/magma_gene_level_analysis.ER
+#copy local envirnmental variables
+#$ -V
+#cd to execution directory
+#$ -cwd
+cd /fas/tukiainen/clara/Magma
+#Header info
+echo "Biomedicum Bioinformatics Unit Linux Cluster"
+echo "http://www.bioinfo.helsinki.fi"
+echo "http://www.giu.fi"
+echo "Job name: magma_gene_level_analysis"
+echo "User name: " $USER
+echo "Run on cluster node: " $HOST
+echo "Run directory: " `pwd`
+echo "Start time: " `date`
+echo "---------------------------------------"
+#Increase stack size
+export MPSTKZ=8M
+
+#Run command
+outputDir="/fas/tukiainen/clara/Magma/data/gene_level_analysis/"
+for i in $(cat ${outputDir}"traits_for_magma.txt")
+do
+	mkdir -p ${outputDir}${i}
+	/fas/tukiainen/apps/magma_v1.08b/magma --gene-results /fas/tukiainen/juho/Magma/Claras_project/Magma_analysis/${i}/Annotation_50/Proteincoding_and_linc_only/magma.genes.raw  --set-annot ${outputDir}"MAGMA_input.txt" --out ${outputDir}${i}/${i}_allLists_MAGMA_res
+done
+
+bash /fas/tukiainen/clara/Magma/scripts/cat_gene_level_res.bash

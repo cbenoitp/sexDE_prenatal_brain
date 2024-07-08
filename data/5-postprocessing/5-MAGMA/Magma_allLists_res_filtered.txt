@@ -1,0 +1,121 @@
+Comparison	Trait	Ngenes	Beta	Beta_std	SE	pval	Data	Analysis	Direction	padj
+hdbr_sexDE_femaleBiased	Alzheimer	1185	-0.029711	-0.0063148	0.028337	0.85279	Prenatal	sexDE	femaleBiased	0.87733
+hdbr_sexDE_maleBiased	Alzheimer	1729	0.01904	0.0048321	0.025385	0.22662	Prenatal	sexDE	maleBiased	0.7554
+hdbr_pseudotimeDE_upRegulated	Alzheimer	7102	0.03896	0.017573	0.014655	0.003929	Prenatal	pseudotimeDE	upRegulated	0.0107154545454545
+hdbr_pseudotimeDE_downRegulated	Alzheimer	5136	-0.0088408	-0.0035726	0.015464	0.71624	Prenatal	pseudotimeDE	downRegulated	0.7674
+gtex_sexDE_femaleBiased	Alzheimer	307	0.012886	0.0014196	0.055438	0.4081	Adult	sexDE	femaleBiased	0.6546
+gtex_sexDE_maleBiased	Alzheimer	627	0.018665	0.0029194	0.04167	0.3271	Adult	sexDE	maleBiased	0.64059375
+gtex_pseudotimeDE_upRegulated	Alzheimer	2594	0.027616	0.0084234	0.021032	0.094599	Adult	pseudotimeDE	upRegulated	0.202712142857143
+gtex_pseudotimeDE_downRegulated	Alzheimer	1712	0.033596	0.0084872	0.024663	0.086577	Adult	pseudotimeDE	downRegulated	0.199793076923077
+hdbr_sexDE_femaleBiased	ADHD	1181	-0.023463	-0.0049877	0.029518	0.78666	Prenatal	sexDE	femaleBiased	0.87733
+hdbr_sexDE_maleBiased	ADHD	1725	-0.0061887	-0.0015716	0.026338	0.59288	Prenatal	sexDE	maleBiased	0.87733
+hdbr_pseudotimeDE_upRegulated	ADHD	7085	-0.0033603	-0.0015162	0.015214	0.5874	Prenatal	pseudotimeDE	upRegulated	0.70488
+hdbr_pseudotimeDE_downRegulated	ADHD	5127	-0.014044	-0.0056792	0.016032	0.80947	Prenatal	pseudotimeDE	downRegulated	0.83738275862069
+gtex_sexDE_femaleBiased	ADHD	307	0.0020654	0.00022794	0.057198	0.4856	Adult	sexDE	femaleBiased	0.662181818181818
+gtex_sexDE_maleBiased	ADHD	625	-0.0031432	-0.00049174	0.043034	0.52911	Adult	sexDE	maleBiased	0.69014347826087
+gtex_pseudotimeDE_upRegulated	ADHD	2587	0.012617	0.0038501	0.021699	0.28047	Adult	pseudotimeDE	upRegulated	0.401871428571429
+gtex_pseudotimeDE_downRegulated	ADHD	1710	-0.033465	-0.0084642	0.025568	0.90471	Adult	pseudotimeDE	downRegulated	0.935906896551724
+hdbr_sexDE_femaleBiased	Anorexia	1179	-0.015541	-0.0033056	0.029679	0.69974	Prenatal	sexDE	femaleBiased	0.87733
+hdbr_sexDE_maleBiased	Anorexia	1726	0.021581	0.0054893	0.026059	0.20379	Prenatal	sexDE	maleBiased	0.7554
+hdbr_pseudotimeDE_upRegulated	Anorexia	7076	0.010481	0.0047318	0.01503	0.24279	Prenatal	pseudotimeDE	upRegulated	0.383352631578947
+hdbr_pseudotimeDE_downRegulated	Anorexia	5120	0.016468	0.0066635	0.015864	0.14962	Prenatal	pseudotimeDE	downRegulated	0.2805375
+gtex_sexDE_femaleBiased	Anorexia	307	-0.030349	-0.0033542	0.056693	0.70378	Adult	sexDE	femaleBiased	0.776271428571429
+gtex_sexDE_maleBiased	Anorexia	625	-0.007885	-0.0012353	0.042952	0.57283	Adult	sexDE	maleBiased	0.7160375
+gtex_pseudotimeDE_upRegulated	Anorexia	2589	0.011602	0.0035462	0.021561	0.29525	Adult	pseudotimeDE	upRegulated	0.402613636363636
+gtex_pseudotimeDE_downRegulated	Anorexia	1707	-0.00056542	-0.00014308	0.025478	0.50885	Adult	pseudotimeDE	downRegulated	0.61062
+hdbr_sexDE_femaleBiased	Autism	1182	-0.03205	-0.0068084	0.02886	0.86661	Prenatal	sexDE	femaleBiased	0.87733
+hdbr_sexDE_maleBiased	Autism	1728	-0.016878	-0.004285	0.025811	0.74342	Prenatal	sexDE	maleBiased	0.87733
+hdbr_pseudotimeDE_upRegulated	Autism	7097	0.0015816	0.00071353	0.014816	0.45749	Prenatal	pseudotimeDE	upRegulated	0.653557142857143
+hdbr_pseudotimeDE_downRegulated	Autism	5129	-0.00090293	-0.00036488	0.015678	0.52296	Prenatal	pseudotimeDE	downRegulated	0.682121739130435
+gtex_sexDE_femaleBiased	Autism	307	-0.033498	-0.0036926	0.056173	0.72452	Adult	sexDE	femaleBiased	0.776271428571429
+gtex_sexDE_maleBiased	Autism	627	0.038061	0.005957	0.042555	0.18556	Adult	sexDE	maleBiased	0.64059375
+gtex_pseudotimeDE_upRegulated	Autism	2591	-0.017891	-0.0054576	0.021245	0.80013	Adult	pseudotimeDE	upRegulated	0.889033333333333
+gtex_pseudotimeDE_downRegulated	Autism	1711	-0.017203	-0.0043476	0.024843	0.75568	Adult	pseudotimeDE	downRegulated	0.871938461538461
+hdbr_sexDE_femaleBiased	Bipolar	1186	0.017499	0.0037205	0.032453	0.29488	Prenatal	sexDE	femaleBiased	0.804218181818182
+hdbr_sexDE_maleBiased	Bipolar	1729	0.037606	0.0095429	0.02898	0.097216	Prenatal	sexDE	maleBiased	0.7554
+hdbr_pseudotimeDE_upRegulated	Bipolar	7103	0.052337	0.023606	0.016685	0.00085572	Prenatal	pseudotimeDE	upRegulated	0.00320895
+hdbr_pseudotimeDE_downRegulated	Bipolar	5136	0.0058391	0.0023594	0.017575	0.36985	Prenatal	pseudotimeDE	downRegulated	0.554775
+gtex_sexDE_femaleBiased	Bipolar	307	-0.021735	-0.0023941	0.062897	0.63516	Adult	sexDE	femaleBiased	0.735703846153846
+gtex_sexDE_maleBiased	Bipolar	627	0.11585	0.018117	0.048056	0.0079685	Adult	sexDE	maleBiased	0.1195275
+gtex_pseudotimeDE_upRegulated	Bipolar	2594	0.028748	0.008768	0.023989	0.11539	Adult	pseudotimeDE	upRegulated	0.23078
+gtex_pseudotimeDE_downRegulated	Bipolar	1713	0.10569	0.026705	0.028056	8.2902e-05	Adult	pseudotimeDE	downRegulated	0.0012034
+hdbr_sexDE_femaleBiased	Brain morphology all	1185	0.030054	0.0063956	0.036451	0.20484	Prenatal	sexDE	femaleBiased	0.7554
+hdbr_sexDE_maleBiased	Brain morphology all	1723	0.0075483	0.0019149	0.032225	0.4074	Prenatal	sexDE	maleBiased	0.86664375
+hdbr_pseudotimeDE_upRegulated	Brain morphology all	7084	0.075811	0.034195	0.018436	1.9697e-05	Prenatal	pseudotimeDE	upRegulated	0.000118182
+hdbr_pseudotimeDE_downRegulated	Brain morphology all	5128	0.067257	0.027189	0.019582	0.0002974	Prenatal	pseudotimeDE	downRegulated	0.00127457142857143
+gtex_sexDE_femaleBiased	Brain morphology all	307	-0.024801	-0.0027355	0.070439	0.63761	Adult	sexDE	femaleBiased	0.735703846153846
+gtex_sexDE_maleBiased	Brain morphology all	620	0.063056	0.0098209	0.053401	0.11885	Adult	sexDE	maleBiased	0.59425
+gtex_pseudotimeDE_upRegulated	Brain morphology all	2587	0.064434	0.019653	0.026545	0.0076092	Adult	pseudotimeDE	upRegulated	0.0326108571428571
+gtex_pseudotimeDE_downRegulated	Brain morphology all	1710	0.035747	0.0090365	0.031398	0.12747	Adult	pseudotimeDE	downRegulated	0.23900625
+hdbr_sexDE_femaleBiased	Cortical area	1185	0.025742	0.005478	0.032429	0.21366	Prenatal	sexDE	femaleBiased	0.7554
+hdbr_sexDE_maleBiased	Cortical area	1723	0.015595	0.0039561	0.028669	0.29324	Prenatal	sexDE	maleBiased	0.804218181818182
+hdbr_pseudotimeDE_upRegulated	Cortical area	7084	0.029982	0.013524	0.016408	0.03384	Prenatal	pseudotimeDE	upRegulated	0.071604
+hdbr_pseudotimeDE_downRegulated	Cortical area	5128	0.033014	0.013346	0.017425	0.029081	Prenatal	pseudotimeDE	downRegulated	0.06711
+gtex_sexDE_femaleBiased	Cortical area	307	-0.12659	-0.013963	0.062658	0.97832	Adult	sexDE	femaleBiased	0.97832
+gtex_sexDE_maleBiased	Cortical area	620	0.0094804	0.0014766	0.04751	0.42092	Adult	sexDE	maleBiased	0.6546
+gtex_pseudotimeDE_upRegulated	Cortical area	2587	0.013675	0.0041709	0.023619	0.28131	Adult	pseudotimeDE	upRegulated	0.401871428571429
+gtex_pseudotimeDE_downRegulated	Cortical area	1710	-0.00010249	-2.5909e-05	0.027935	0.50146	Adult	pseudotimeDE	downRegulated	0.61062
+hdbr_sexDE_femaleBiased	Cortical thickness	1185	0.037135	0.0079026	0.030047	0.10825	Prenatal	sexDE	femaleBiased	0.7554
+hdbr_sexDE_maleBiased	Cortical thickness	1723	0.0038826	0.00098494	0.026564	0.4419	Prenatal	sexDE	maleBiased	0.86664375
+hdbr_pseudotimeDE_upRegulated	Cortical thickness	7084	0.042602	0.019216	0.015201	0.0025383	Prenatal	pseudotimeDE	upRegulated	0.0076149
+hdbr_pseudotimeDE_downRegulated	Cortical thickness	5128	0.029091	0.01176	0.016146	0.035802	Prenatal	pseudotimeDE	downRegulated	0.071604
+gtex_sexDE_femaleBiased	Cortical thickness	307	0.01338	0.0014758	0.058064	0.40888	Adult	sexDE	femaleBiased	0.6546
+gtex_sexDE_maleBiased	Cortical thickness	620	0.019745	0.0030752	0.044021	0.32689	Adult	sexDE	maleBiased	0.64059375
+gtex_pseudotimeDE_upRegulated	Cortical thickness	2587	0.032679	0.0099671	0.021884	0.067688	Adult	pseudotimeDE	upRegulated	0.16922
+gtex_pseudotimeDE_downRegulated	Cortical thickness	1710	0.044094	0.011147	0.025881	0.044225	Adult	pseudotimeDE	downRegulated	0.120613636363636
+hdbr_sexDE_femaleBiased	Subcortical volume	1185	-0.01436	-0.0030559	0.033715	0.66491	Prenatal	sexDE	femaleBiased	0.87733
+hdbr_sexDE_maleBiased	Subcortical volume	1723	0.0028279	0.00071739	0.029806	0.46221	Prenatal	sexDE	maleBiased	0.86664375
+hdbr_pseudotimeDE_upRegulated	Subcortical volume	7084	0.07743	0.034925	0.017049	2.8142e-06	Prenatal	pseudotimeDE	upRegulated	2.11065e-05
+hdbr_pseudotimeDE_downRegulated	Subcortical volume	5128	0.066485	0.026877	0.018111	0.00012118	Prenatal	pseudotimeDE	downRegulated	0.0006059
+gtex_sexDE_femaleBiased	Subcortical volume	307	0.031222	0.0034438	0.06515	0.31589	Adult	sexDE	femaleBiased	0.64059375
+gtex_sexDE_maleBiased	Subcortical volume	620	0.0957	0.014905	0.049388	0.026339	Adult	sexDE	maleBiased	0.1975425
+gtex_pseudotimeDE_upRegulated	Subcortical volume	2587	0.090152	0.027496	0.024546	0.00012034	Adult	pseudotimeDE	upRegulated	0.0012034
+gtex_pseudotimeDE_downRegulated	Subcortical volume	1710	0.055078	0.013923	0.029039	0.028945	Adult	pseudotimeDE	downRegulated	0.086835
+hdbr_sexDE_femaleBiased	Educational attainment	1186	-0.045156	-0.0068617	0.038869	0.87733	Prenatal	sexDE	femaleBiased	0.87733
+hdbr_sexDE_maleBiased	Educational attainment	1729	0.0057684	0.0010524	0.0343	0.43322	Prenatal	sexDE	maleBiased	0.86664375
+hdbr_pseudotimeDE_upRegulated	Educational attainment	7103	0.036957	0.012886	0.017753	0.018689	Prenatal	pseudotimeDE	upRegulated	0.0467225
+hdbr_pseudotimeDE_downRegulated	Educational attainment	5141	-0.0072556	-0.0022008	0.01988	0.64243	Prenatal	pseudotimeDE	downRegulated	0.715166666666667
+gtex_sexDE_femaleBiased	Educational attainment	307	0.0081533	0.00063597	0.077716	0.45822	Adult	sexDE	femaleBiased	0.6546
+gtex_sexDE_maleBiased	Educational attainment	627	0.13323	0.014804	0.054067	0.0068708	Adult	sexDE	maleBiased	0.1195275
+gtex_pseudotimeDE_upRegulated	Educational attainment	2592	0.021411	0.0047402	0.027918	0.22157	Adult	pseudotimeDE	upRegulated	0.369283333333333
+gtex_pseudotimeDE_downRegulated	Educational attainment	1711	0.11467	0.020816	0.032085	0.00017626	Adult	pseudotimeDE	downRegulated	0.00132195
+hdbr_sexDE_femaleBiased	Epilepsy	1163	-0.026699	-0.0056915	0.028424	0.82621	Prenatal	sexDE	femaleBiased	0.87733
+hdbr_sexDE_maleBiased	Epilepsy	1706	-0.018406	-0.0046962	0.025303	0.76651	Prenatal	sexDE	maleBiased	0.87733
+hdbr_pseudotimeDE_upRegulated	Epilepsy	6946	0.042622	0.01924	0.014416	0.0015578	Prenatal	pseudotimeDE	upRegulated	0.00519266666666667
+hdbr_pseudotimeDE_downRegulated	Epilepsy	5050	0.012281	0.0049774	0.015278	0.21077	Prenatal	pseudotimeDE	downRegulated	0.371947058823529
+gtex_sexDE_femaleBiased	Epilepsy	304	0.030086	0.0033391	0.0528	0.28441	Adult	sexDE	femaleBiased	0.64059375
+gtex_sexDE_maleBiased	Epilepsy	612	0.066595	0.01042	0.041727	0.055261	Adult	sexDE	maleBiased	0.331566
+gtex_pseudotimeDE_upRegulated	Epilepsy	2547	0.016083	0.0049201	0.020862	0.22038	Adult	pseudotimeDE	upRegulated	0.369283333333333
+gtex_pseudotimeDE_downRegulated	Epilepsy	1682	0.085066	0.021562	0.02445	0.00025216	Adult	pseudotimeDE	downRegulated	0.00151296
+hdbr_sexDE_femaleBiased	Height	1180	0.15969	0.034013	0.056266	0.0022717	Prenatal	sexDE	femaleBiased	0.068151
+hdbr_sexDE_maleBiased	Height	1721	0.083347	0.021192	0.049342	0.045604	Prenatal	sexDE	maleBiased	0.68406
+hdbr_pseudotimeDE_upRegulated	Height	7059	0.15894	0.071745	0.02815	8.345e-09	Prenatal	pseudotimeDE	upRegulated	1.25175e-07
+hdbr_pseudotimeDE_downRegulated	Height	5113	0.17688	0.071589	0.029835	1.5594e-09	Prenatal	pseudotimeDE	downRegulated	4.6782e-08
+gtex_sexDE_femaleBiased	Height	307	0.043887	0.0048554	0.10757	0.34165	Adult	sexDE	femaleBiased	0.64059375
+gtex_sexDE_maleBiased	Height	626	-0.14206	-0.022295	0.080472	0.96123	Adult	sexDE	maleBiased	0.97832
+gtex_pseudotimeDE_upRegulated	Height	2576	0.23183	0.070765	0.040533	5.4407e-09	Adult	pseudotimeDE	upRegulated	1.63221e-07
+gtex_pseudotimeDE_downRegulated	Height	1705	-0.051128	-0.012944	0.047911	0.85704	Adult	pseudotimeDE	downRegulated	0.918257142857143
+hdbr_sexDE_femaleBiased	Major depressive disorder	1185	0.0058712	0.0012477	0.028144	0.41738	Prenatal	sexDE	femaleBiased	0.86664375
+hdbr_sexDE_maleBiased	Major depressive disorder	1727	-0.012002	-0.0030441	0.025103	0.68372	Prenatal	sexDE	maleBiased	0.87733
+hdbr_pseudotimeDE_upRegulated	Major depressive disorder	7098	0.010353	0.0046686	0.01455	0.23837	Prenatal	pseudotimeDE	upRegulated	0.383352631578947
+hdbr_pseudotimeDE_downRegulated	Major depressive disorder	5135	-0.0024808	-0.0010023	0.015384	0.56405	Prenatal	pseudotimeDE	downRegulated	0.70488
+gtex_sexDE_femaleBiased	Major depressive disorder	307	0.046167	0.0050852	0.054718	0.19942	Adult	sexDE	femaleBiased	0.64059375
+gtex_sexDE_maleBiased	Major depressive disorder	627	0.02205	0.0034484	0.041562	0.29788	Adult	sexDE	maleBiased	0.64059375
+gtex_pseudotimeDE_upRegulated	Major depressive disorder	2590	-0.047839	-0.01458	0.020887	0.98899	Adult	pseudotimeDE	upRegulated	0.98899
+gtex_pseudotimeDE_downRegulated	Major depressive disorder	1712	0.057094	0.014422	0.024484	0.0098603	Adult	pseudotimeDE	downRegulated	0.036976125
+hdbr_sexDE_femaleBiased	Schizophrenia	1173	-0.0082101	-0.0017521	0.034965	0.59282	Prenatal	sexDE	femaleBiased	0.87733
+hdbr_sexDE_maleBiased	Schizophrenia	1713	0.024841	0.006332	0.03088	0.21057	Prenatal	sexDE	maleBiased	0.7554
+hdbr_pseudotimeDE_upRegulated	Schizophrenia	6983	0.092591	0.041786	0.017955	1.271e-07	Prenatal	pseudotimeDE	upRegulated	1.271e-06
+hdbr_pseudotimeDE_downRegulated	Schizophrenia	5077	-0.0069398	-0.0028119	0.018846	0.64365	Prenatal	pseudotimeDE	downRegulated	0.715166666666667
+gtex_sexDE_femaleBiased	Schizophrenia	305	0.052721	0.005843	0.06743	0.21715	Adult	sexDE	femaleBiased	0.64059375
+gtex_sexDE_maleBiased	Schizophrenia	618	0.11318	0.017739	0.05121	0.013556	Adult	sexDE	maleBiased	0.13556
+gtex_pseudotimeDE_upRegulated	Schizophrenia	2551	0.050161	0.015314	0.025714	0.025552	Adult	pseudotimeDE	upRegulated	0.0851733333333333
+gtex_pseudotimeDE_downRegulated	Schizophrenia	1685	0.095294	0.024106	0.029977	0.00074067	Adult	pseudotimeDE	downRegulated	0.00370335
+hdbr_sexDE_femaleBiased	Tourette	1184	-0.028982	-0.0061617	0.027378	0.8551	Prenatal	sexDE	femaleBiased	0.87733
+hdbr_sexDE_maleBiased	Tourette	1728	-0.010573	-0.0026843	0.0243	0.66826	Prenatal	sexDE	maleBiased	0.87733
+hdbr_pseudotimeDE_upRegulated	Tourette	7097	0.00055615	0.0002509	0.013979	0.48413	Prenatal	pseudotimeDE	upRegulated	0.660177272727273
+hdbr_pseudotimeDE_downRegulated	Tourette	5135	-0.017995	-0.0072749	0.014787	0.88817	Prenatal	pseudotimeDE	downRegulated	0.88817
+gtex_sexDE_femaleBiased	Tourette	307	0.00603	0.00066473	0.052937	0.45466	Adult	sexDE	femaleBiased	0.6546
+gtex_sexDE_maleBiased	Tourette	627	0.034298	0.0053681	0.040057	0.19594	Adult	sexDE	maleBiased	0.64059375
+gtex_pseudotimeDE_upRegulated	Tourette	2593	0.0096759	0.0029527	0.020114	0.31524	Adult	pseudotimeDE	upRegulated	0.411182608695652
+gtex_pseudotimeDE_downRegulated	Tourette	1711	0.01545	0.0039046	0.023601	0.25636	Adult	pseudotimeDE	downRegulated	0.401871428571429

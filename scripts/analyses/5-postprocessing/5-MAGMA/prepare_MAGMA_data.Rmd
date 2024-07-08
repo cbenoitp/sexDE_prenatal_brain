@@ -1,0 +1,237 @@
+---
+title: "Prepare MAGMA data"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r load_library, echo=FALSE}
+suppressPackageStartupMessages( library(readxl) )
+suppressPackageStartupMessages( library(tidyverse) )
+```
+
+```{r, setup, include=FALSE, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+Parameters:
+
+```{r parameters, echo=FALSE}
+qvalue_threshold <- 0.01
+logFC_threshold <- 0
+```
+
+
+# Load all data needed
+
+## HDBR data.
+
+Load HDBR sex-DE data.
+
+```{r load_data_HDBR_sexDE, echo=FALSE}
+hdbr_sexDE_results <- read.table("data/3-DE/VoomDream_topTable_forebrain_pseudotime_sva_ind_interaction.txt",
+                         header = TRUE, check.names=FALSE)
+# remove genes used for sex assignment
+genes2remove <- c("XIST", as.character(hdbr_sexDE_results$gene_name[which(hdbr_sexDE_results$chr == "chrY" & hdbr_sexDE_results$gene_type == "protein_coding")]))
+hdbr_sexDE_results <- hdbr_sexDE_results[which(!hdbr_sexDE_results$gene_name %in% genes2remove),]
+# format
+hdbr_sexDE_results$ensemblID <- sapply(strsplit(as.character(hdbr_sexDE_results$gene_id), "\\."), function(x){x[1]})
+```
+
+Load HDBR pseudotime-DE data.
+
+```{r load_data_HDBR_pseudotimeDE, echo=FALSE}
+hdbr_pseudotimeDE_results <- read.table("data/3-DE/VoomDream_topTable_forebrain_pseudotime_sva_ind_interaction_pseudotime.txt",
+                         header = TRUE, check.names=FALSE)
+# remove genes used to infer pseudotime
+load("data/2-pseudotime/forebrain_pseudotime_analysis.RData")
+genes2remove <- rownames(selectedCounts)
+hdbr_pseudotimeDE_results <- hdbr_pseudotimeDE_results[which(!hdbr_pseudotimeDE_results$gene_name %in% genes2remove),]
+# format
+hdbr_pseudotimeDE_results$ensemblID <- sapply(strsplit(as.character(hdbr_pseudotimeDE_results$gene_id), "\\."), function(x){x[1]})
+```
+
+
+## GTEx data.
+
+Load GTEx sex-DE data.
+
+```{r load_data_GTEx_sexDE, echo=FALSE}
+gtex_sexDE_results <- read.table("data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_VoomDream_topTable_with_sva_ind_pseudotime_interaction.txt",
+                         header = TRUE, check.names=FALSE)
+# remove genes used for sex assignment
+genes2remove <- c("XIST", as.character(gtex_sexDE_results$gene_name[which(gtex_sexDE_results$chr == "chrY" & gtex_sexDE_results$gene_type == "protein_coding")]))
+gtex_sexDE_results <- gtex_sexDE_results[which(!gtex_sexDE_results$gene_name %in% genes2remove),]
+# format
+gtex_sexDE_results$ensemblID <- sapply(strsplit(as.character(gtex_sexDE_results$gene_id), "\\."), function(x){x[1]})
+```
+
+Load GTEx pseudotime-DE data.
+
+```{r load_data_GTEx_pseudotimeDE, echo=FALSE}
+gtex_pseudotimeDE_results <- read.table("data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_VoomDream_topTable_with_sva_ind_pseudotime_interaction_pseudotime.txt",
+                                        header = TRUE, check.names=FALSE)
+# remove genes used to infer pseudotime
+load("data/4-GTEx/1-GTEx_analysis/GTEx_v8_forebrain_pseudotime_analysis.RData")
+genes2remove <- rownames(selectedCounts)
+gtex_pseudotimeDE_results <- gtex_pseudotimeDE_results[which(!gtex_pseudotimeDE_results$gene_name %in% genes2remove),]
+# format
+gtex_pseudotimeDE_results$ensemblID <- sapply(strsplit(as.character(gtex_pseudotimeDE_results$gene_id), "\\."), function(x){x[1]})
+```
+
+
+## Bayesian results.
+
+```{r load_bayes_results, echo=FALSE}
+bayesResults <- read.table("data/4-GTEx/2-comparison/lineModel/lineModel_prenatalVSadult_6models_withAnnotation.txt", 
+                           header = TRUE, sep = "\t")
+# Keep only autosomal genes
+bayesResults <- bayesResults[which(bayesResults$annot == "Autosome"), ]
+```
+
+
+
+# Prepare the gene lists for the MAGMA analyses and save them
+
+## Functions
+
+```{r function_select_DEgenes, echo=FALSE}
+selectDEgenes <- function(de_results, qvalue_threshold = 0.01, logFC_threshold = 0){
+  # keep only autosomal genes
+  de_results <- de_results[which(!de_results$chr %in% c("chrX", "chrY", "chrM")),]
+  # Create the 3 genes lists
+  DEgenes <- de_results$ensemblID[which(de_results$qvalue < qvalue_threshold & 
+                                          abs(de_results$logFC) > logFC_threshold)]
+  upGenes <- de_results$ensemblID[which(de_results$qvalue < qvalue_threshold & 
+                                          de_results$logFC > logFC_threshold)]
+  downGenes <- de_results$ensemblID[which(de_results$qvalue < qvalue_threshold & 
+                                            de_results$logFC < logFC_threshold)]
+  return(list("DEgenes" = DEgenes, "upGenes" = upGenes, "downGenes" = downGenes))
+}
+```
+
+```{r function_select_bayesRes, echo=FALSE}
+selectBayesRes <- function(results, data2select, logFC_threshold = 0){
+  selectedSpecificity <- ""
+  if (data2select == "shared"){
+    selectedSpecificity <- "Shared"
+  } else if (data2select == "prenatal_specific"){
+    selectedSpecificity <- "Prenatal"
+  }
+  # Get gene in the selected category
+  results <- results[which(results$specificity == selectedSpecificity),]
+  # Create the 3 gene lists
+  DEgenes <- results$ensemblID
+  upGenes <- results$ensemblID[which(results$logFC_adult > logFC_threshold)]
+  downGenes <- results$ensemblID[which(results$logFC_adult < logFC_threshold)]
+  return(list("DEgenes" = DEgenes, "upGenes" = upGenes, "downGenes" = downGenes))
+}
+```
+
+```{r function_save_results, echo=FALSE}
+save_data_magma <- function(data, suffix, outputDir){
+  fullFileName <- paste0(paste(paste0(outputDir, "MAGMA"), suffix, sep = "_"), ".txt")
+  write.table(data, file = fullFileName, 
+              col.names = FALSE, row.names = FALSE, quote = FALSE)
+  return(1)
+}
+```
+
+
+## Create gene lists to be used as MAGMA input
+
+Save data from the DE analysis.
+
+```{r prepareNsave_data, echo=FALSE}
+listDEdata <- list(hdbr_sexDE_results, hdbr_pseudotimeDE_results,
+                   gtex_sexDE_results, gtex_pseudotimeDE_results)
+listTypeData <- c("sexDE", "pseudotimeDE", "sexDE", "pseudotimeDE")
+listDataset <- c("hdbr", "hdbr", "gtex", "gtex")
+i <- 1
+for (DEdata in listDEdata){
+  geneLists <- selectDEgenes(DEdata)
+  j <- 1
+  if (listTypeData[i] == "sexDE"){
+    directionEffect <- c("", "_femaleBiased", "_maleBiased")
+  } else if (listTypeData[i] == "pseudotimeDE"){
+    directionEffect <- c("", "_upRegulated", "_downRegulated")
+  }
+  for (geneList in geneLists){
+    suffix <- paste0(paste(listDataset[i], listTypeData[i], sep = "_"), directionEffect[j])
+    print(suffix)
+    save_data_magma(geneList, suffix, outputDir = "data/5-postprocessing/5-MAGMA/inputLists/")
+    j <- j + 1
+  }
+  i <- i + 1
+}
+```
+
+Save data from the bayesian analysis.
+
+```{r prepareNsave_data_bayes, echo=FALSE}
+analyses <- c("shared", "prenatal_specific")
+directionEffect <- c("", "_femaleBiased", "_maleBiased")
+for (currentAnalysis in analyses){
+  bayesLists <- selectBayesRes(bayesResults, currentAnalysis)
+  i <- 1
+  for (geneList in bayesLists){
+    suffix <- paste0(paste("sexDE_bayes", currentAnalysis, sep = "_"), directionEffect[i])
+    print(suffix)
+    save_data_magma(geneList, suffix, outputDir = "data/5-postprocessing/5-MAGMA/inputLists/")
+    i <- i + 1
+  }
+}
+```
+
+Create the input file for the MAGMA gene level analysis.
+
+```{r create_magma_input, echo=FALSE}
+MAGMA_input <- list()
+# sexDE and pseudotimeDE genes
+listDEdata <- list(hdbr_sexDE_results, hdbr_pseudotimeDE_results,
+                   gtex_sexDE_results, gtex_pseudotimeDE_results)
+listTypeData <- c("sexDE", "pseudotimeDE", "sexDE", "pseudotimeDE")
+listDataset <- c("hdbr", "hdbr", "gtex", "gtex")
+i <- 1
+for (DEdata in listDEdata){
+  geneLists <- selectDEgenes(DEdata)
+  j <- 1
+  if (listTypeData[i] == "sexDE"){
+    directionEffect <- c("", "_femaleBiased", "_maleBiased")
+  } else if (listTypeData[i] == "pseudotimeDE"){
+    directionEffect <- c("", "_upRegulated", "_downRegulated")
+  }
+  for (geneList in geneLists){
+    suffix <- paste0(paste(listDataset[i], listTypeData[i], sep = "_"), directionEffect[j])
+    print(suffix)
+    MAGMA_input[[suffix]] <- c(suffix, geneList)
+    j <- j + 1
+  }
+  i <- i + 1
+}
+# bayesian analysis
+analyses <- c("shared", "prenatal_specific")
+directionEffect <- c("", "_femaleBiased", "_maleBiased")
+for (currentAnalysis in analyses){
+  bayesLists <- selectBayesRes(bayesResults, currentAnalysis)
+  i <- 1
+  for (geneList in bayesLists){
+    suffix <- paste0(currentAnalysis, directionEffect[i])
+    print(suffix)
+    MAGMA_input[[suffix]] <- c(suffix, geneList)
+    i <- i + 1
+  }
+}
+# write the file
+file_conn <- file("data/5-postprocessing/5-MAGMA/inputLists/MAGMA_input.txt")
+writeLines(unlist(lapply(MAGMA_input, paste, collapse=" ")), file_conn)
+close(file_conn)
+```
+
+
+# Session info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```
+

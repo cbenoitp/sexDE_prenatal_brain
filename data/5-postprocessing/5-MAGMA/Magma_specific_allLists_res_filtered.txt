@@ -1,0 +1,61 @@
+Comparison	Trait	Ngenes	Beta	Beta_std	SE	pval	Analysis	Direction	padj
+shared_femaleBiased	Alzheimer	175	0.016429	0.0013701	0.069201	0.40617	shared	femaleBiased	0.8577
+shared_maleBiased	Alzheimer	467	0.0017111	0.00023172	0.048862	0.48603	shared	maleBiased	0.8577
+prenatal_specific_femaleBiased	Alzheimer	772	0.068095	0.011783	0.035259	0.026733	prenatal_specific	femaleBiased	0.26733
+prenatal_specific_maleBiased	Alzheimer	1056	0.011446	0.0023028	0.031627	0.35872	prenatal_specific	maleBiased	0.57435
+shared_femaleBiased	ADHD	175	-0.026117	-0.002182	0.074917	0.63631	shared	femaleBiased	0.880813636363636
+shared_maleBiased	ADHD	465	-0.013012	-0.0017617	0.050355	0.60195	shared	maleBiased	0.880813636363636
+prenatal_specific_femaleBiased	ADHD	771	-0.055864	-0.0096778	0.036444	0.93734	prenatal_specific	femaleBiased	0.9856
+prenatal_specific_maleBiased	ADHD	1052	-0.0020304	-0.00040848	0.032801	0.52468	prenatal_specific	maleBiased	0.658452
+shared_femaleBiased	Anorexia	175	-0.026981	-0.0022575	0.072073	0.64593	shared	femaleBiased	0.880813636363636
+shared_maleBiased	Anorexia	465	-0.036668	-0.0049714	0.050195	0.76745	shared	maleBiased	0.945351724137931
+prenatal_specific_femaleBiased	Anorexia	772	0.022738	0.0039471	0.036561	0.267	prenatal_specific	femaleBiased	0.57435
+prenatal_specific_maleBiased	Anorexia	1053	0.036156	0.0072871	0.032389	0.13216	prenatal_specific	maleBiased	0.4956
+shared_femaleBiased	Autism	175	-0.097314	-0.0081209	0.0713	0.91384	shared	femaleBiased	0.945351724137931
+shared_maleBiased	Autism	467	0.077512	0.010504	0.049885	0.060125	shared	maleBiased	0.36075
+prenatal_specific_femaleBiased	Autism	772	-0.0039768	-0.00068858	0.035631	0.54443	prenatal_specific	femaleBiased	0.658452
+prenatal_specific_maleBiased	Autism	1053	-0.070089	-0.014091	0.032056	0.9856	prenatal_specific	maleBiased	0.9856
+shared_femaleBiased	Bipolar	175	-0.022539	-0.0018794	0.079521	0.61157	shared	femaleBiased	0.880813636363636
+shared_maleBiased	Bipolar	467	0.11677	0.015812	0.056145	0.018783	shared	maleBiased	0.18783
+prenatal_specific_femaleBiased	Bipolar	772	0.022374	0.0038711	0.040493	0.2903	prenatal_specific	femaleBiased	0.57435
+prenatal_specific_maleBiased	Bipolar	1056	0.046133	0.0092805	0.036053	0.10036	prenatal_specific	maleBiased	0.4956
+shared_femaleBiased	Brain morphology all	175	0.028755	0.0024011	0.090055	0.37475	shared	femaleBiased	0.8577
+shared_maleBiased	Brain morphology all	462	-0.055295	-0.0074583	0.062655	0.81125	shared	maleBiased	0.945351724137931
+prenatal_specific_femaleBiased	Brain morphology all	772	0.051871	0.0089868	0.044899	0.124	prenatal_specific	femaleBiased	0.4956
+prenatal_specific_maleBiased	Brain morphology all	1054	0.025218	0.0050751	0.040136	0.2649	prenatal_specific	maleBiased	0.57435
+shared_femaleBiased	Cortical area	175	-0.092538	-0.007727	0.080114	0.87596	shared	femaleBiased	0.945351724137931
+shared_maleBiased	Cortical area	462	-0.071425	-0.0096341	0.055739	0.89997	shared	maleBiased	0.945351724137931
+prenatal_specific_femaleBiased	Cortical area	772	0.069061	0.011965	0.039942	0.041913	prenatal_specific	femaleBiased	0.3143475
+prenatal_specific_maleBiased	Cortical area	1054	0.012133	0.0024418	0.035707	0.36701	prenatal_specific	maleBiased	0.57435
+shared_femaleBiased	Cortical thickness	175	0.066217	0.0055292	0.074232	0.18619	shared	femaleBiased	0.797957142857143
+shared_maleBiased	Cortical thickness	462	-0.056089	-0.0075654	0.051646	0.86126	shared	maleBiased	0.945351724137931
+prenatal_specific_femaleBiased	Cortical thickness	772	0.024647	0.0042701	0.037012	0.25274	prenatal_specific	femaleBiased	0.57435
+prenatal_specific_maleBiased	Cortical thickness	1054	0.015426	0.0031045	0.033085	0.32052	prenatal_specific	maleBiased	0.57435
+shared_femaleBiased	Subcortical volume	175	0.045022	0.0037594	0.083293	0.29442	shared	femaleBiased	0.8577
+shared_maleBiased	Subcortical volume	462	0.0033724	0.00045488	0.057952	0.4768	shared	maleBiased	0.8577
+prenatal_specific_femaleBiased	Subcortical volume	772	0.06307	0.010927	0.041527	0.06442	prenatal_specific	femaleBiased	0.38652
+prenatal_specific_maleBiased	Subcortical volume	1054	0.03771	0.0075891	0.037122	0.15486	prenatal_specific	maleBiased	0.5162
+shared_femaleBiased	Educational attainment	175	0.030253	0.001784	0.10061	0.38183	shared	femaleBiased	0.8577
+shared_maleBiased	Educational attainment	467	0.13717	0.013175	0.062577	0.014193	shared	maleBiased	0.18783
+prenatal_specific_femaleBiased	Educational attainment	772	-0.006282	-0.00077341	0.051317	0.54871	prenatal_specific	femaleBiased	0.658452
+prenatal_specific_maleBiased	Educational attainment	1056	0.014036	0.0020152	0.041837	0.36863	prenatal_specific	maleBiased	0.57435
+shared_femaleBiased	Epilepsy	173	-0.0091191	-0.00076557	0.067345	0.55385	shared	femaleBiased	0.880813636363636
+shared_maleBiased	Epilepsy	457	0.080091	0.010864	0.047805	0.046942	shared	maleBiased	0.352065
+prenatal_specific_femaleBiased	Epilepsy	764	-0.060249	-0.010499	0.035185	0.95657	prenatal_specific	femaleBiased	0.9856
+prenatal_specific_maleBiased	Epilepsy	1043	0.020618	0.004173	0.031754	0.25807	prenatal_specific	maleBiased	0.57435
+shared_femaleBiased	Height	175	0.17821	0.014925	0.13861	0.099298	shared	femaleBiased	0.49649
+shared_maleBiased	Height	466	-0.19543	-0.026551	0.09393	0.98125	shared	maleBiased	0.98125
+prenatal_specific_femaleBiased	Height	771	0.16286	0.028281	0.069297	0.0093895	prenatal_specific	femaleBiased	0.26733
+prenatal_specific_maleBiased	Height	1050	0.1224	0.02466	0.061023	0.022445	prenatal_specific	maleBiased	0.26733
+shared_femaleBiased	Major depressive disorder	175	-0.087419	-0.0072893	0.068488	0.89908	shared	femaleBiased	0.945351724137931
+shared_maleBiased	Major depressive disorder	467	0.0083108	0.0011254	0.048732	0.43229	shared	maleBiased	0.8577
+prenatal_specific_femaleBiased	Major depressive disorder	772	-0.016442	-0.0028448	0.035003	0.68073	prenatal_specific	femaleBiased	0.785457692307692
+prenatal_specific_maleBiased	Major depressive disorder	1054	0.0017904	0.00035983	0.031214	0.47713	prenatal_specific	maleBiased	0.658452
+shared_femaleBiased	Schizophrenia	173	0.010305	0.00086244	0.085869	0.45224	shared	femaleBiased	0.8577
+shared_maleBiased	Schizophrenia	463	0.1344	0.018292	0.059888	0.012419	shared	maleBiased	0.18783
+prenatal_specific_femaleBiased	Schizophrenia	767	0.013605	0.0023681	0.043529	0.37732	prenatal_specific	femaleBiased	0.57435
+prenatal_specific_maleBiased	Schizophrenia	1046	-0.0032758	-0.00066196	0.038171	0.53419	prenatal_specific	maleBiased	0.658452
+shared_femaleBiased	Tourette	175	0.024525	0.0020467	0.0662	0.35552	shared	femaleBiased	0.8577
+shared_maleBiased	Tourette	467	0.019486	0.0026407	0.046946	0.33905	shared	maleBiased	0.8577
+prenatal_specific_femaleBiased	Tourette	772	-0.033149	-0.00574	0.034022	0.83505	prenatal_specific	femaleBiased	0.927833333333333
+prenatal_specific_maleBiased	Tourette	1055	0.0090312	0.0018173	0.030319	0.3829	prenatal_specific	maleBiased	0.57435

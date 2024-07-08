@@ -1,0 +1,406 @@
+---
+title: "MAGMA results"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r load_library, echo=FALSE}
+suppressPackageStartupMessages( library(readxl) )
+suppressPackageStartupMessages( library(tidyverse) )
+suppressPackageStartupMessages( library(ggsignif) )
+suppressPackageStartupMessages( library(ggnewscale) )
+suppressPackageStartupMessages( library(scales) )
+```
+
+```{r, setup, include=FALSE, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+
+# Load MAGMA results
+
+MAGMA analysis on GTEx and HDBR separatly.
+
+```{r load_MAGMA_results, echo=FALSE}
+magma_all <- read.table("data/5-postprocessing/5-MAGMA/Magma_allLists_res.txt", header = TRUE)
+```
+
+Separate the analysis on adult and prenatal forebrain from the analysis on prenatal-specific and shared sex-DE.
+
+```{r separate_MAGMA_results}
+magma <- magma_all[grep("sexDE|pseudotimeDE", magma_all$FULL_NAME),]
+magmaSpe <- magma_all[grep("shared|specific", magma_all$FULL_NAME),]
+```
+
+
+
+# MAGMA analysis on GTEx and HDBR separatly
+
+## Filter and format data
+
+Remove all results from undirected data.
+
+```{r filter_results, echo=FALSE}
+magma_filtered <- magma[grep("maleBiased|Regulated", magma$FULL_NAME),]
+names(magma_filtered) <- c("Comparison", "Trait", "Ngenes", "Beta", "Beta_std", "SE", "pval", "Dataset")
+magma_filtered$Comparison <- magma_filtered$Dataset
+magma_filtered <- separate(magma_filtered, Dataset, sep = "_", into = c("Data", "Analysis", "Direction"))
+magma_filtered$Data <- factor(magma_filtered$Data, levels = c("hdbr", "gtex"), labels = c("Prenatal", "Adult"))
+magma_filtered$Direction <- factor(magma_filtered$Direction, levels = c("upRegulated", "downRegulated", "maleBiased", "femaleBiased"))
+magma_filtered$Analysis <- factor(magma_filtered$Analysis, levels = c("sexDE", "pseudotimeDE"), labels = c("sexDE", "pseudotimeDE"))
+magma_filtered$Trait <- factor(magma_filtered$Trait, levels = c("AD", "AN", "TS", "MDD", "BD", "SCZ", "Epilepsy", "ADHD", "ASD",
+                                                                "Brain_morphology_subcortical_volume", "Brain_morphology_cortical_thickness",
+                                                                "Brain_morphology_cortical_area", "Brain_morphology_all", "Height", "EA"),
+                               labels = c("Alzheimer", "Anorexia", "Tourette", "Major depressive disorder", "Bipolar", "Schizophrenia", "Epilepsy", "ADHD", "Autism", 
+                                          "Subcortical volume",  "Cortical thickness", "Cortical area", "Brain morphology all", "Height", "Educational attainment"))
+```
+
+Compute the p-value adjusted for each DE analysis and dataset separatly.
+
+```{r padj, echo=FALSE}
+magma_transformed <- magma_filtered %>% group_by(Data, Analysis) %>% mutate(padj = p.adjust(pval, method = "fdr"))
+```
+
+Write the transformed data in a file.
+
+```{r write_output_all_filtered, echo=FALSE}
+write.table(magma_transformed, file = "data/5-postprocessing/5-MAGMA/Magma_allLists_res_filtered.txt",
+            row.names = FALSE, col.names = TRUE, sep = "\t", quote = FALSE)
+```
+
+## Plot figure
+
+Format data for plot
+
+```{r plot, echo=FALSE}
+magma_transformed_plot <- magma_transformed
+magma_transformed_plot$shape <- ifelse(magma_transformed_plot$Data == "Prenatal", 
+                                   ifelse(magma_transformed_plot$Beta>0, "prenatal_positive", "prenatal_negative"),
+                                   ifelse(magma_transformed_plot$Data == "Adult", 
+                                          ifelse(magma_transformed_plot$Beta>0, "adult_positive", "adult_negative"), 
+                                          ifelse(magma_transformed_plot$Beta>0, "prenatal_positive", "prenatal_negative")))
+p <- ggplot(magma_transformed_plot, aes(x = Trait, y = -log10(padj), color = paste(Analysis, Direction, sep = "_"), 
+                                   fill = paste(Analysis, Direction, sep = "_")))
+p <- p + geom_hline(aes(yintercept = -log10(0.05)), color = "red")
+p <- p + geom_point(aes(shape = shape))
+p <- p + scale_color_manual(values = c("sex_maleBiased" = 'darkblue', "sex_femaleBiased" = 'darkred',
+                                       "pseudotime_upRegulated" = 'aquamarine4', "pseudotime_downRegulated" = "chocolate"), 
+                            labels = c("sex_maleBiased" = 'Male biased', "sex_femaleBiased" = 'Female biased',
+                                       "pseudotime_upRegulated" = 'Pseudotime upreg', "pseudotime_downRegulated" = "Pseudotime downreg"),
+                            name = "")
+p <- p + scale_fill_manual(values = c("sex_maleBiased" = 'darkblue', "sex_femaleBiased" = 'darkred',
+                                       "pseudotime_upRegulated" = 'aquamarine4', "pseudotime_downRegulated" = "chocolate"), 
+                            labels = c("sex_maleBiased" = 'Male biased', "sex_femaleBiased" = 'Female biased',
+                                       "pseudotime_upRegulated" = 'Pseudotime upreg', "pseudotime_downRegulated" = "Pseudotime downreg"),
+                            name = "")
+p <- p + scale_shape_manual(name = "",
+                            values = c("prenatal_positive" = 24, "prenatal_negative" = 25,
+                                       "adult_positive" = 2, "adult_negative" = 6),
+                            labels = c("prenatal_positive" = "prenatal_positive", "prenatal_negative" = "prenatal_negative",
+                                       "adult_positive" = "adult_positive", "adult_negative" = "adult_negative"),
+                            guide = guide_legend(override.aes = list(linetype = c(0, 0, 0, 0),
+                                                                  shape = c(24, 25, 2, 6),
+                                                                  color = "black",
+                                                                  fill = "black") ))
+p <- p + theme_bw()
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p <- p + facet_grid(cols = vars(Analysis))
+p
+ggsave("magma_padj.png", plot = p, 
+       path = "images/5-postprocessing/5-MAGMA/",
+       width = 22, height = 10, units = "cm")
+```
+
+## Compare betas between adult and prenatal
+
+Function to compare beta coefficient between adult and prenatal data for 1 trait in 1 direction.
+
+```{r function_compare_betas, echo=FALSE}
+compareBetas <- function(adult_data, prenatal_data){
+  z <- (adult_data$Beta - prenatal_data$Beta) / sqrt(adult_data$SE^2 +  prenatal_data$SE^2)
+  p_diff <- 2*pnorm(-abs(z))
+  return(p_diff)
+}
+```
+
+Comparison for Bipolar disorder in males.
+
+```{r bipolar_males, echo=FALSE}
+bipolar_males <- magma_transformed[which(magma_transformed$Trait == "Bipolar" & magma_transformed$Direction == "maleBiased"),]
+compareBetas(bipolar_males[which(bipolar_males$Data == "Adult"), ], bipolar_males[which(bipolar_males$Data == "Prenatal"), ])
+```
+
+Compare the beta coefficients for all traits in each analysis.
+
+```{r compare_all_betas, echo=FALSE}
+traits <- levels(as.factor(magma_transformed$Trait))
+results <- data.frame(trait = NULL, analysis = NULL, direction = NULL, beta_adult = NULL, beta_prenatal = NULL, pval = NULL)
+# for each analysis
+for (analysis in levels(as.factor(magma_transformed$Analysis))){
+  magma_transformed_tmp <- magma_transformed[which(magma_transformed$Analysis == analysis), ]
+  # for each direction
+  for (direction in levels(droplevels(magma_transformed_tmp$Direction))){
+    magma_transformed_tmp2 <- magma_transformed_tmp[which(magma_transformed_tmp$Direction == direction), ]
+    # for each trait
+    for (trait in traits){
+      data_trait <- magma_transformed_tmp2[which(magma_transformed_tmp2$Trait == trait), ]
+      # compare betas
+      pval <- compareBetas(data_trait[which(data_trait$Data == "Adult"), ], data_trait[which(data_trait$Data == "Prenatal"), ])
+      # add results in data frame
+      res <- c(trait = trait, analysis = analysis, direction = direction, beta_adult = data_trait$Beta[which(data_trait$Data == "Adult")],
+               beta_prenatal = data_trait$Beta[which(data_trait$Data == "Prenatal")], pval = pval)
+      results <- rbind(results, res)
+    }
+  }
+}
+names(results) <- c("trait", "analysis", "direction", "beta_adult", "beta_prenatal", "pval")
+```
+
+```{r write_results, echo=FALSE}
+write.table(results, file = "data/5-postprocessing/5-MAGMA/MAGMA_allLists_res_beta_comparison.txt",
+            sep = "\t", quote = FALSE, col.names = TRUE, row.names = FALSE)
+```
+
+## Plot betas
+
+Prepare the significance annotation.
+```{r annot_signif, echo=FALSE}
+magma_transformed_plot$signif <- ifelse(magma_transformed_plot$pval<0.0033, "*", "")
+```
+
+```{r plot_betas_prenatal_adult, echo=FALSE}
+p <- ggplot(magma_transformed_plot, aes(x = Beta, y = Trait, xmin = Beta-SE, xmax = Beta+SE, 
+                                   color = Direction, fill = Direction, ))
+p <- p + geom_vline(xintercept = 0, color = "darkgrey")
+p <- p + geom_pointrange(position = position_dodge(width = 0.75))
+p <- p + scale_color_manual(values = c("maleBiased" = 'darkblue', "femaleBiased" = 'darkred',
+                                       "upRegulated" = 'aquamarine4', "downRegulated" = "chocolate"), 
+                            labels = c("maleBiased" = 'Male biased', "femaleBiased" = 'Female biased',
+                                       "upRegulated" = 'Pseudotime upreg', "downRegulated" = "Pseudotime downreg"),
+                            name = "Direction of effect")
+p <- p + scale_fill_manual(values = c("maleBiased" = 'darkblue', "femaleBiased" = 'darkred',
+                                       "upRegulated" = 'aquamarine4', "downRegulated" = "chocolate"), 
+                            labels = c("maleBiased" = 'Male biased', "femaleBiased" = 'Female biased',
+                                       "upRegulated" = 'Pseudotime upreg', "downRegulated" = "Pseudotime downreg"),
+                            name = "Direction of effect")
+
+p <- p + facet_grid(cols = vars(Data))
+# add significance to plot
+p <- p + geom_text(aes(x = Beta+SE+0.05, y = Trait, label = signif), size = 5, position = position_dodge(width = 0.75))
+p <- p + theme_minimal()
+p
+# save plot
+ggsave("magma_betas_prenatalVSadult.png", plot = p, 
+       path = "images/5-postprocessing/5-MAGMA/",
+       width = 15, height = 25, units = "cm")
+```
+
+```{r plot_betas_sex_pseudotime, echo=FALSE}
+p <- ggplot(magma_transformed_plot, aes(x = Beta, y = Trait, xmin = Beta-SE, xmax = Beta+SE, 
+                                   color = Direction, fill = Direction, shape = Data))
+p <- p + geom_vline(xintercept = 0, color = "darkgrey")
+p <- p + geom_pointrange(position = position_dodge(width = 0.75))
+p <- p + scale_color_manual(values = c("maleBiased" = 'darkblue', "femaleBiased" = 'darkred',
+                                       "upRegulated" = 'aquamarine4', "downRegulated" = "chocolate"), 
+                            labels = c("maleBiased" = 'Male biased', "femaleBiased" = 'Female biased',
+                                       "upRegulated" = 'Pseudotime upreg', "downRegulated" = "Pseudotime downreg"),
+                            name = "Direction of effect")
+p <- p + scale_fill_manual(values = c("maleBiased" = 'darkblue', "femaleBiased" = 'darkred',
+                                       "upRegulated" = 'aquamarine4', "downRegulated" = "chocolate"), 
+                            labels = c("maleBiased" = 'Male biased', "femaleBiased" = 'Female biased',
+                                       "upRegulated" = 'Pseudotime upreg', "downRegulated" = "Pseudotime downreg"),
+                            name = "Direction of effect")
+p <- p + scale_shape_manual(values = c("Prenatal" = 21, "Adult" = 24),
+                            labels = c("Prenatal" = "Prenatal", "Adult" = "Adult"),
+                            name = "Data")
+p <- p + facet_grid(cols = vars(Analysis))
+# add significance to plot
+p <- p + geom_text(aes(x = Beta+SE+0.05, y = Trait, label = signif), size = 5, position = position_dodge(width = 0.75))
+p <- p + theme_minimal()
+p <- p + guides(shape = guide_legend(override.aes = list(fill = "black")))
+p
+# save plot
+ggsave("magma_betas_sexVSpseudotime.png", plot = p, 
+       path = "images/5-postprocessing/5-MAGMA/",
+       width = 15, height = 25, units = "cm")
+```
+
+Do heatmaps of these results.
+TODO: change the different gradient to have one for male-biased genes, one for female-biased genes, one for up-regulated genes and another one for down-regulated genes... 
+What should be the color for negative beta?
+
+```{r plot_heatmap_betas_sex_pseudotime, echo=FALSE}
+sexDE_data <- magma_transformed_plot[which(magma_transformed_plot$Analysis == "sexDE"), ]
+pseudotimeDE_data <- magma_transformed_plot[which(magma_transformed_plot$Analysis == "pseudotimeDE"), ]
+p <- ggplot(mapping = aes(x = Direction, y = Trait))
+p <- p + geom_tile(data = sexDE_data, aes(fill = Beta), colour = "white")
+p <- p + facet_grid(cols = vars(Data, Analysis), scales = "free", space = "free")
+p <- p + scale_fill_gradient2(low = 'darkblue', mid = "white", high = 'darkred', midpoint = 0, name = "", 
+                              limits=c(-0.1, 0.1), oob=squish)
+p <- p + new_scale_fill()
+p <- p + geom_tile(data = pseudotimeDE_data, aes(fill = Beta), colour = "white")
+p <- p + scale_fill_gradient2(low = 'chocolate', mid = "white", high = 'aquamarine4', midpoint = 0, name = "",
+                              limits=c(-0.1, 0.1), oob=squish)
+p <- p + theme_minimal() + theme(text = element_text(size=15), 
+                                 axis.text.x = element_text(angle = 45, hjust = 1),
+                                 panel.grid.major = element_blank(), 
+                                 panel.grid.minor = element_blank())
+# add significance to plot
+p <- p + geom_text(data = magma_transformed_plot, mapping = aes(x = Direction, y = Trait, label = signif), 
+                   color = "grey", size = 10, nudge_y = -0.2)
+p <- p + labs(y = "", x = "")
+p
+# save plot
+ggsave("heatmap_magma_sexVSpseudotime.png", plot = p, 
+       path = "images/5-postprocessing/5-MAGMA/",
+       width = 15, height = 18, units = "cm")
+```
+
+
+
+# MAGMA analysis on HDBR-specific and shared signal with GTEx
+
+## Filter and format data
+
+Order and format the data.
+
+```{r order_results_spe, echo=FALSE}
+magmaSpe_filtered <- magmaSpe[which(!magmaSpe$FULL_NAME %in% c("shared", "prenatal_specific", "adult_specific")), ]
+names(magmaSpe_filtered) <- c("Comparison", "Trait", "Ngenes", "Beta", "Beta_std", "SE", "pval", "Dataset")
+magmaSpe_filtered$Comparison <- magmaSpe_filtered$Dataset
+magmaSpe_filtered <- separate(magmaSpe_filtered, Dataset, sep = '([shared|specific]_)', into = c("Analysis", "Direction")) ## Strange behavior: the last character is removed. Why??
+magmaSpe_filtered$Direction <- factor(magmaSpe_filtered$Direction, levels = c("maleBiased", "femaleBiased"))
+magmaSpe_filtered$Analysis <- factor(magmaSpe_filtered$Analysis, levels = c("adult_specifi", "prenatal_specifi", "share"),
+                                     labels = c("adult_specific", "prenatal_specific", "shared"))
+magmaSpe_filtered$Trait <- factor(magmaSpe_filtered$Trait, levels = c("AD", "AN", "TS", "MDD", "BD", "SCZ", "Epilepsy", "ADHD", "ASD", 
+                                                                      "Brain_morphology_subcortical_volume", "Brain_morphology_cortical_thickness", 
+                                                                      "Brain_morphology_cortical_area", "Brain_morphology_all", "Height", "EA"),
+                                  labels = c("Alzheimer", "Anorexia", "Tourette", "Major depressive disorder", "Bipolar", "Schizophrenia", "Epilepsy", "ADHD", "Autism", 
+                                             "Subcortical volume",  "Cortical thickness", "Cortical area", "Brain morphology all", "Height", "Educational attainment"))
+```
+
+Compute the p-value adjusted for each DE analysis and dataset separatly.
+
+```{r padj_spe, echo=FALSE}
+magmaSpe_transformed <- magmaSpe_filtered %>% group_by(Analysis) %>% mutate(padj = p.adjust(pval, method = "fdr"))
+```
+
+Write the transformed data in a file.
+
+```{r write_output_specific_filtered, echo=FALSE}
+write.table(magmaSpe_transformed, file = "data/5-postprocessing/5-MAGMA/Magma_specific_allLists_res_filtered.txt",
+            row.names = FALSE, col.names = TRUE, sep = "\t", quote = FALSE)
+```
+
+
+## Plot betas
+
+Prepare the significance annotation.
+```{r annot_signif_spe, echo=FALSE}
+magmaSpe_transformed$signif <- ifelse(magmaSpe_transformed$pval<0.0033, "*", "")
+```
+
+
+```{r plot_betas_spe_shared, echo=FALSE}
+p <- ggplot(magmaSpe_transformed, aes(x = Beta, y = Trait, xmin = Beta-SE, xmax = Beta+SE, 
+                                   color = Direction, fill = Direction, shape = Analysis))
+p <- p + geom_vline(xintercept = 0, color = "darkgrey")
+p <- p + geom_pointrange(position = position_dodge(width = 0.75))
+p <- p + scale_color_manual(values = c("maleBiased" = 'darkblue', "femaleBiased" = 'darkred'), 
+                            labels = c("maleBiased" = 'Male biased', "femaleBiased" = 'Female biased'),
+                            name = "Direction of effect")
+p <- p + scale_fill_manual(values = c("maleBiased" = 'darkblue', "femaleBiased" = 'darkred'), 
+                            labels = c("maleBiased" = 'Male biased', "femaleBiased" = 'Female biased'),
+                            name = "Direction of effect")
+p <- p + scale_shape_manual(values = c("shared" = 22, "prenatal_specific" = 21), 
+                            labels = c("shared" = "Shared effect", 
+                                       "prenatal_specific" = "Prenatal specific"),
+                            name = "Data")
+# add significance to plot
+p <- p + geom_text(aes(x = Beta+SE+0.05, y = Trait, label = signif), size = 5, position = position_dodge(width = 0.2))
+p <- p + theme_minimal() + coord_cartesian(xlim = c(-0.3, 0.3))
+p <- p + guides(shape = guide_legend(override.aes = list(fill = "black")))
+p
+# save plot
+ggsave("magmaSpe_betas.png", plot = p, 
+       path = "images/5-postprocessing/5-MAGMA/",
+       width = 12, height = 25, units = "cm")
+```
+
+Same as a heatmap.
+
+```{r plot_heatmap_betas_spe_shared, echo=FALSE}
+p <- ggplot(data = magmaSpe_transformed, mapping = aes(x = Analysis, y = Trait))
+p <- p + geom_tile(aes(fill = Beta), colour = "white")
+p <- p + scale_fill_gradient2(low = 'darkblue', mid = "white", high = 'darkred', midpoint = 0, name = "", 
+                              limits=c(-0.2, 0.2), oob=squish)
+p <- p + theme_minimal() + theme(text = element_text(size=15), 
+                                 axis.text.x = element_text(angle = 45, hjust = 1),
+                                 panel.grid.major = element_blank(), 
+                                 panel.grid.minor = element_blank())
+# add significance to plot
+p <- p + geom_text(data = magmaSpe_transformed, mapping = aes(x = Analysis, y = Trait, label = signif), 
+                   color = "grey", size = 10, nudge_y = -0.2)
+p <- p + labs(y = "", x = "")
+p
+# save plot
+ggsave("heatmap_magmaSpe_betas.png", plot = p, 
+       path = "images/5-postprocessing/5-MAGMA/",
+       width = 11, height = 18, units = "cm")
+```
+
+
+## Compare betas between specific and shared signal within-sex
+
+For each trait and each sex separately, compare the betas of shared and specific signal.
+
+```{r compare_all_betas_specific, echo=FALSE}
+traits <- levels(as.factor(magmaSpe_transformed$Trait))
+results <- data.frame(trait = NULL, direction = NULL, beta_specifc = NULL, beta_shared = NULL, pval = NULL)
+# for each direction
+for (direction in levels(as.factor(magmaSpe_transformed$Direction))){
+  magmaSpe_transformed_tmp <- magmaSpe_transformed[which(magmaSpe_transformed$Direction == direction), ]
+  # for each trait
+  for (trait in traits){
+    data_trait <- magmaSpe_transformed_tmp[which(magmaSpe_transformed_tmp$Trait == trait), ]
+    # compare betas
+    pval <- compareBetas(data_trait[which(data_trait$Analysis == "prenatal_specific"), ], data_trait[which(data_trait$Analysis == "shared"), ])
+    # add results in data frame
+    res <- c(trait = trait, direction = direction, beta_specific = data_trait$Beta[which(data_trait$Analysis == "prenatal_specific")],
+             beta_shared = data_trait$Beta[which(data_trait$Analysis == "shared")], pval = pval)
+    results <- rbind(results, res)
+  }
+}
+names(results) <- c("trait", "direction", "beta_specific", "beta_shared", "pval")
+```
+
+Comparison for Autism in males.
+
+```{r ASD_males, echo=FALSE}
+ASD_males <- magmaSpe_transformed[which(magmaSpe_transformed$Trait == "Autism" & magmaSpe_transformed$Direction == "maleBiased"),]
+compareBetas(ASD_males[which(ASD_males$Analysis == "prenatal_specific"), ], ASD_males[which(ASD_males$Analysis == "shared"), ])
+```
+
+Comparison for Alzheimer in males.
+
+```{r AD_males, echo=FALSE}
+AD_males <- magmaSpe_transformed[which(magmaSpe_transformed$Trait == "Alzheimer" & magmaSpe_transformed$Direction == "maleBiased"),]
+compareBetas(AD_males[which(AD_males$Analysis == "prenatal_specific"), ], AD_males[which(AD_males$Analysis == "shared"), ])
+```
+
+Comparison for Epilepsy in males.
+
+```{r Epilepsy_males, echo=FALSE}
+Epilepsy_males <- magmaSpe_transformed[which(magmaSpe_transformed$Trait == "Epilepsy" & magmaSpe_transformed$Direction == "maleBiased"),]
+compareBetas(Epilepsy_males[which(Epilepsy_males$Analysis == "prenatal_specific"), ], Epilepsy_males[which(Epilepsy_males$Analysis == "shared"), ])
+```
+
+
+
+# Session info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```
+
