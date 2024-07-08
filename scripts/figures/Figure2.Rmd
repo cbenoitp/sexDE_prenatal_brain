@@ -106,6 +106,7 @@ colorVal <- list(sex = c("male" = "#053061", "female" = "#B2182B"),
                  dataset = c("adult" = "#2bd494", "prenatal" = "#9729d6"))
 p <- UpSet(combination_matrix, set_order = c("prenatal male", "prenatal female", "adult male", "adult female"), 
            comb_order = order(comb_size(combination_matrix), decreasing = TRUE),
+           row_names_gp = gpar(fontsize = 8),
            row_names_side = "left",
            top_annotation = upset_top_annotation(combination_matrix, 
                                                  show_annotation_name = FALSE,
