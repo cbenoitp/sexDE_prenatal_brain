@@ -152,6 +152,57 @@ upset(fromList(TF_lists), order.by = "freq")
 ```
 
 
+## Format and save result table
+
+Format adult sex-DE results.
+
+```{r format_adult_sexDE_res, echo=FALSE}
+# female biased
+femaleBiased_TF_formatted <- femaleBiased_TF
+femaleBiased_TF_formatted$userSet <- as.character(femaleBiased_TF_formatted$userSet)
+femaleBiased_TF_formatted$userSet <- "femaleBiased"
+names(femaleBiased_TF_formatted)[1] <- "data"
+# male biased
+maleBiased_TF_formatted <- maleBiased_TF
+maleBiased_TF_formatted$userSet <- as.character(maleBiased_TF_formatted$userSet)
+maleBiased_TF_formatted$userSet <- "maleBiased"
+names(maleBiased_TF_formatted)[1] <- "data"
+# merge
+sexDE_TF_formatted <- rbind(femaleBiased_TF_formatted, maleBiased_TF_formatted)
+```
+
+Save adult sex-DE results.
+
+```{r save_adult_sexDE_res, echo=FALSE}
+write.table(sexDE_TF_formatted, file = "data/5-postprocessing/7-TFBS/adult/sexDE_TF_results.txt",
+            row.names = FALSE, col.names = TRUE, sep = "\t", quote = FALSE)
+```
+
+Format adult pseudotime-DE results.
+
+```{r format_adult_pseudotimeDE_res, echo=FALSE}
+# female biased
+upReg_TF_formatted <- upReg_TF
+upReg_TF_formatted$userSet <- as.character(upReg_TF_formatted$userSet)
+upReg_TF_formatted$userSet <- "upRegulated"
+names(upReg_TF_formatted)[1] <- "data"
+# male biased
+downReg_TF_formatted <- downReg_TF
+downReg_TF_formatted$userSet <- as.character(downReg_TF_formatted$userSet)
+downReg_TF_formatted$userSet <- "downRegulated"
+names(downReg_TF_formatted)[1] <- "data"
+# merge
+pseudotimeDE_TF_formatted <- rbind(upReg_TF_formatted, downReg_TF_formatted)
+```
+
+Save adult pseudotime-DE results.
+
+```{r save_adult_pseudotimeDE_res, echo=FALSE}
+write.table(pseudotimeDE_TF_formatted, file = "data/5-postprocessing/7-TFBS/adult/pseudotimeDE_TF_results.txt",
+            row.names = FALSE, col.names = TRUE, sep = "\t", quote = FALSE)
+```
+
+
 ## Forest plot
 
 ```{r function_format_forestPlot, echo=FALSE}

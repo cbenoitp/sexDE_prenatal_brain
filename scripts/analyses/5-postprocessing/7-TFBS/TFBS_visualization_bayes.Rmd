@@ -139,9 +139,6 @@ print(prenatal_maleBiased_TF_signif_sexDE)
 ```
 
 
-## Save the significant TFBS
-
-
 ## Overlap of significant TF between the 4 lists analyzed
 
 ```{r overlap_TF, echo=FALSE}
@@ -152,6 +149,56 @@ upset(fromList(TF_lists), order.by = "freq")
 
 As there was no TF enriched in the shared gene list, only the prenatal data is shown.
 
+
+## Format and save result table
+
+Format prenatal-specific sex-DE results.
+
+```{r format_prenatalSpe_sexDE_res, echo=FALSE}
+# female biased
+prenatal_femaleBiased_TF_formatted <- prenatal_femaleBiased_TF
+prenatal_femaleBiased_TF_formatted$userSet <- as.character(prenatal_femaleBiased_TF_formatted$userSet)
+prenatal_femaleBiased_TF_formatted$userSet <- "femaleBiased"
+names(prenatal_femaleBiased_TF_formatted)[1] <- "data"
+# male biased
+prenatal_maleBiased_TF_formatted <- prenatal_maleBiased_TF
+prenatal_maleBiased_TF_formatted$userSet <- as.character(prenatal_maleBiased_TF_formatted$userSet)
+prenatal_maleBiased_TF_formatted$userSet <- "maleBiased"
+names(prenatal_maleBiased_TF_formatted)[1] <- "data"
+# merge
+prenatal_sexDE_TF_formatted <- rbind(prenatal_femaleBiased_TF_formatted, prenatal_maleBiased_TF_formatted)
+```
+
+Save adult sex-DE results.
+
+```{r save_prenatalSpe_sexDE_res, echo=FALSE}
+write.table(prenatal_sexDE_TF_formatted, file = "data/5-postprocessing/7-TFBS/shared/prenatalSpecific_sexDE_TF_results.txt",
+            row.names = FALSE, col.names = TRUE, sep = "\t", quote = FALSE)
+```
+
+Format shared sex-DE results.
+
+```{r format_shared_sexDE_res, echo=FALSE}
+# female biased
+shared_femaleBiased_TF_formatted <- shared_femaleBiased_TF
+shared_femaleBiased_TF_formatted$userSet <- as.character(shared_femaleBiased_TF_formatted$userSet)
+shared_femaleBiased_TF_formatted$userSet <- "femaleBiased"
+names(shared_femaleBiased_TF_formatted)[1] <- "data"
+# male biased
+shared_maleBiased_TF_formatted <- shared_maleBiased_TF
+shared_maleBiased_TF_formatted$userSet <- as.character(shared_maleBiased_TF_formatted$userSet)
+shared_maleBiased_TF_formatted$userSet <- "maleBiased"
+names(shared_maleBiased_TF_formatted)[1] <- "data"
+# merge
+shared_sexDE_TF_formatted <- rbind(shared_femaleBiased_TF_formatted, shared_maleBiased_TF_formatted)
+```
+
+Save adult sex-DE results.
+
+```{r save_shared_sexDE_res, echo=FALSE}
+write.table(shared_sexDE_TF_formatted, file = "data/5-postprocessing/7-TFBS/shared/shared_sexDE_TF_results.txt",
+            row.names = FALSE, col.names = TRUE, sep = "\t", quote = FALSE)
+```
 
 
 ## Extract the genes linked to TF or interest
