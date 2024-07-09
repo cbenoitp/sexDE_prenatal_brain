@@ -25,7 +25,6 @@ suppressPackageStartupMessages( library(readxl) )
 knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
 ```
 
-
 # Load data and functions
 
 ## Load functions for GSEA analysis with control
@@ -284,7 +283,7 @@ enrichRes$percent <- enrichRes$overlap/enrichRes$nbr_DE*100
 Write the complete enrichment results into a file.
 
 ```{r write_res, echo=FALSE}
-write.table("data/5-postprocessing/6-Network/results_hyper/enrichment_results.txt", 
+write.table(enrichRes, "data/5-postprocessing/6-Network/results_hyper/enrichment_results.txt", 
             quote = FALSE, row.names = FALSE, col.names = TRUE, sep = "\t")
 ```
 
