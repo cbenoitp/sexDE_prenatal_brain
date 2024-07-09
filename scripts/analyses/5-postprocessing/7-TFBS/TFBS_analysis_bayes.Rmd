@@ -1,0 +1,135 @@
+---
+title: "Enrichment for transcription factor binding sites in promoter regions of shared and prenatal-specific sex-biased genes"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r library, echo=FALSE}
+suppressPackageStartupMessages( library(rtracklayer) )
+suppressPackageStartupMessages( library(data.table) )
+```
+
+```{r, setup, include=FALSE, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+Parameters
+```{r thresholds, echo=FALSE}
+threshold_qvalue <- 0.01
+threshold_logFC <- 0
+```
+
+Functions
+```{r function_save_bed_file, echo=FALSE}
+save_bedFile <- function(data, fileName){
+  bed <- data[, c("chrom", "promoter_start", "promoter_end", "gene_id", "gene_name", "strand")]
+  colnames(bed) <- c('chrom', 'chromStart', 'chromEnd', 'name', 'score', 'strand')
+  bed$score <- 0
+  write.table(bed, file = fileName, quote = FALSE, sep = "\t", col.names = FALSE, row.names = FALSE)
+}
+```
+
+
+# Generate bed files for Unibind analysis
+
+## Load bayes genes
+
+```{r load_bayes_results, echo=FALSE}
+bayesResults <- read.table("data/4-GTEx/2-comparison/lineModel/lineModel_prenatalVSadult_6models_withAnnotation.txt", 
+                           header = TRUE, sep = "\t")
+```
+
+
+## Load annotation and prepare promoters
+
+```{r load_annotation, echo=FALSE}
+gencode28_annot <- rtracklayer::import("/Users/benoicla/Desktop/Genome/Gencode_v28/gencode.v28.annotation.gtf.gz")
+gencode28 <- gencode28_annot[which(elementMetadata(gencode28_annot)$type == "gene"),]
+gencode28 <- data.frame(gene_id = elementMetadata(gencode28)$gene_id,
+                    gene_name = elementMetadata(gencode28)$gene_name,
+                    gene_type = elementMetadata(gencode28)$gene_type,
+                    chr = seqnames(gencode28),
+                    start = start(gencode28),
+                    end = end(gencode28),
+                    strand = strand(gencode28))
+```
+
+Prepare promoters.
+
+```{r prepare_coord_prom, echo=FALSE}
+promoters <- data.frame(gene_id = gencode28$gene_id, gene_name = gencode28$gene_name, chrom = gencode28$chr, strand = gencode28$strand, 
+                        promoter_start = 0, promoter_end = 0)
+promoters$gene_id <- sapply(strsplit(as.character(promoters$gene_id), "\\."), function(x){x[1]})
+for (i in 1:dim(gencode28)[1]){
+  if (gencode28$strand[i] == "+"){
+    promoters$promoter_start[i] <- as.integer(gencode28$start[i]-2000-1) # -1 because bed files are 0 based
+    promoters$promoter_end[i] <- as.integer(gencode28$start[i])
+  } else if (gencode28$strand[i] == "-"){
+    promoters$promoter_start[i] <- as.integer(gencode28$end[i]-1) # -1 because bed files are 0 based
+    promoters$promoter_end[i] <- as.integer(gencode28$end[i]+2000)
+  } else{
+    print("Unknown strand...")
+  }
+}
+```
+
+## Get promoters for all genes analyzed
+
+```{r save_bed_file_universe, echo=FALSE}
+promoters_universe <- promoters[which(promoters$gene_id %in% bayesResults$ensemblID), ]
+save_bedFile(promoters_universe, "data/5-postprocessing/7-TFBS/shared/universe_bayes_promoters.bed")
+```
+
+
+## Extract promoters of DE genes
+
+
+Separate male/female-biased and shared/prenatal-specific genes (4 lists of genes).
+```{r separate_DE_genes, echo=FALSE}
+shared <- bayesResults[which(bayesResults$specificity == "Shared"), ]
+prenatal <- bayesResults[which(bayesResults$specificity == "Prenatal"), ]
+shared_maleBiased <- shared[which(shared$logFC_prenatal <= threshold_logFC), ]
+shared_femaleBiased <- shared[which(shared$logFC_prenatal >= threshold_logFC), ]
+prenatal_maleBiased <- prenatal[which(prenatal$logFC_prenatal <= threshold_logFC), ]
+prenatal_femaleBiased <- prenatal[which(prenatal$logFC_prenatal >= threshold_logFC), ]
+```
+
+Select the promoters for the sex-biased genes.
+```{r promoter_sexBiased, echo=FALSE}
+promoters_shared_maleBiased <- promoters[which(promoters$gene_id %in% shared_maleBiased$ensemblID), ]
+promoters_shared_femaleBiased <- promoters[which(promoters$gene_id %in% shared_femaleBiased$ensemblID), ]
+promoters_prenatal_maleBiased <- promoters[which(promoters$gene_id %in% prenatal_maleBiased$ensemblID), ]
+promoters_prenatal_femaleBiased <- promoters[which(promoters$gene_id %in% prenatal_femaleBiased$ensemblID), ]
+```
+
+Save these promoters as bed files.
+```{r save_bed_files, echo=FALSE}
+save_bedFile(promoters_shared_maleBiased, "data/5-postprocessing/7-TFBS/shared/shared_maleBiased_promoters.bed")
+save_bedFile(promoters_shared_femaleBiased, "data/5-postprocessing/7-TFBS/shared/shared_femaleBiased_promoters.bed")
+save_bedFile(promoters_prenatal_maleBiased, "data/5-postprocessing/7-TFBS/shared/prenatal_maleBiased_promoters.bed")
+save_bedFile(promoters_prenatal_femaleBiased, "data/5-postprocessing/7-TFBS/shared/prenatal_femaleBiased_promoters.bed")
+```
+
+
+# Run analysis in bash
+
+```{bash unibind_analysis, echo=FALSE, eval=FALSE}
+# from /Users/benoicla/Desktop/Tools/unibind_enrichment/ directory
+## analysis for shared male-biased genes
+bin/UniBind_enrich.sh oneSetBg /Users/benoicla/Desktop/Tools/unibind_enrichment/data/hg38_robust_UniBind_LOLA.RDS /Users/benoicla//Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/data/5-postprocessing/7-TFBS/shared/shared_maleBiased_promoters.bed /Users/benoicla//Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/data/5-postprocessing/7-TFBS/shared/universe_bayes_promoters.bed /Users/benoicla//Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/data/5-postprocessing/7-TFBS/shared/Unibind_shared_maleBiased
+## analysis for shared female-biased genes
+bin/UniBind_enrich.sh oneSetBg /Users/benoicla/Desktop/Tools/unibind_enrichment/data/hg38_robust_UniBind_LOLA.RDS /Users/benoicla//Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/data/5-postprocessing/7-TFBS/shared/shared_femaleBiased_promoters.bed /Users/benoicla//Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/data/5-postprocessing/7-TFBS/shared/universe_bayes_promoters.bed /Users/benoicla//Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/data/5-postprocessing/7-TFBS/shared/Unibind_shared_femaleBiased
+
+## analysis for prenatal male-biased genes
+bin/UniBind_enrich.sh oneSetBg /Users/benoicla/Desktop/Tools/unibind_enrichment/data/hg38_robust_UniBind_LOLA.RDS /Users/benoicla//Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/data/5-postprocessing/7-TFBS/shared/prenatal_maleBiased_promoters.bed /Users/benoicla//Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/data/5-postprocessing/7-TFBS/shared/universe_bayes_promoters.bed /Users/benoicla//Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/data/5-postprocessing/7-TFBS/shared/Unibind_prenatal_maleBiased
+## analysis for prenatal female-biased genes
+bin/UniBind_enrich.sh oneSetBg /Users/benoicla/Desktop/Tools/unibind_enrichment/data/hg38_robust_UniBind_LOLA.RDS /Users/benoicla//Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/data/5-postprocessing/7-TFBS/shared/prenatal_femaleBiased_promoters.bed /Users/benoicla//Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/data/5-postprocessing/7-TFBS/shared/universe_bayes_promoters.bed /Users/benoicla//Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/data/5-postprocessing/7-TFBS/shared/Unibind_prenatal_femaleBiased
+```
+
+
+# Session Info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```

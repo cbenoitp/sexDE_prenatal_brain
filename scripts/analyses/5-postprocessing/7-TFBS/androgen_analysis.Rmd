@@ -1,0 +1,703 @@
+---
+title: 'Enrichment analysis: genes affected by androgen treatments'
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r load_library, echo=FALSE}
+suppressPackageStartupMessages( library(tidyverse) )
+suppressPackageStartupMessages( library(readxl) )
+suppressPackageStartupMessages( library(rtracklayer) )
+```
+
+```{r setup, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+# Load data
+
+## Load and format bayes results
+
+```{r load_bayesRes, echo=FALSE}
+bayesResults <- read.table("data/4-GTEx/2-comparison/lineModel/lineModel_prenatalVSadult_6models.txt", 
+                           header = TRUE)
+```
+
+Format the bayes results:
+- add a simplified specificity column
+- add column sexDE_prenatal_direction
+- add column sexDE_adult_direction
+
+```{r format_bayesRes, echo=FALSE}
+bayesResults_formated <- bayesResults
+bayesResults_formated$specificity2 <- bayesResults_formated$specificity
+bayesResults_formated$specificity <- as.factor(ifelse(bayesResults_formated$specificity %in% c("SHARED0.5", "SHARED1", "SHARED2", "SHARED_UNSPECIFIED"),
+                                                      "Shared",
+                                                      ifelse(bayesResults_formated$specificity == "PRENATAL",
+                                                             "Prenatal",
+                                                             ifelse(bayesResults_formated$specificity == "ADULT",
+                                                                    "Adult",
+                                                                    ifelse(bayesResults_formated$specificity == "OPPOSITE",
+                                                                           "Opposite",
+                                                                           "Unclassified")))))
+bayesResults_formated$sexDE_prenatal_direction <- ifelse(bayesResults_formated$logFC_prenatal > 0, "female-biased", "male-biased")
+bayesResults_formated$sexDE_adult_direction <- ifelse(bayesResults_formated$logFC_adult > 0, "female-biased", "male-biased")
+```
+
+Merge bayes results with prenatal sex-DE results and then keep only the protein coding genes as those were the one kept in the androgen treatment analyses.
+
+```{r keep_protein_coding, echo=FALSE}
+sexDE <- read.table("data/5-postprocessing/1-GeneProperties/prenatal/prenatal_forebrain_geneProperties.txt", header = TRUE)
+bayesResults_formated <- merge(bayesResults_formated, sexDE[, c(1,3,4,17:21)], by = "ensemblID")
+bayesResults_formated_prot <- bayesResults_formated[which(bayesResults_formated$gene_type == "protein_coding"), ]
+```
+
+In order to compare the enrichment found in sex-DE genes, we also load the pseudotime-DE genes.
+
+```{r load_pseudotimeDE, echo=FALSE}
+pseudotimeDE <- read.table("data/3-DE/VoomDream_topTable_forebrain_pseudotime_sva_ind_interaction_pseudotime.txt", 
+                           header = TRUE)
+load("data/2-pseudotime/forebrain_pseudotime_analysis.RData")
+genes2remove <- rownames(selectedCounts)
+pseudotimeDE_filtered <- pseudotimeDE[which(!pseudotimeDE$gene_name %in% genes2remove),]
+pseudotimeDE_filtered$ensemblID <- sapply(strsplit(as.character(pseudotimeDE_filtered$gene_id), "\\."), function(x){x[1]})
+pseudotimeDE_filtered_prot <- pseudotimeDE_filtered[which(pseudotimeDE_filtered$gene_type == "protein_coding"), ]
+```
+
+
+
+## Load Quartier et al., 2018 data
+
+Load RNA-seq DE results from Quartier et al., 2018 paper.
+
+```{r load_androRes, echo=FALSE}
+DHTres <- read_excel("data/5-postprocessing/7-TFBS/Quartier_2018_Androgen/TableSupp.xlsx", sheet = 2)
+DHTres <- DHTres[, c(1,24,26)]
+names(DHTres) <- c("gene_name", "DHT100nMall_logFC", "DHT100nMall_padj")
+AndroRes <- read_excel("data/5-postprocessing/7-TFBS/Quartier_2018_Androgen/TableSupp.xlsx", sheet = 1)
+AndroRes <- AndroRes[, c(1,2,27,29,30,32,33,35,36,38,39,41,42,44)]
+names(AndroRes) <- c("gene_id", "gene_name", "RA1microM_logFC", "RA1microM_padj", "DHT100nM_logFC", "DHT100nM_padj", 
+                     "DHT10nM_logFC", "DHT10nM_padj", "Testo100nM_logFC", "Testo100nM_padj", 
+                     "Testo10nM_logFC", "Testo10nM_padj", "R18811nM_logFC", "R18811nM_padj")
+```
+
+Load ChIP-seq results from Quartier et al., 2018 paper.
+
+```{r load_ARbound, echo=FALSE}
+ARboundRes <- read_excel("data/5-postprocessing/7-TFBS/Quartier_2018_Androgen/TableSupp.xlsx", sheet = 6, skip = 1)
+ARboundRes <- ARboundRes[, c(1,2,3,4,7,8,9,10,11,12,13,14,15)]
+names(ARboundRes) <- c("chr", "start", "end", "annotation", "gene_id", "gene_name", "biotype", "DHT10nM1_enrich", "DHT10nM2_enrich", "DHT100nM_enrich", "Testo100nM1_enrich", "Testo100nM2_enrich", "nbr_enrich5")
+```
+
+## Load annotation
+
+We use ensembl75 annotation as the exact annotation used in the article (ensembl72) is not available anymore.
+
+```{r load_annotation, echo=FALSE}
+ensembl75_annot <- rtracklayer::import("/Users/benoicla/Desktop/Genome/Ensembl_v75/Homo_sapiens.GRCh37.75.gtf")
+ensembl75 <- ensembl75_annot[which(elementMetadata(ensembl75_annot)$type == "gene"),]
+ensembl75 <- data.frame(gene_id = elementMetadata(ensembl75)$gene_id,
+                        gene_name = elementMetadata(ensembl75)$gene_name,
+                        gene_type = elementMetadata(ensembl75)$gene_biotype,
+                        chr = seqnames(ensembl75),
+                        start = start(ensembl75),
+                        end = end(ensembl75),
+                        strand = strand(ensembl75))
+```
+
+## Format data
+
+Format the results.
+Merge the DHTres with Ensembl annotation to get the ensemblID.
+
+```{r DHTres_format, echo=FALSE}
+# add gene ensemblID using gene name to DHTres data
+DHTres_annot <- merge(DHTres, ensembl75[, c(1,2)], by = "gene_name") 
+DHTres_annot <- DHTres_annot[!duplicated(DHTres_annot$gene_name), ]
+```
+
+Summary of number of DE genes for each hormones.
+
+```{r summary_data, echo=FALSE}
+print("Number of DE genes with DHT 10nM =")
+dim(AndroRes[which(AndroRes$DHT10nM_padj < 0.05), ])[1]
+print("Number of DE genes with DHT 100nM (serie #1) =")
+dim(AndroRes[which(AndroRes$DHT100nM_padj < 0.05), ])[1]
+print("Number of DE genes with Testosterone 10nM =")
+dim(AndroRes[which(AndroRes$Testo10nM_padj < 0.05), ])[1]
+print("Number of DE genes with Testosterone 100nM =")
+dim(AndroRes[which(AndroRes$Testo100nM_padj < 0.05), ])[1]
+print("Number of DE genes with R1881 1nM =")
+dim(AndroRes[which(AndroRes$R18811nM_padj < 0.05), ])[1]
+print("Number of DE genes with DHT 100nM (all series #1, #2, #3) =")
+dim(DHTres[which(DHTres$DHT100nMall_padj < 0.05), ])[1]
+```
+For the enrichment analyses, we need to keep only the genes that were analyzed in the bayes analysis.
+
+```{r filter_bayes, echo=FALSE}
+DHTres_filtered <- DHTres_annot[which(DHTres_annot$gene_id %in% bayesResults_formated$ensemblID), ]
+AndroRes_filtered <- AndroRes[which(AndroRes$gene_id %in% bayesResults_formated$ensemblID), ]
+```
+
+Summary of number of DE genes for each hormones after filtering.
+
+```{r summary_data_filtered, echo=FALSE}
+print("Number of DE genes with DHT 10nM =")
+dim(AndroRes_filtered[which(AndroRes_filtered$DHT10nM_padj < 0.05), ])[1]
+print("Number of DE genes with DHT 100nM (serie #1) =")
+dim(AndroRes_filtered[which(AndroRes_filtered$DHT100nM_padj < 0.05), ])[1]
+print("Number of DE genes with Testosterone 10nM =")
+dim(AndroRes_filtered[which(AndroRes_filtered$Testo10nM_padj < 0.05), ])[1]
+print("Number of DE genes with Testosterone 100nM =")
+dim(AndroRes_filtered[which(AndroRes_filtered$Testo100nM_padj < 0.05), ])[1]
+print("Number of DE genes with R1881 1nM =")
+dim(AndroRes_filtered[which(AndroRes_filtered$R18811nM_padj < 0.05), ])[1]
+print("Number of DE genes with DHT 100nM (all series #1, #2, #3) =")
+dim(DHTres_filtered[which(DHTres_filtered$DHT100nMall_padj < 0.05), ])[1]
+```
+
+Same but with only protein coding genes in the bayes results.
+
+```{r filter_bayes_prot, echo=FALSE}
+DHTres_filtered_prot <- DHTres_annot[which(DHTres_annot$gene_id %in% bayesResults_formated_prot$ensemblID), ]
+AndroRes_filtered_prot <- AndroRes[which(AndroRes$gene_id %in% bayesResults_formated_prot$ensemblID), ]
+```
+
+Summary of number of DE genes for each hormones after filtering.
+
+```{r summary_data_filtered_prot, echo=FALSE}
+print("Number of DE genes with DHT 10nM =")
+dim(AndroRes_filtered_prot[which(AndroRes_filtered_prot$DHT10nM_padj < 0.05), ])[1]
+print("Number of DE genes with DHT 100nM (serie #1) =")
+dim(AndroRes_filtered_prot[which(AndroRes_filtered_prot$DHT100nM_padj < 0.05), ])[1]
+print("Number of DE genes with Testosterone 10nM =")
+dim(AndroRes_filtered_prot[which(AndroRes_filtered_prot$Testo10nM_padj < 0.05), ])[1]
+print("Number of DE genes with Testosterone 100nM =")
+dim(AndroRes_filtered_prot[which(AndroRes_filtered_prot$Testo100nM_padj < 0.05), ])[1]
+print("Number of DE genes with R1881 1nM =")
+dim(AndroRes_filtered_prot[which(AndroRes_filtered_prot$R18811nM_padj < 0.05), ])[1]
+print("Number of DE genes with DHT 100nM (all series #1, #2, #3) =")
+dim(DHTres_filtered_prot[which(DHTres_filtered_prot$DHT100nMall_padj < 0.05), ])[1]
+```
+
+Same but with only protein coding genes in the pseudotime results.
+
+```{r filter_pseudo_prot, echo=FALSE}
+DHTres_filtered_pseudo_prot <- DHTres_annot[which(DHTres_annot$gene_id %in% pseudotimeDE_filtered_prot$ensemblID), ]
+AndroRes_filtered_pseudo_prot <- AndroRes[which(AndroRes$gene_id %in% pseudotimeDE_filtered_prot$ensemblID), ]
+```
+
+
+Format ARbound data.
+
+```{r format_ARbound, echo=FALSE}
+ARboundRes_filtered <- ARboundRes[which(!ARboundRes$annotation %in% c("Intergenic") & ARboundRes$biotype %in% c("protein_coding", "lincRNA")), ]
+ARboundRes_filtered <- ARboundRes_filtered[which(ARboundRes_filtered$gene_id %in% bayesResults_formated$ensemblID), ]
+ARboundRes_filtered_prot <- ARboundRes_filtered[which(ARboundRes_filtered$biotype == "protein_coding"), ]
+ARboundRes_filtered_pseudo_prot <- ARboundRes[which(!ARboundRes$annotation %in% c("Intergenic") &
+                                                      ARboundRes$biotype == "protein_coding" &
+                                                      ARboundRes$gene_id %in% pseudotimeDE_filtered_prot$ensemblID), ]
+```
+
+
+
+# Analyses
+
+Questions:
+- are the DE genes with androgen treatment (DHT only or any other androgen treatment) enriched in prenatal-specific sex-DE genes?
+- is the enrichment different for male- or female-biased genes?
+
+## Enrichment functions
+
+Function that do the enrichment analysis for the geneList of interest.
+
+```{r function_enrichment_analysis, echo=FALSE}
+enrichment_analysis <- function(DEresults, geneList, analysisName, bias = "pseudotime", direction = "both", qvalue_threshold = 0.01){
+  if (direction == "both"){
+    DEresults_selected <- DEresults[which(DEresults$qvalue < qvalue_threshold), ]
+  } else if (direction == "up"){
+    DEresults_selected <- DEresults[which(DEresults$qvalue < qvalue_threshold & DEresults$logFC > 0), ]
+  } else if (direction == "down"){
+    DEresults_selected <- DEresults[which(DEresults$qvalue < qvalue_threshold & DEresults$logFC < 0), ]
+  }
+  universe_nbr <- length(DEresults$ensemblID)
+  DE_nbr <- length(DEresults_selected$ensemblID)
+  geneList_nbr <- length(geneList)
+  # overlap
+  overlap_nbr <- length(intersect(DEresults_selected$ensemblID, geneList))
+  # get enrichment stat and effect size
+  enrichment_stat_res <- enrichment_stat(overlap_nbr, geneList_nbr, DE_nbr, universe_nbr)
+  # format data
+  results <- data.frame("analysis" = analysisName, "direction" = direction, "bias" = bias,
+                        "nbr_DE" = DE_nbr, "nbr_geneList" = geneList_nbr, 
+                        "overlap" = overlap_nbr, "N" = universe_nbr, 
+                        "pval_enrich" = enrichment_stat_res$pvalEnrich, "pval_deple" = enrichment_stat_res$pvalDeple,
+                        "relative_enrich" = enrichment_stat_res$relatEnrich)
+  return(results)
+}
+
+enrichment_stat <- function(overlap_nbr, geneList_nbr, DE_nbr, universe_nbr){
+  # overall enrichment
+  #print(">> Enrichment")
+  pvalEnrich <- phyper(overlap_nbr-1, geneList_nbr, universe_nbr - geneList_nbr, DE_nbr, lower.tail = FALSE)
+  # overall depletion
+  #print(">> Depletion")
+  pvalDeple <-phyper(overlap_nbr,  geneList_nbr, universe_nbr -  geneList_nbr, DE_nbr, lower.tail = TRUE)
+  # effect size
+  #print(">> Relative enrichment")
+  relatEnrich <- (overlap_nbr/ geneList_nbr)/(DE_nbr/universe_nbr)
+  
+  return(list("pvalEnrich" = pvalEnrich, "pvalDeple" = pvalDeple, "relatEnrich" = relatEnrich))
+}
+```
+
+Function to do the enrichment analysis for the bayesian results.
+
+```{r function_enrichment_analysis_bayes, echo=FALSE}
+enrichment_analysis_bayes <- function(DEresults, geneList, analysisName, bias = "shared", direction = "both"){
+  if (bias == "shared"){
+    if (direction == "both"){
+      DEresults_selected <- DEresults[which(DEresults$specificity == "Shared"), ]
+    } else if (direction == "male"){
+      DEresults_selected <- DEresults[which(DEresults$specificity == "Shared" & 
+                                              DEresults$sexDE_prenatal_direction == "male-biased"), ]
+    } else if (direction == "female"){
+      DEresults_selected <- DEresults[which(DEresults$specificity == "Shared" & 
+                                              DEresults$sexDE_prenatal_direction == "female-biased"), ]
+    }
+  } else if (bias == "prenatal"){
+    if (direction == "both"){
+      DEresults_selected <- DEresults[which(DEresults$specificity == "Prenatal"), ]
+    } else if (direction == "male"){
+      DEresults_selected <- DEresults[which(DEresults$specificity == "Prenatal" & 
+                                              DEresults$sexDE_prenatal_direction == "male-biased"), ]
+    } else if (direction == "female"){
+      DEresults_selected <- DEresults[which(DEresults$specificity == "Prenatal" & 
+                                              DEresults$sexDE_prenatal_direction == "female-biased"), ]
+    }
+  } else if (bias == "adult"){
+    if (direction == "both"){
+      DEresults_selected <- DEresults[which(DEresults$specificity == "Adult"), ]
+    } else if (direction == "male"){
+      DEresults_selected <- DEresults[which(DEresults$specificity == "Adult" & 
+                                              DEresults$sexDE_adult_direction == "male-biased"), ]
+    } else if (direction == "female"){
+      DEresults_selected <- DEresults[which(DEresults$specificity == "Adult" & 
+                                              DEresults$sexDE_adult_direction == "female-biased"), ]
+    }
+  }
+  universe_nbr <- length(DEresults$ensemblID)
+  DE_nbr <- length(DEresults_selected$ensemblID)
+  geneList_nbr <- length(geneList)
+  # overlap
+  overlap_nbr <- length(intersect(DEresults_selected$ensemblID, geneList))
+  # get enrichment stat and effect size
+  enrichment_stat_res <- enrichment_stat(overlap_nbr, geneList_nbr, DE_nbr, universe_nbr)
+  # format data
+  results <- data.frame("analysis" = analysisName, "direction" = direction, "bias" = bias,
+                        "nbr_DE" = DE_nbr, "nbr_geneList" = geneList_nbr, 
+                        "overlap" = overlap_nbr, "N" = universe_nbr, 
+                        "pval_enrich" = enrichment_stat_res$pvalEnrich, "pval_deple" = enrichment_stat_res$pvalDeple,
+                        "relative_enrich" = enrichment_stat_res$relatEnrich)
+  return(results)
+}
+```
+
+
+Function that do the enrichment analysis for the geneList of interest and a choosen number of random genesets (both for bayes and pseudotime analysis).
+
+```{r function_enrichment_analysis_permut, echo=FALSE}
+enrichment_analysis_permut_bayes <- function(DEresults, geneList, analysisName, nbr_permut = 1000, bias = "Shared", direction = "both"){
+  # enrichment for geneList
+  results_enrich_geneList <- enrichment_analysis_bayes(DEresults = DEresults, geneList = geneList, 
+                                                       analysisName = analysisName, bias = bias,
+                                                       direction = direction)
+  # enrichment for 'nbr_permut" random genesets of the same size of the geneList
+  length_geneList <- length(geneList)
+  results_enrich_randomGeneset <- results_enrich_geneList[0,]
+  for (i in 1:nbr_permut){
+    # select 'length_geneList' random genes from the universe
+    random_geneset <- sample(DEresults$ensemblID, length_geneList)
+    # enrichment for this random geneset
+    results_enrich_randomGeneset_tmp <- enrichment_analysis_bayes(DEresults = DEresults, geneList = random_geneset, 
+                                                                  analysisName = paste(analysisName, "random", sep = "_"),
+                                                                  bias = bias, direction = direction)
+    results_enrich_randomGeneset <- rbind(results_enrich_randomGeneset, results_enrich_randomGeneset_tmp)
+  }
+  
+  # merge the results from the random genesets and add them to final results
+  results_enrich_geneList$pval_enrich_random <- paste(results_enrich_randomGeneset$pval_enrich, sep = ";", collapse = ";")
+  results_enrich_geneList$pval_deple_random <- paste(results_enrich_randomGeneset$pval_deple, sep = ";", collapse = ";")
+  results_enrich_geneList$relative_enrich_random <- paste(results_enrich_randomGeneset$relative_enrich, sep = ";", collapse = ";")
+  results_enrich_geneList$permut_pval <- compute_permPvalue(results_enrich_geneList$relative_enrich, results_enrich_randomGeneset$relative_enrich)
+  
+  return(results_enrich_geneList)
+}
+
+enrichment_analysis_permut <- function(DEresults, geneList, analysisName, nbr_permut = 1000, bias = "pseudotime", direction = "both", qvalue_threshold = 0.01){
+  # enrichment for geneList
+  results_enrich_geneList <- enrichment_analysis(DEresults = DEresults, geneList = geneList, 
+                                                 analysisName = analysisName, bias = bias,
+                                                 direction = direction, qvalue_threshold = qvalue_threshold)
+  # enrichment for 'nbr_permut" random genesets of the same size of the geneList
+  length_geneList <- length(geneList)
+  results_enrich_randomGeneset <- results_enrich_geneList[0,]
+  for (i in 1:nbr_permut){
+    # select 'length_geneList' random genes from the universe
+    random_geneset <- sample(DEresults$ensemblID, length_geneList)
+    # enrichment for this random geneset
+    results_enrich_randomGeneset_tmp <- enrichment_analysis(DEresults = DEresults, geneList = random_geneset, 
+                                                            analysisName = paste(analysisName, "random", sep = "_"),
+                                                            bias = bias, direction = direction, qvalue_threshold = qvalue_threshold)
+    results_enrich_randomGeneset <- rbind(results_enrich_randomGeneset, results_enrich_randomGeneset_tmp)
+  }
+  
+  # merge the results from the random genesets and add them to final results
+  results_enrich_geneList$pval_enrich_random <- paste(results_enrich_randomGeneset$pval_enrich, sep = ";", collapse = ";")
+  results_enrich_geneList$pval_deple_random <- paste(results_enrich_randomGeneset$pval_deple, sep = ";", collapse = ";")
+  results_enrich_geneList$relative_enrich_random <- paste(results_enrich_randomGeneset$relative_enrich, sep = ";", collapse = ";")
+  results_enrich_geneList$permut_pval <- compute_permPvalue(results_enrich_geneList$relative_enrich, results_enrich_randomGeneset$relative_enrich)
+  
+  return(results_enrich_geneList)
+}
+```
+
+Function to compute the permutation p-value.
+
+```{r function_permut_pval, echo=FALSE}
+compute_permPvalue <- function(value, randomValues){
+  nbrUp <- sum(randomValues > value)
+  nbrLow <- sum(randomValues < value)
+  if (value > 1){
+    pval <- nbrUp / length(randomValues)
+  } else if (value < 1){
+    pval <- nbrLow / length(randomValues)
+  }
+  
+  return(pval)
+}
+```
+
+
+
+## Run enrichment analysis for bayesian results
+
+```{r init_enrichmentRes, echo=FALSE}
+enrichRes <- data.frame("analysis" = NA, "direction" = NA, "bias" = NA, "nbr_DE" = NA, "nbr_geneList" = NA, 
+                        "overlap" = NA, "N" = NA, "pval_enrich" = NA, "pval_deple" = NA, "relative_enrich" = NA,
+                        "pval_enrich_random" = NA, "pval_deple_random" = NA, "relative_enrich_random" = NA,
+                        "permut_pval" = NA)
+enrichRes <- enrichRes[0,]
+```
+
+```{r enrich_DE, echo=FALSE}
+directions <- c("both", "male", "female")
+bias <- c("shared", "prenatal")
+geneLists <- list("DHT100nM" = DHTres_filtered_prot$gene_id[which(DHTres_filtered_prot$DHT100nMall_padj < 0.05)],
+                  "DHT100nM_up" = DHTres_filtered_prot$gene_id[which(DHTres_filtered_prot$DHT100nMall_padj < 0.05 & DHTres_filtered_prot$DHT100nMall_logFC > 0)],
+                  "DHT100nM_down" = DHTres_filtered_prot$gene_id[which(DHTres_filtered_prot$DHT100nMall_padj < 0.05 & DHTres_filtered_prot$DHT100nMall_logFC < 0)],
+                  "DHT10nM" = AndroRes_filtered_prot$gene_id[which(AndroRes_filtered_prot$DHT10nM_padj < 0.05)],
+                  "DHT10nM_up" = AndroRes_filtered_prot$gene_id[which(AndroRes_filtered_prot$DHT10nM_padj < 0.05 & AndroRes_filtered_prot$DHT10nM_logFC > 0)],
+                  "DHT10nM_down" = AndroRes_filtered_prot$gene_id[which(AndroRes_filtered_prot$DHT10nM_padj < 0.05 & AndroRes_filtered_prot$DHT10nM_logFC < 0)],
+                  "Testo100nM" = AndroRes_filtered_prot$gene_id[which(AndroRes_filtered_prot$Testo100nM_padj < 0.05)],
+                  "Testo100nM_up" = AndroRes_filtered_prot$gene_id[which(AndroRes_filtered_prot$Testo100nM_padj < 0.05 & AndroRes_filtered_prot$Testo100nM_logFC > 0)],
+                  "Testo100nM_down" = AndroRes_filtered_prot$gene_id[which(AndroRes_filtered_prot$Testo100nM_padj < 0.05 & AndroRes_filtered_prot$Testo100nM_logFC < 0)],
+                  "Testo10nM" = AndroRes_filtered_prot$gene_id[which(AndroRes_filtered_prot$Testo10nM_padj < 0.05)],
+                  "Testo10nM_up" = AndroRes_filtered_prot$gene_id[which(AndroRes_filtered_prot$Testo10nM_padj < 0.05 & AndroRes_filtered_prot$Testo10nM_logFC > 0)],
+                  "Testo10nM_down" = AndroRes_filtered_prot$gene_id[which(AndroRes_filtered_prot$Testo10nM_padj < 0.05 & AndroRes_filtered_prot$Testo10nM_logFC < 0)],
+                  "R18811nM" = AndroRes_filtered_prot$gene_id[which(AndroRes_filtered_prot$R18811nM_padj < 0.05)],
+                  "R18811nM_up" = AndroRes_filtered_prot$gene_id[which(AndroRes_filtered_prot$R18811nM_padj < 0.05 & AndroRes_filtered_prot$R18811nM_logFC > 0)],
+                  "R18811nM_down" = AndroRes_filtered_prot$gene_id[which(AndroRes_filtered_prot$R18811nM_padj < 0.05 & AndroRes_filtered_prot$R18811nM_logFC < 0)],
+                  "ARbound" = ARboundRes_filtered_prot$gene_id,
+                  "ARbound_promoterTSS" = ARboundRes_filtered_prot$gene_id[which(ARboundRes_filtered_prot$annotation == "promoter-TSS")],
+                  "ARbound_promoter" = ARboundRes_filtered_prot$gene_id[which(ARboundRes_filtered_prot$annotation %in% c("promoter-TSS", "Distant-promoter"))],
+                  "ARbound_geneBody" = ARboundRes_filtered_prot$gene_id[which(ARboundRes_filtered_prot$annotation %in% c("3'", "5'", "exon", "intron"))])
+for (analysis in names(geneLists)){
+  print(paste0(">>>>> ", analysis))
+  for (myBias in bias){
+    print(paste0(">>> ", myBias))
+    for (myDirection in directions){
+      print(paste0("> ", myDirection))
+      resTmp <- enrichment_analysis_permut_bayes(DEresults = bayesResults_formated_prot, 
+                                                 geneList = geneLists[[analysis]], 
+                                                 analysisName = analysis, 
+                                                 nbr_permut = 1000, bias = myBias, direction = myDirection)
+      # add results to the global enrichment abject
+      enrichRes <- rbind(enrichRes, resTmp)
+    }
+  }
+}
+```
+
+```{r write_enrichRes, echo=FALSE}
+write.table(enrichRes, file = "data/5-postprocessing/7-TFBS/AndrogenAnalysis/enrichment_results.txt",
+            quote = FALSE, sep = "\t", row.names = FALSE)
+```
+
+
+```{r format4plot_withPermut, echo=FALSE}
+enrichRes_formated <- enrichRes[which(!enrichRes$analysis %in% c("ARbound", "ARbound_geneBody", "ARbound_promoter", "ARbound_promoterTSS")), ]
+# add * for signif enrichment or depletion (with a threshold of 0.05)
+enrichRes_formated$signif <- ifelse(enrichRes_formated$permut_pval < 0.05,
+                                    ifelse(enrichRes_formated$relative_enrich > 1, 
+                                           ifelse(enrichRes_formated$pval_enrich<0.0005, "*", ""),
+                                           ifelse(enrichRes_formated$pval_deple<0.0005, "*", "")),
+                                    "")
+# order the different direction of effect
+enrichRes_formated$direction <- factor(enrichRes_formated$direction,
+                                       levels = c("both", "female", "male"))
+# format the analysis by treatment and treatment direction
+enrichRes_formated <- enrichRes_formated %>% separate(col = analysis, into = c("treatment", "treatment_direction"), sep = "_", fill = "right")
+enrichRes_formated$treatment_direction <- ifelse(is.na(enrichRes_formated$treatment_direction), "both", enrichRes_formated$treatment_direction)
+
+# extract and transform the results for the random set of genes
+enrichRes_random_formated <- enrichRes_formated[, c("treatment", "treatment_direction", "bias", "direction", "pval_enrich_random", "pval_deple_random", "relative_enrich_random")] %>% separate_longer_delim(cols = c(pval_enrich_random, pval_deple_random, relative_enrich_random), delim = ";")
+enrichRes_random_formated$pval_enrich_random <- as.numeric(enrichRes_random_formated$pval_enrich_random)
+enrichRes_random_formated$pval_deple_random <- as.numeric(enrichRes_random_formated$pval_deple_random)
+enrichRes_random_formated$relative_enrich_random <- as.numeric(enrichRes_random_formated$relative_enrich_random)
+```
+
+We plot the enrichment for the prenatal-specific and shared male- and female-biased genes for each androgen treatment (DHT10nM, DHT100nM, Testo10nM & Testo100nM) with both effect direction (up/down) and all DE genes.
+
+```{r plot_enrich_withPermut, echo=FALSE}
+enrichRes_random_formated_selected <- enrichRes_random_formated[which(enrichRes_random_formated$direction != "both" & 
+                                                                        enrichRes_random_formated$treatment_direction != "both"), ]
+enrichRes_formated_selected <- enrichRes_formated[which(enrichRes_formated$direction != "both" &
+                                                          enrichRes_formated$treatment_direction != "both"), ]
+p <- ggplot(enrichRes_random_formated_selected, aes(x = bias, y = relative_enrich_random, fill = direction, alpha = 0.4))
+p <- p + geom_violin()
+p <- p + geom_hline(yintercept = 1)
+p <- p + scale_fill_manual(values = c("female" = "red", "male" = "blue"))
+p <- p + geom_point(data = enrichRes_formated_selected, 
+                    aes(x = bias, y = relative_enrich, color = direction), position = position_dodge(0.9), size = 2, alpha = 1)
+p <- p + geom_text(data = enrichRes_formated_selected, 
+                   aes(x = bias, y = ifelse(relative_enrich>1, relative_enrich + 0.2, relative_enrich - 0.5), label = signif), position = position_dodge(0.9), size = 4, alpha = 1)
+p <- p + scale_color_manual(values = c("female" = "darkred", "male" = "darkblue"))
+p <- p + theme_minimal()
+p <- p + xlab("") + ylab("Relative enrichment")
+p <- p + guides(alpha=FALSE)
+p <- p + facet_grid(rows = vars(treatment), cols = vars(treatment_direction), scales = "free")
+p
+# save plot
+ggsave("enrich_bayes_vs_androgenDE.png",
+      path = "images/5-postprocessing/7-TFBS/AndrogenAnalysis/",
+      units = "cm", width = 10, height = 13 )
+```
+
+```{r plot_enrich_withPermut_selected, echo=FALSE}
+enrichRes_random_formated_selected <- enrichRes_random_formated[which(enrichRes_random_formated$direction != "both" & 
+                                                                        enrichRes_random_formated$treatment_direction != "both" &
+                                                                        !enrichRes_random_formated$treatment %in% c("R18811nM", "DHT100nM", "Testo10nM")), ]
+enrichRes_formated_selected <- enrichRes_formated[which(enrichRes_formated$direction != "both" &
+                                                          enrichRes_formated$treatment_direction != "both" &
+                                                          !enrichRes_formated$treatment %in% c("R18811nM", "DHT100nM", "Testo10nM")), ]
+p <- ggplot(enrichRes_random_formated_selected, aes(x = bias, y = relative_enrich_random, fill = direction, alpha = 0.4))
+p <- p + geom_violin()
+p <- p + geom_hline(yintercept = 1)
+p <- p + scale_fill_manual(values = c("female" = "red", "male" = "blue"))
+p <- p + geom_point(data = enrichRes_formated_selected, 
+                    aes(x = bias, y = relative_enrich, color = direction), position = position_dodge(0.9), size = 2, alpha = 1)
+p <- p + geom_text(data = enrichRes_formated_selected, 
+                   aes(x = bias, y = ifelse(relative_enrich>1, relative_enrich + 0.2, relative_enrich - 0.5), label = signif), position = position_dodge(0.9), size = 4, alpha = 1)
+p <- p + scale_color_manual(values = c("female" = "darkred", "male" = "darkblue"))
+p <- p + theme_minimal()
+p <- p + xlab("") + ylab("Relative enrichment")
+p <- p + guides(alpha=FALSE)
+p <- p + facet_grid(rows = vars(treatment), cols = vars(treatment_direction), scales = "free")
+p
+# save plot
+ggsave("enrich_bayes_vs_androgenDE_selected.png",
+      path = "images/5-postprocessing/7-TFBS/AndrogenAnalysis/",
+      units = "cm", width = 10, height = 8)
+```
+
+
+```{r format4plot_withPermut_chip, echo=FALSE}
+enrichRes_formated_chip <- enrichRes[which(enrichRes$analysis %in% c("ARbound", "ARbound_geneBody", "ARbound_promoter", "ARbound_promoterTSS")), ]
+# add * for signif enrichment or depletion (with a threshold of 0.05)
+enrichRes_formated_chip$signif <- ifelse(enrichRes_formated_chip$permut_pval < 0.05,
+                                         ifelse(enrichRes_formated_chip$relative_enrich > 1, 
+                                                ifelse(enrichRes_formated_chip$pval_enrich<0.006, "*", ""),
+                                                ifelse(enrichRes_formated_chip$pval_deple<0.006, "*", "")),
+                                         "")
+# order the different direction of effect
+enrichRes_formated_chip$direction <- factor(enrichRes_formated_chip$direction,
+                                            levels = c("both", "female", "male"))
+# format the analysis by treatment and treatment direction
+enrichRes_formated_chip <- enrichRes_formated_chip %>% separate(col = analysis, into = c("analysis", "annotation"), sep = "_", fill = "right")
+enrichRes_formated_chip$annotation <- ifelse(is.na(enrichRes_formated_chip$annotation), "all", enrichRes_formated_chip$annotation)
+
+# extract and transform the results for the random set of genes
+enrichRes_random_formated_chip <- enrichRes_formated_chip[, c("annotation", "bias", "direction", "pval_enrich_random", "pval_deple_random", "relative_enrich_random")] %>% separate_longer_delim(cols = c(pval_enrich_random, pval_deple_random, relative_enrich_random), delim = ";")
+enrichRes_random_formated_chip$pval_enrich_random <- as.numeric(enrichRes_random_formated_chip$pval_enrich_random)
+enrichRes_random_formated_chip$pval_deple_random <- as.numeric(enrichRes_random_formated_chip$pval_deple_random)
+enrichRes_random_formated_chip$relative_enrich_random <- as.numeric(enrichRes_random_formated_chip$relative_enrich_random)
+```
+
+
+```{r plot_enrich_withPermut_chip_selected, echo=FALSE}
+enrichRes_random_formated_chip_selected <- enrichRes_random_formated_chip[which(enrichRes_random_formated_chip$direction != "both"), ]
+enrichRes_formated_chip_selected <- enrichRes_formated_chip[which(enrichRes_formated_chip$direction != "both"), ]
+p <- ggplot(enrichRes_random_formated_chip_selected, aes(x = bias, y = relative_enrich_random, fill = direction, alpha = 0.4))
+p <- p + geom_violin()
+p <- p + geom_hline(yintercept = 1)
+p <- p + scale_fill_manual(values = c("female" = "red", "male" = "blue"))
+p <- p + geom_point(data = enrichRes_formated_chip_selected, 
+                    aes(x = bias, y = relative_enrich, color = direction), position = position_dodge(0.9), size = 2, alpha = 1)
+p <- p + geom_text(data = enrichRes_formated_chip_selected, 
+                   aes(x = bias, y = ifelse(relative_enrich>1, relative_enrich + 0.2, relative_enrich - 0.5), label = signif), position = position_dodge(0.9), size = 4, alpha = 1)
+p <- p + scale_color_manual(values = c("female" = "darkred", "male" = "darkblue"))
+p <- p + theme_minimal()
+p <- p + xlab("") + ylab("Relative enrichment")
+p <- p + guides(alpha=FALSE)
+p <- p + facet_grid(rows = vars(annotation), scales = "free")
+p
+# save plot
+ggsave("enrich_bayes_vs_androgenChip_selected.png",
+      path = "images/5-postprocessing/7-TFBS/AndrogenAnalysis/",
+      units = "cm", width = 10, height = 10)
+```
+
+
+## Run enrichment analysis for pseudotime results
+
+
+```{r init_enrichmentRes_pseudo, echo=FALSE}
+enrichRes_pseudo <- data.frame("analysis" = NA, "direction" = NA, "bias" = NA, "nbr_DE" = NA, "nbr_geneList" = NA, 
+                               "overlap" = NA, "N" = NA, "pval_enrich" = NA, "pval_deple" = NA, "relative_enrich" = NA,
+                               "pval_enrich_random" = NA, "pval_deple_random" = NA, "relative_enrich_random" = NA,
+                               "permut_pval" = NA)
+enrichRes_pseudo <- enrichRes[0,]
+```
+
+```{r enrich_DE_pseudo, echo=FALSE}
+directions <- c("both", "up", "down")
+geneLists <- list("DHT100nM" = DHTres_filtered_pseudo_prot$gene_id[which(DHTres_filtered_pseudo_prot$DHT100nMall_padj < 0.05)],
+                  "DHT100nM_up" = DHTres_filtered_pseudo_prot$gene_id[which(DHTres_filtered_pseudo_prot$DHT100nMall_padj < 0.05 &
+                                                                              DHTres_filtered_pseudo_prot$DHT100nMall_logFC > 0)],
+                  "DHT100nM_down" = DHTres_filtered_pseudo_prot$gene_id[which(DHTres_filtered_pseudo_prot$DHT100nMall_padj < 0.05 &
+                                                                                DHTres_filtered_pseudo_prot$DHT100nMall_logFC < 0)],
+                  "DHT10nM" = AndroRes_filtered_pseudo_prot$gene_id[which(AndroRes_filtered_pseudo_prot$DHT10nM_padj < 0.05)],
+                  "DHT10nM_up" = AndroRes_filtered_pseudo_prot$gene_id[which(AndroRes_filtered_pseudo_prot$DHT10nM_padj < 0.05 &
+                                                                               AndroRes_filtered_pseudo_prot$DHT10nM_logFC > 0)],
+                  "DHT10nM_down" = AndroRes_filtered_pseudo_prot$gene_id[which(AndroRes_filtered_pseudo_prot$DHT10nM_padj < 0.05 &
+                                                                                 AndroRes_filtered_pseudo_prot$DHT10nM_logFC < 0)],
+                  "Testo100nM" = AndroRes_filtered_pseudo_prot$gene_id[which(AndroRes_filtered_pseudo_prot$Testo100nM_padj < 0.05)],
+                  "Testo100nM_up" = AndroRes_filtered_pseudo_prot$gene_id[which(AndroRes_filtered_pseudo_prot$Testo100nM_padj < 0.05 &
+                                                                                  AndroRes_filtered_pseudo_prot$Testo100nM_logFC > 0)],
+                  "Testo100nM_down" = AndroRes_filtered_pseudo_prot$gene_id[which(AndroRes_filtered_pseudo_prot$Testo100nM_padj < 0.05 &
+                                                                                    AndroRes_filtered_pseudo_prot$Testo100nM_logFC < 0)],
+                  "Testo10nM" = AndroRes_filtered_pseudo_prot$gene_id[which(AndroRes_filtered_pseudo_prot$Testo10nM_padj < 0.05)],
+                  "Testo10nM_up" = AndroRes_filtered_pseudo_prot$gene_id[which(AndroRes_filtered_pseudo_prot$Testo10nM_padj < 0.05 &
+                                                                                 AndroRes_filtered_pseudo_prot$Testo10nM_logFC > 0)],
+                  "Testo10nM_down" = AndroRes_filtered_pseudo_prot$gene_id[which(AndroRes_filtered_pseudo_prot$Testo10nM_padj < 0.05 &
+                                                                                   AndroRes_filtered_pseudo_prot$Testo10nM_logFC < 0)],
+                  "R18811nM" = AndroRes_filtered_pseudo_prot$gene_id[which(AndroRes_filtered_pseudo_prot$R18811nM_padj < 0.05)],
+                  "R18811nM_up" = AndroRes_filtered_pseudo_prot$gene_id[which(AndroRes_filtered_pseudo_prot$R18811nM_padj < 0.05 &
+                                                                                AndroRes_filtered_pseudo_prot$R18811nM_logFC > 0)],
+                  "R18811nM_down" = AndroRes_filtered_pseudo_prot$gene_id[which(AndroRes_filtered_pseudo_prot$R18811nM_padj < 0.05 &
+                                                                                  AndroRes_filtered_pseudo_prot$R18811nM_logFC < 0)],
+                  "ARbound" = ARboundRes_filtered_pseudo_prot$gene_id,
+                  "ARbound_promoterTSS" = ARboundRes_filtered_pseudo_prot$gene_id[which(ARboundRes_filtered_pseudo_prot$annotation == "promoter-TSS")],
+                  "ARbound_promoter" = ARboundRes_filtered_pseudo_prot$gene_id[which(ARboundRes_filtered_pseudo_prot$annotation %in% c("promoter-TSS", "Distant-promoter"))],
+                  "ARbound_geneBody" = ARboundRes_filtered_pseudo_prot$gene_id[which(ARboundRes_filtered_pseudo_prot$annotation %in% c("3'", "5'", "exon", "intron"))])
+for (analysis in names(geneLists)){
+  print(paste0(">>>> ", analysis))
+  for (myDirection in directions){
+    print(paste0(">> ", myDirection))
+    resTmp_pseudo <- enrichment_analysis_permut(DEresults = pseudotimeDE_filtered_prot, 
+                                                geneList = geneLists[[analysis]], 
+                                                analysisName = analysis, 
+                                                nbr_permut = 1000, 
+                                                bias = "pseudotime", 
+                                                direction = myDirection, 
+                                                qvalue_threshold = 0.01)
+    # add results to the global enrichment abject
+    enrichRes_pseudo <- rbind(enrichRes_pseudo, resTmp_pseudo)
+  }
+}
+```
+
+```{r format4plot_pseudo_withPermut, echo=FALSE}
+enrichRes_pseudo_formated <- enrichRes_pseudo[which(!enrichRes_pseudo$analysis %in% c("ARbound", "ARbound_geneBody", "ARbound_promoter", "ARbound_promoterTSS")), ]
+# add * for signif enrichment or depletion (with a threshold of 0.05)
+enrichRes_pseudo_formated$signif <- ifelse(enrichRes_pseudo_formated$permut_pval < 0.05,
+                                           ifelse(enrichRes_pseudo_formated$relative_enrich > 1, 
+                                                  ifelse(enrichRes_pseudo_formated$pval_enrich<0.0005, "*", ""),
+                                                  ifelse(enrichRes_pseudo_formated$pval_deple<0.0005, "*", "")),
+                                           "")
+# order the different direction of effect
+enrichRes_pseudo_formated$direction <- factor(enrichRes_pseudo_formated$direction,
+                                              levels = c("both", "up", "down"))
+# format the analysis by treatment and treatment direction
+enrichRes_pseudo_formated <- enrichRes_pseudo_formated %>% separate(col = analysis, into = c("treatment", "treatment_direction"), sep = "_", fill = "right")
+enrichRes_pseudo_formated$treatment_direction <- ifelse(is.na(enrichRes_pseudo_formated$treatment_direction), "both", enrichRes_pseudo_formated$treatment_direction)
+
+# extract and transform the results for the random set of genes
+enrichRes_pseudo_random_formated <- enrichRes_pseudo_formated[, c("treatment", "treatment_direction", "bias", "direction", "pval_enrich_random", "pval_deple_random", "relative_enrich_random")] %>% separate_longer_delim(cols = c(pval_enrich_random, pval_deple_random, relative_enrich_random), delim = ";")
+enrichRes_pseudo_random_formated$pval_enrich_random <- as.numeric(enrichRes_pseudo_random_formated$pval_enrich_random)
+enrichRes_pseudo_random_formated$pval_deple_random <- as.numeric(enrichRes_pseudo_random_formated$pval_deple_random)
+enrichRes_pseudo_random_formated$relative_enrich_random <- as.numeric(enrichRes_pseudo_random_formated$relative_enrich_random)
+```
+
+
+We plot the enrichment for the prenatal-specific and shared male- and female-biased genes for each androgen treatment (DHT10nM, DHT100nM, Testo10nM & Testo100nM) with both effect direction (up/down) and all DE genes.
+
+```{r plot_enrich_pseudo_withPermut, echo=FALSE}
+enrichRes_pseudo_random_formated_selected <- enrichRes_pseudo_random_formated[which(enrichRes_pseudo_random_formated$direction != "both" & 
+                                                                                      enrichRes_pseudo_random_formated$treatment_direction != "both"), ]
+enrichRes_pseudo_formated_selected <- enrichRes_pseudo_formated[which(enrichRes_pseudo_formated$direction != "both" &
+                                                                        enrichRes_pseudo_formated$treatment_direction != "both"), ]
+p <- ggplot(enrichRes_pseudo_random_formated_selected, aes(x = bias, y = relative_enrich_random, fill = direction, alpha = 0.4))
+p <- p + geom_violin()
+p <- p + geom_hline(yintercept = 1)
+p <- p + scale_fill_manual(values = c("up" = 'aquamarine4', "down" = "chocolate"))
+p <- p + geom_point(data = enrichRes_pseudo_formated_selected, 
+                    aes(x = bias, y = relative_enrich, color = direction), position = position_dodge(0.9), size = 2, alpha = 1)
+p <- p + geom_text(data = enrichRes_pseudo_formated_selected, 
+                   aes(x = bias, y = ifelse(relative_enrich>1, relative_enrich + 0.1, relative_enrich - 0.1), label = signif), position = position_dodge(0.9), size = 4, alpha = 1)
+p <- p + scale_color_manual(values = c("up" = "#295346", "down" = "#7e3f12"))
+p <- p + theme_minimal()
+p <- p + xlab("") + ylab("Relative enrichment")
+p <- p + guides(alpha=FALSE)
+p <- p + facet_grid(rows = vars(treatment), cols = vars(treatment_direction), scales = "free")
+p
+# save plot
+ggsave("enrich_pseudotimeDE_vs_androgenDE.png",
+      path = "images/5-postprocessing/7-TFBS/AndrogenAnalysis/",
+      units = "cm", width = 10, height = 13 )
+```
+
+```{r plot_enrich_pseudo_withPermut_selected, echo=FALSE}
+enrichRes_pseudo_random_formated_selected <- enrichRes_pseudo_random_formated[which(enrichRes_pseudo_random_formated$direction != "both" & 
+                                                                                      enrichRes_pseudo_random_formated$treatment_direction != "both" &
+                                                                                      !enrichRes_pseudo_random_formated$treatment %in% c("R18811nM", "DHT100nM", "Testo10nM")), ]
+enrichRes_pseudo_formated_selected <- enrichRes_pseudo_formated[which(enrichRes_pseudo_formated$direction != "both" &
+                                                                        enrichRes_pseudo_formated$treatment_direction != "both" &
+                                                                                      !enrichRes_pseudo_formated$treatment %in% c("R18811nM", "DHT100nM", "Testo10nM")), ]
+p <- ggplot(enrichRes_pseudo_random_formated_selected, aes(x = bias, y = relative_enrich_random, fill = direction, alpha = 0.4))
+p <- p + geom_violin()
+p <- p + geom_hline(yintercept = 1)
+p <- p + scale_fill_manual(values = c("up" = 'aquamarine4', "down" = "chocolate"))
+p <- p + geom_point(data = enrichRes_pseudo_formated_selected, 
+                    aes(x = bias, y = relative_enrich, color = direction), position = position_dodge(0.9), size = 2, alpha = 1)
+p <- p + geom_text(data = enrichRes_pseudo_formated_selected, 
+                   aes(x = bias, y = ifelse(relative_enrich>1, relative_enrich + 0.1, relative_enrich - 0.1), label = signif), position = position_dodge(0.9), size = 4, alpha = 1)
+p <- p + scale_color_manual(values = c("up" = "#295346", "down" = "#7e3f12"))
+p <- p + theme_minimal()
+p <- p + xlab("") + ylab("Relative enrichment")
+p <- p + guides(alpha=FALSE)
+p <- p + facet_grid(rows = vars(treatment), cols = vars(treatment_direction), scales = "free")
+p
+# save plot
+ggsave("enrich_pseudotimeDE_vs_androgenDE_selected.png",
+      path = "images/5-postprocessing/7-TFBS/AndrogenAnalysis/",
+      units = "cm", width = 10, height = 8 )
+```
+
+# Session info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```
