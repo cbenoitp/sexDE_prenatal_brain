@@ -225,13 +225,14 @@ combination_matrix <- combination_matrix[comb_degree(combination_matrix) > 0]
 colorVal <- list(group = c("female" = "#B2182B", "male" = "#053061"))
 p <- UpSet(combination_matrix, set_order = c("female\n pseudotime analysis", "male\n pseudotime analysis", "female\n devStages analysis", "male\n devStages analysis"), 
            comb_order = order(comb_size(combination_matrix), decreasing = TRUE),
+           row_names_gp = gpar(fontsize = 8),
            row_names_side = "left",
            top_annotation = upset_top_annotation(combination_matrix, 
                                                  show_annotation_name = FALSE,
                                                  add_numbers = TRUE,
                                                  numbers_rot = 0,
                                                  numbers_gp = gpar(fontsize = 8),
-                                                 height = unit(7, "cm")),
+                                                 height = unit(4, "cm")),
            left_annotation = rowAnnotation(group = c("female", "male", "female", "male"), 
                                             col = colorVal,
                                             show_annotation_name = FALSE,
@@ -241,7 +242,7 @@ p
 # save plot
 # png("~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/images/3-DE/UpsetPlot/complexUpsetPlot_between_sexDE_pseudotimeDE_allGenes.png", width = 10, height = 10, units = "cm", res = 300)
 png(paste0(workDir, "images/3-DE/analysis_devStage/UpsetPlot/complexUpsetPlot_sexDE_between_pseudotime_devStages_analysis.png"),
-    width = 8, height = 10, units = "cm", res = 300)
+    width = 8, height = 8, units = "cm", res = 300)
 p
 dev.off()
 ```

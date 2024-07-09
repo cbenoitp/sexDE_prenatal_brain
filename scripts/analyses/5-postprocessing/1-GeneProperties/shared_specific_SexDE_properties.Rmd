@@ -180,6 +180,48 @@ ggsave("adult_expression_ byCategory_bySex.png",
 
 Both for the female-biased and male-biased sex-DE, the shared sex-DE genes have higher adult expression than the prenatal ones.
 
+Also compare the full set of sex-DE genes with the non-sex-DE genes.
+
+```{r expression_prenatal_sexDEVSnonsexDE, echo=FALSE}
+# add variable defining if the gene is sexDE in at least one of the 2 dataset
+fullMerge$category <- ifelse(is.na(fullMerge$specificity), "non sexDE", "sexDE")
+# compare means
+compare_means(AveExpr_prenatal~category, fullMerge)
+# plot
+p <- ggplot(fullMerge, aes(x = category, y = AveExpr_prenatal, fill = category))
+p <- p + geom_violin(alpha = 0.5, scale = "area", linewidth = 0.01, show.legend = FALSE) 
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + scale_fill_manual(values = c('non sexDE' = "black", 'sexDE' = "grey"))
+p <- p + theme_minimal() + xlab("") + ylab("Prenatal expression")
+p <- p + stat_compare_means(method = "wilcox.test",
+                            label = "p.signif", hide.ns = TRUE, vjust = 1,
+                            tip.length = 1, na.rm = TRUE)
+p
+# save plot
+ggsave("prenatal_expression_sexDE_vs_nonsexDE.png",
+       path = "images/5-postprocessing/1-GeneProperties/shared/",
+       width = 6, height = 8, units = "cm")
+```
+
+```{r expression_adult_sexDEVSnonsexDE, echo=FALSE}
+# compare means
+compare_means(AveExpr_adult~category, fullMerge)
+# plot
+p <- ggplot(fullMerge, aes(x = category, y = AveExpr_adult, fill = category))
+p <- p + geom_violin(alpha = 0.5, scale = "area", linewidth = 0.01, show.legend = FALSE) 
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + scale_fill_manual(values = c('non sexDE' = "black", 'sexDE' = "grey"))
+p <- p + theme_minimal() + xlab("") + ylab("Adult expression")
+p <- p + stat_compare_means(method = "wilcox.test",
+                            label = "p.signif", hide.ns = TRUE, vjust = 1,
+                            tip.length = 1, na.rm = TRUE)
+p
+# save plot
+ggsave("adult_expression_sexDE_vs_nonsexDE.png",
+       path = "images/5-postprocessing/1-GeneProperties/shared/",
+       width = 6, height = 8, units = "cm")
+```
+
 
 ## Level of expression in BrainSpan
 
@@ -824,8 +866,37 @@ wilcox.test(fullMerge_spe_Xchr_ns_escape$AveExpr_adult, fullMerge_spe_Xchr_escap
 
 The non-significant escape genes are more lowly expressed (both in adult and prenatal forebrain) than the significant escape genes.
 
-TODO: plot this result for supp figure...
+```{r aveExpr_prenatal_Xchr, echo=FALSE}
+# format data
+fullMerge_spe_Xchr_escape$AnnotEscape <- ifelse(fullMerge_spe_Xchr_escape$sexDE_prenatal != "ns" | fullMerge_spe_Xchr_escape$sexDE_adult != "ns", "sex-DE", "not sex-DE")
+# plot
+p <- ggplot(fullMerge_spe_Xchr_escape, aes(x = AnnotEscape, y = AveExpr_prenatal, fill = AnnotEscape))
+p <- p + geom_violin(alpha = 0.5, scale = "area", linewidth = 0.01, show.legend = FALSE) 
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + theme_minimal() + xlab("") + ylab("Expression in prenatal forebrain")
+p <- p + scale_fill_manual(values = c("not sex-DE" = "black", "sex-DE" = "grey"))
+p <- p + stat_compare_means(method = "wilcox.test", label = "p.signif", label.x = 1.4)
+p
+# save plot
+ggsave("prenatal_expression_Xchr_escape_sexDE_vs_nonsexDE.png",
+       path = "images/5-postprocessing/1-GeneProperties/shared/",
+       width = 6, height = 8, units = "cm")
+```
 
+```{r aveExpr_adult_Xchr, echo=FALSE}
+# plot
+p <- ggplot(fullMerge_spe_Xchr_escape, aes(x = AnnotEscape, y = AveExpr_adult, fill = AnnotEscape))
+p <- p + geom_violin(alpha = 0.5, scale = "area", linewidth = 0.01, show.legend = FALSE) 
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + theme_minimal() + xlab("") + ylab("Expression in adult forebrain")
+p <- p + scale_fill_manual(values = c("not sex-DE" = "black", "sex-DE" = "grey"))
+p <- p + stat_compare_means(method = "wilcox.test", label = "p.signif", label.x = 1.4)
+p
+# save plot
+ggsave("adult_expression_Xchr_escape_sexDE_vs_nonsexDE.png",
+       path = "images/5-postprocessing/1-GeneProperties/shared/",
+       width = 6, height = 8, units = "cm")
+```
 
 Look at the number of GTEx tissue in which the non-sex-DE escape genes and the sex-DE escape genes are sex-DE.
 
@@ -843,15 +914,18 @@ overlap_gtex_sexDE_Xchr <- merge(fullMerge_spe_Xchr_escape, sexDE_nbrTissues$sha
 Compare the genes that were found sex-DE in one of the 2 datasets (prenatal or adult) or in neither of the 2.
 
 ```{r nbr_GTEx_tissues_sexDE_escape, echo=FALSE}
-overlap_gtex_sexDE_Xchr$isSignif <- ifelse(overlap_gtex_sexDE_Xchr$sexDE_prenatal != "ns" | overlap_gtex_sexDE_Xchr$sexDE_adult != "ns", "Yes", "No")
-p <- ggplot(overlap_gtex_sexDE_Xchr, aes(x = isSignif, y = percent_sexDE))
-p <- p + geom_boxplot(fill = "grey")
-p <- p + theme_minimal() + ylab("Percent of GTEx tissues sex-DE") + xlab("Sex-DE in adult or prenatal forebrain")
+overlap_gtex_sexDE_Xchr$isSignif <- ifelse(overlap_gtex_sexDE_Xchr$sexDE_prenatal != "ns" | overlap_gtex_sexDE_Xchr$sexDE_adult != "ns", "sex-DE", "not sex-DE")
+p <- ggplot(overlap_gtex_sexDE_Xchr, aes(x = isSignif, y = percent_sexDE, fill = isSignif))
+p <- p + geom_violin(alpha = 0.5, scale = "area", linewidth = 0.01, show.legend = FALSE) 
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + scale_fill_manual(values = c("not sex-DE" = "black", "sex-DE" = "grey"))
+p <- p + theme_minimal() + ylab("Percent of GTEx tissues sex-DE") + xlab("")
+p <- p + stat_compare_means(method = "wilcox.test", label = "p.signif", label.x = 1.4)
 p
 # save
 ggsave("Xchr_escape_GTEx_nbrTissueSexDE.png", 
        path = "images/5-postprocessing/1-GeneProperties/shared/",
-       width = 10, height = 8, units = "cm")
+       width = 6, height = 8, units = "cm")
 ```
 
 
