@@ -1,0 +1,351 @@
+---
+title: 'Scripts to create the main figures: Figure 3'
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+
+```{r load_library, echo=FALSE}
+suppressPackageStartupMessages( library(tidyverse) )
+suppressPackageStartupMessages( library(edgeR) )
+suppressPackageStartupMessages( library(limma) )
+suppressPackageStartupMessages( library(ggpubr) )
+suppressPackageStartupMessages( library(ggpp) )
+suppressPackageStartupMessages( library(cowplot) )
+```
+
+```{r setup, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+# Figure 3 A
+
+Boxplot of expression of shared and prenatal-specific genes in Excitatory and Inhibitory neurons.
+
+## Load data
+
+Load lineModel results.
+
+```{r load_linemodel_res, echo=FALSE}
+dataLineModel <- read.table("data/4-GTEx/2-comparison/lineModel/lineModel_prenatalVSadult_6models_withAnnotation.txt", 
+                            sep = "\t", header = TRUE)
+```
+
+Load single-cell data.
+
+```{r load_scRNAseq_data, echo=FALSE}
+load("data/5-postprocessing/2-CellType/scRNAseq/song_2021_cellTypeExprProfile.RData")
+```
+
+## Plot
+
+```{r data_summary_function, echo=FALSE}
+data_summary <- function(x) {
+   m <- mean(x)
+   ymin <- m-sd(x)
+   ymax <- m+sd(x)
+   return(c(y=m,ymin=ymin,ymax=ymax))
+}
+```
+
+```{r compare_expr_cellType_, echo=FALSE}
+# format data
+cellTypeExprProfile_formated <- cellTypeExprProfile
+cellTypeExprProfile_formated$gene_name <- rownames(cellTypeExprProfile_formated)
+cellTypeExprProfile_formated <- merge(cellTypeExprProfile_formated, dataLineModel[, c(1:2,13,17,20:22)])
+cellTypeExprProfile_formated <- cellTypeExprProfile_formated %>% 
+                                    pivot_longer(cols = 2:12, names_to = "CellType", values_to = "meanExpr")
+cellTypeExprProfile_formated_selected <- cellTypeExprProfile_formated[which(cellTypeExprProfile_formated$specificity %in% c("Prenatal", "Shared") & cellTypeExprProfile_formated$CellType %in% c("ExN", "InN", "NPC", "OPC")),]
+cellTypeExprProfile_formated_selected$CellType <- factor(cellTypeExprProfile_formated_selected$CellType,
+                                                         levels = c("ExN", "InN", "NPC", "OPC"),
+                                                         labels = c("Excitatory\nNeurons", "Inhibitory\nNeurons", 
+                                                                    "Neuronal\nProgenitor Cells", "Oligodendrocyte\nProgenitor Cells"))
+compare_means(meanExpr~specificity, cellTypeExprProfile_formated_selected,
+              method = "wilcox.test", group.by = "CellType")
+# plot
+p <- ggplot(cellTypeExprProfile_formated_selected[which(cellTypeExprProfile_formated_selected$specificity %in% c("Prenatal", "Shared")),], aes(x = specificity, y = meanExpr))
+p <- p + geom_violin(aes(fill = specificity), alpha = 0.5, scale = "area", linewidth = 0.01, show.legend = FALSE) 
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + facet_wrap(vars(CellType), scales = "free_y", ncol = 4)
+p <- p + scale_fill_manual(values = c('Prenatal' = "#9729d6", 'Shared' = "#d5952a"))
+p <- p + theme_minimal() + xlab("") + ylab("Mean expression")
+p <- p + stat_compare_means(method = "wilcox.test", label = "p.signif", hide.ns = TRUE,
+                            label.x.npc = "center", label.y.npc = 0.8)
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p
+# save plot
+ggsave("3A_cellType_Neurons_Progenitors_expression_byCategory.png", 
+       path = "images/figures/",
+       width = 13, height = 6, units = "cm")
+```
+
+
+
+
+# Figure 3 B
+
+TFBS enrichment in prenatal-specific genes.
+
+## Load TFBS results
+
+```{r load_TF_results, echo=FALSE}
+# prenatal-specific sex-DE results
+prenatal_femaleBiased_TF <- readRDS("data/5-postprocessing/7-TFBS/shared/Unibind_prenatal_femaleBiased/lolaLocResults.RDS")
+prenatal_maleBiased_TF <- readRDS("data/5-postprocessing/7-TFBS/shared/Unibind_prenatal_maleBiased/lolaLocResults.RDS")
+```
+
+## Format data
+
+```{r function_get_signif, echo=FALSE}
+get_signif <- function(data_TF, qvalue_threshold = 0.05){
+  data_TF_signif <- data_TF[which(data_TF$qValue < qvalue_threshold), ]
+  if (dim(data_TF_signif)[1] == 0){
+    return(data.frame("TF" = NULL, "max_oddsRatio" = NULL))
+  }
+  TF_OR <- data_TF_signif %>% group_by(collection) %>% summarise(maxOddsRatio = suppressWarnings(max(oddsRatio, na.rm = TRUE)))
+  names(TF_OR) <- c("TF", "max_oddsRatio")
+  return(TF_OR)
+}
+```
+
+```{r get_signif_TF, echo=FALSE}
+prenatal_femaleBiased_TF_signif <- get_signif(prenatal_femaleBiased_TF)
+prenatal_femaleBiased_TF_signif$data <- "female\nbiased"
+prenatal_maleBiased_TF_signif <- get_signif(prenatal_maleBiased_TF)
+prenatal_maleBiased_TF_signif$data <- "male\nbiased" 
+```
+
+Merge the 2 datasets.
+
+```{r merge_TF, echo=FALSE}
+prenatal_TF_signif <- rbind(prenatal_femaleBiased_TF_signif, prenatal_maleBiased_TF_signif)
+prenatal_TF_signif2plot <- prenatal_TF_signif
+prenatal_TF_signif2plot$label <- ifelse(prenatal_TF_signif2plot$max_oddsRatio > 2.5, prenatal_TF_signif2plot$TF, NA)
+prenatal_TF_signif2plot$label[which(prenatal_TF_signif2plot$TF == "AR")] <- "AR"
+prenatal_TF_signif2plot$label[which(prenatal_TF_signif2plot$TF == "ESR1")] <- "ESR1"
+```
+
+
+## Plot
+
+Plot the enrichment oddratio for the significant TF found in the prenatal male-biased and female-biased genes.
+
+```{r figure2b, echo=FALSE}
+p <- ggplot(prenatal_TF_signif2plot, aes(x = data, y = max_oddsRatio, color = data, label = label))
+p <- p + geom_point(position = position_jitter(seed = 2))
+p <- p + theme_minimal() + xlab("") + ylab("Enrichment odds ratio")
+p <- p + scale_color_manual(values = c("male\nbiased" = "#053061", "female\nbiased" = "#B2182B"))
+p <- p + geom_text_repel(position = position_jitter(seed = 2), max.overlaps = 2.5, min.segment.length = 0.5, color = "black")
+p <- p + theme(legend.position = "none")
+p
+# save plot
+ggsave(filename = "3B_TF_prenatalSpecific.png",
+       path = "images/figures/",
+       width = 6, height = 8, units = "cm")
+```
+
+
+# Figure 3 C
+
+Stacked barplot of the percentage of genes in each category separated in autosomes and different XCI categories.
+
+## Format data
+
+First, add specificity classification detailed.
+
+```{r specificityDetailes, echo=FALSE}
+threshold_classification <- 0.8
+dataLineModel <- dataLineModel %>% mutate(specificityDetailed = case_when(
+  PRENATAL > threshold_classification ~ 'PRENATAL',
+  ADULT > threshold_classification ~ 'ADULT',
+  SHARED0.5 > threshold_classification ~ 'SHARED0.5',
+  SHARED1 > threshold_classification ~ 'SHARED1',
+  SHARED2 > threshold_classification ~ 'SHARED2',
+  OPPOSITE > threshold_classification ~ 'OPPOSITE',
+  SHARED0.5+SHARED1+SHARED2 > threshold_classification ~ 'SHARED_UNSPECIFIED',
+  TRUE ~ 'UNCLASSIFIED'
+))
+dataLineModel$specificityDetailed <- factor(dataLineModel$specificityDetailed, 
+                                            levels = c("PRENATAL", "ADULT",
+                                                       "SHARED0.5", "SHARED1", "SHARED2", "SHARED_UNSPECIFIED",
+                                                       "OPPOSITE", "UNCLASSIFIED"))
+```
+
+Merge the 2 annotXCI categories: "Unknown" and "NA"
+
+```{r merge_XCI_cat, echo=FALSE}
+dataLineModel$annot_formatted <- factor(ifelse(dataLineModel$annot == "Autosome",
+                                                           dataLineModel$annot, dataLineModel$annotXCI),
+                                                    levels = c("Autosome", "Escape", "Inactive", "Variable", NA, "Unknown"),
+                                                    labels = c("Autosome", "Escape", "Inactive", "Variable", "Unknown", "Unknown"),
+                                                    exclude = NULL)
+```
+
+Re-order the different models.
+
+```{r reorder_models, echo=FALSE}
+dataLineModel$specificityDetailed_formatted <- factor(dataLineModel$specificityDetailed,
+                                                      levels = c("PRENATAL", "SHARED0.5", "SHARED1", "SHARED2", "SHARED_UNSPECIFIED",
+                                                                 "ADULT", "OPPOSITE", "UNCLASSIFIED"),
+                                                      labels = c('Prenatal specific',
+                                                                 'Shared - higher\nprenatal effect', 
+                                                                 'Shared - equal\neffect', 
+                                                                 'Shared - higher\nadult effect', 
+                                                                 'Shared -\nunspecified',
+                                                                 'Opposite effect',
+                                                                 'Adult specific',
+                                                                 'Unclassified'),
+                                                      ordered = TRUE)
+```
+
+Add total number of genes in each XCI/autosome category.
+
+```{r add_tot_genes, echo=FALSE}
+totals_all <- dataLineModel %>% 
+  group_by(annot_formatted, specificityDetailed_formatted) %>%
+  summarise(n=n())%>%
+  mutate(percent = (n / sum(n)), 
+         cumsum = cumsum(percent), 
+         label = ifelse(specificityDetailed_formatted == "Prenatal specific", as.character(sum(n)),""))
+totals_all$category <- as.factor(ifelse(totals_all$annot_formatted != "Autosome", "X-chromosome", ""))
+totals_all$category <- factor(totals_all$category, levels = c("X-chromosome", ""), ordered = TRUE)
+```
+
+## Plot
+
+```{r barplot_sharingModel_Xchr_autosome, echo=FALSE}
+p <- ggplot(totals_all, aes(x = annot_formatted, y = percent, fill = specificityDetailed_formatted))
+p <- p + geom_bar(position = 'fill', stat = "identity")
+p <- p + scale_y_continuous(labels = scales::percent)
+p <- p + scale_fill_manual(values = c('Prenatal specific' = "#9729d6", 'Adult specific' = "#2bd494",
+                                      'Shared - higher\nprenatal effect' = "#95681d", 'Shared - equal\neffect' = "#d5952a", 
+                                      'Shared - higher\nadult effect' = "#e6bf7f", 'Shared -\nunspecified' = "#6b4b15",
+                                      'Opposite effect' = "#Fbfd8e", 'Unclassified' = "#898989"),
+                           name = "Genes category")
+p <- p + theme_minimal() + ylab("Percent of genes") + xlab("")
+p <- p + geom_text(aes(y = 1, label = label), vjust = -0.2, size = 4)
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p <- p + facet_grid(cols = vars(category), scales = "free_x", space = "free_x")
+p
+# save plot
+ggsave("3C_Xchr_autosome_byCategory_stacked_barplot.png", 
+       path = "images/figures/",
+       plot = p, width = 10, height = 12, units = "cm")
+```
+
+# Figure 3 D
+
+X-chromosome example genes:
+Top plot = logFC in adult and prenatal data
+Bottom plot = PP for linemodel
+
+## Prepare data
+
+Prepare data for example genes plots.
+
+```{r prepare_data_examples, echo=FALSE}
+dataLineModel$specificity <- factor(dataLineModel$specificity , levels = c('Prenatal', 'Shared', 'Opposite', 'Adult', 'Unclassified'))
+```
+
+
+Prepare list of autosomal gene of interest:
+```{r prepare_example_geneLost, echo=FALSE}
+example_geneList <- c("ANOS1", "DDX3X", "JPX", "ZFX", "PNPLA4", "PLCXD1")
+```
+
+## Functions
+
+```{r function_plot_logFC_gene, echo=FALSE}
+plot_logFC_geneList <- function(geneList, data, save = TRUE, limits = c(-1.7, 1.7), nameFig = "example_genes"){
+  # select data for the gene on interest
+  data_gene <- data[which(data$gene_name %in% geneList),]
+  # format data
+  data_gene_longer <- data_gene[,c(2:6,13)] %>% 
+                                  pivot_longer(2:5, names_pattern = "^(.*)_(prenatal|adult)$",
+                                               names_to = c(".values", "dataset"))
+  data_gene_formated <- data_gene_longer %>% pivot_wider(names_from = .values, values_from = value)
+  data_gene_formated$dataset <- factor(data_gene_formated$dataset, 
+                                       levels = c("prenatal", "adult"))
+  data_gene_formated$gene_name <- factor(data_gene_formated$gene_name, levels = geneList)
+  # plot
+  p <- ggplot(data_gene_formated, aes(x = gene_name, y = logFC, 
+                                      ymin = logFC-SE, ymax = logFC+SE, 
+                                      color = dataset))
+  p <- p + geom_pointrange(size = 0.2, position = position_dodge(width = 0.5))
+  p <- p + scale_color_manual(values = c("prenatal" = "#9729d6", "adult" = "#2bd494"), name = "")
+  p <- p + theme_minimal() + ylab("LogFC") + xlab("")
+  p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+  p <- p + geom_hline(yintercept = 0, color = "grey")
+  p <- p + facet_grid(cols = vars(specificity), scales = "free", space = "free_x")
+  p <- p + coord_cartesian(ylim = limits)
+  p <- p + theme(legend.position="bottom", legend.justification = "center")
+  if (save){
+    ggsave(paste0("logFC_", nameFig, ".png"), 
+           path = 'images/4-GTEx/2-comparison/lineModel/examples/',
+           plot = p, width = 3+dim(data_gene_formated)[1]/2, height = 8, units = "cm")
+  }
+  return(p)
+}
+```
+```{r function_plot_posterior_proba_gene, echo=FALSE}
+plot_post_proba_geneList <- function(geneList, data, save = TRUE, nameFig = "example_genes"){
+  # select data for the gene on interest
+  data_gene <- data[which(data$gene_name %in% geneList),]
+  # format data
+  data_gene_formated <- data_gene[,c(2,7:13)] %>% 
+                                  pivot_longer(2:7, names_to = "model")
+  data_gene_formated$model <- factor(data_gene_formated$model, levels = c("PRENATAL", "SHARED0.5", "SHARED1", "SHARED2", "OPPOSITE", "ADULT"))
+  data_gene_formated$gene_name <- factor(data_gene_formated$gene_name, levels = geneList)
+  # plot
+  p <- ggplot(data_gene_formated, aes(x = gene_name, y = value, fill = model))
+  p <- p + scale_fill_manual(values = c("PRENATAL" = "#9729d6", "ADULT" = "#2bd494", "SHARED0.5" = "#95681d", "SHARED1" = "#d5952a", 
+                                       "SHARED2" = "#e6bf7f", "OPPOSITE" = "#Fbfd8e"),
+                            name = "")
+  p <- p + geom_bar(stat='identity', position = "stack")
+  p <- p + theme_minimal() + ylab("Posterior probability") + xlab("")
+  p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+  p <- p + facet_grid(cols = vars(specificity), scales = "free", space = "free_x")
+  p <- p + coord_cartesian(ylim = c(0,1))
+  p <- p + theme(legend.position="bottom", legend.justification = "center")
+  if (save){
+    ggsave(paste0("posteriorProba_", nameFig, ".png"),
+           path = 'images/4-GTEx/2-comparison/lineModel/examples/', 
+           plot = p, width = 5+dim(data_gene_formated)[1]/6, height = 6, units = "cm")
+  }
+  return(p)
+}
+```
+
+## Plot
+
+```{r plot_geneList_logFC, echo=FALSE}
+example_logFC_legend <- plot_logFC_geneList(example_geneList, dataLineModel, save = FALSE) + theme(axis.text.x = element_blank(), plot.margin = unit(c(0, 0, 0, 0), "cm"))
+legend_logFC <- get_plot_component(example_logFC_legend, 'guide-box-bottom', return_all = TRUE)
+example_logFC <- example_logFC_legend + theme(legend.position = "none")
+example_logFC
+```
+
+
+```{r plot_geneList_posteriorProba, echo=FALSE}
+example_PP_legend <- plot_post_proba_geneList(example_geneList, dataLineModel, save = FALSE) + theme(strip.background = element_blank(),
+  strip.text.x = element_blank(), plot.margin = unit(c(0, 0, 0, 0), "cm"))
+legend_PP <- get_plot_component(example_PP_legend, 'guide-box-bottom', return_all = TRUE)
+example_PP <- example_PP_legend + theme(legend.position = "none")
+example_PP
+```
+
+Arrange 2 plots together.
+
+```{r figure2E, echo=FALSE}
+final_plot <- plot_grid(example_logFC, example_PP, legend_logFC, legend_PP, ncol = 1, align = "v", axis = "rl", rel_heights = c(1, 1, .2, .4))
+final_plot
+save_plot("images/figures/3D_example_Xchr_genes.png", plot = final_plot, 
+          base_width = 10, base_height = 12, units = "cm")
+```
+
+
+
+
+
+
