@@ -484,6 +484,53 @@ write.table(gsea_results_bayes_ctrlConst,
 ```
 
 
+### Merging and saving the results
+
+```{r results_DE_signed_save, echo=FALSE}
+gsea_results_DE_withoutCtrl <- loadNmerge_gsea_results(typeAnalysis = 'withoutCtrl', genesetName = 'downstreamer', 
+                                                       dataName = '[[:alpha:]]+', typeData = '[[:alpha:]]+DE', 
+                                                       signed = 'signed')
+gsea_results_DE_ctrlExpr <- loadNmerge_gsea_results(typeAnalysis = 'ctrlExpr', genesetName = 'downstreamer', 
+                                                    dataName = '[[:alpha:]]+', typeData = '[[:alpha:]]+DE', 
+                                                    signed = 'signed')
+# merge and format the results
+gsea_results_DE_withoutCtrl$ctrlExpr <- FALSE
+gsea_results_DE_withoutCtrl <- separate_wider_delim(gsea_results_DE_withoutCtrl, 1, delim = ".", 
+                                                    names = c("pathway", "MetaBrain network"))
+gsea_results_DE_ctrlExpr$ctrlExpr <- TRUE
+gsea_results_DE_ctrlExpr <- separate_wider_delim(gsea_results_DE_ctrlExpr, 1, delim = ".", 
+                                                 names = c("pathway", "MetaBrain network"))
+gsea_results_DE_merged <- rbind(gsea_results_DE_withoutCtrl, gsea_results_DE_ctrlExpr)
+# ave file with columns reordered
+write.table(gsea_results_DE_merged[, c(9, 10, 1:8, 11)], 
+            file = "data/5-postprocessing/6-Network/results_fgsea/gsea_downstreamerDiseaseGeneSet_allDE_signed.txt",
+            quote = FALSE, row.names = FALSE, col.names = TRUE, sep = "\t")
+```
+
+```{r results_bayes_signed_save, echo=FALSE}
+gsea_results_bayes_withoutCtrl <- loadNmerge_gsea_results(typeAnalysis = 'withoutCtrl', genesetName = 'downstreamer', 
+                                                          dataName = '[[:alpha:]]+', 
+                                                          typeData = c('shared', 'prenatal specific', 'adult specific'), 
+                                                          signed = 'signed')
+gsea_results_bayes_ctrlExpr <- loadNmerge_gsea_results(typeAnalysis = 'ctrlExpr', genesetName = 'downstreamer', 
+                                                       dataName = '[[:alpha:]]+', 
+                                                       typeData = c('shared', 'prenatal specific', 'adult specific'),
+                                                       signed = 'signed')
+# merge and format the results
+gsea_results_bayes_withoutCtrl$ctrlExpr <- FALSE
+gsea_results_bayes_withoutCtrl <- separate_wider_delim(gsea_results_bayes_withoutCtrl, 1, delim = ".", 
+                                                       names = c("pathway", "MetaBrain network"))
+gsea_results_bayes_ctrlExpr$ctrlExpr <- TRUE
+gsea_results_bayes_ctrlExpr <- separate_wider_delim(gsea_results_bayes_ctrlExpr, 1, delim = ".", 
+                                                    names = c("pathway", "MetaBrain network"))
+gsea_results_bayes_merged <- rbind(gsea_results_bayes_withoutCtrl, gsea_results_bayes_ctrlExpr)
+# ave file with columns reordered
+write.table(gsea_results_bayes_merged[, c(9, 10, 1:8, 11)], 
+            file = "data/5-postprocessing/6-Network/results_fgsea/gsea_downstreamerDiseaseGeneSet_allbayes_signed.txt",
+            quote = FALSE, row.names = FALSE, col.names = TRUE, sep = "\t")
+```
+
+
 # Session info
 
 ```{r sessionInfo, echo=FALSE}
