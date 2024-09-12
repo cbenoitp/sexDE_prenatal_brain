@@ -309,6 +309,53 @@ ggsave("nbrGenes_sexDE_origin_barplot.png",
        plot = p, width = 13, height = 12, units = "cm")
 ```
 
+# Plot the effect size between the classified and unclassified genes
+
+Do a violinplot of the absolute logFC value between the genes classified in one of the 6 categories and the unclassified ones.
+
+```{r violinplot_logFC_prenatal_classifiedVSunclassified, echo=FALSE}
+# prepare data
+results_ClassifiedVSunclassified <- results
+results_ClassifiedVSunclassified$specificitySimplified <- ifelse(results_ClassifiedVSunclassified$specificity == "UNCLASSIFIED", "Unclassified", "Classified")
+# function to show summary on top of violinplot
+data_summary <- function(x) {
+   m <- mean(x)
+   ymin <- m-sd(x)
+   ymax <- m+sd(x)
+   return(c(y=m,ymin=ymin,ymax=ymax))
+}
+# plot
+p <- ggplot(results_ClassifiedVSunclassified, aes(x = specificitySimplified, y = abs(logFC_prenatal), fill = specificitySimplified))
+p <- p + geom_violin(alpha = 0.5, scale = "area", linewidth = 0.01, show.legend = FALSE) 
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + scale_fill_manual(values = c('Classified' = "black", 'Unclassified' = "lightgrey"))
+p <- p + theme_minimal() + xlab("") + ylab("| logFC |\nin prenatal brain")
+p <- p + stat_compare_means(method = "wilcox.test", label = "p.signif", label.x = 1.4, label.y = 1)
+p <- p + coord_cartesian(ylim = c(0,1))
+p
+# save plot
+ggsave("prenatal_expression_classified_VS_unclassified.png",
+       path = "images/4-GTEx/2-comparison/lineModel/",
+       width = 6, height = 8, units = "cm")
+```
+
+```{r violinplot_logFC_adult_classifiedVSunclassified, echo=FALSE}
+# plot
+p <- ggplot(results_ClassifiedVSunclassified, aes(x = specificitySimplified, y = abs(logFC_adult), fill = specificitySimplified))
+p <- p + geom_violin(alpha = 0.5, scale = "area", linewidth = 0.01, show.legend = FALSE) 
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + scale_fill_manual(values = c('Classified' = "black", 'Unclassified' = "lightgrey"))
+p <- p + theme_minimal() + xlab("") + ylab("| logFC |\nin adult brain")
+p <- p + stat_compare_means(method = "wilcox.test", label = "p.signif", label.x = 1.4, label.y = 0.5)
+p <- p + coord_cartesian(ylim = c(0,0.5))
+p
+# save plot
+ggsave("adult_expression_classified_VS_unclassified.png",
+       path = "images/4-GTEx/2-comparison/lineModel/",
+       width = 6, height = 8, units = "cm")
+```
+
+
 
 # LogFC scatter plot
 

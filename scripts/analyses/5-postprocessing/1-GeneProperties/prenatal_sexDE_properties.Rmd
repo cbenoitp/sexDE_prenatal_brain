@@ -41,6 +41,7 @@ results <- results[which(!results$gene_name %in% genes2remove),]
 ```{r prepare_sexDE_data, echo=FALSE}
 results$sexDE <- ifelse(results$qvalue < threshold_qvalue, ifelse(results$logFC > 0, "Female", "Male"), "No")
 results$sexDE <- factor(results$sexDE, levels = c("No", "Male", "Female"))
+results$sexDE_all <- ifelse(results$qvalue < threshold_qvalue, "Sex-DE", "Non sex-DE")
 ```
 
 Select autosomal genes
@@ -190,6 +191,22 @@ ggsave("prenatal_sexDE_vs_expr.png",
        width = 8, height = 8, units = "cm")
 ```
 
+```{r violinplot_expr_all, echo=FALSE}
+p <- ggplot(results, aes(x = sexDE_all, y = AveExpr, fill = sexDE_all))
+p <- p + geom_violin(alpha = 0.5, scale = "area", size = 0.01, show.legend = FALSE) 
+p <- p + stat_summary(fun.data=data_summary, size = 0.1, show.legend = FALSE)
+p <- p + theme_minimal() + xlab("") + ylab("Mean expression")
+p <- p + scale_fill_manual(values = c("Sex-DE" = "black", "Non sex-DE" = "lightgrey"),
+                           name = "")
+p <- p + stat_compare_means(method = "wilcox.test",
+                            label = "p.signif", label.x = 1.4)
+p
+# save plot
+ggsave("prenatal_sexDEall_vs_expr.png",
+       path = "images/5-postprocessing/1-GeneProperties/prenatal/",
+       width = 6, height = 8, units = "cm")
+```
+
 ## SexDE per expression bin
 
 Plot proportion of sex-DE gene for each expression bin coloring male and female-biased genes.
@@ -282,6 +299,24 @@ ggsave("prenatal_sexDE_vs_constraint.png",
        path = "images/5-postprocessing/1-GeneProperties/prenatal/",
        width = 8, height = 8, units = "cm")
 ```
+
+```{r violinplot_constraint_all, echo=FALSE}
+p <- ggplot(results[which(!is.na(results$LOEUF)),], aes(x = sexDE_all, y = LOEUF, fill = sexDE_all))
+p <- p + geom_violin(alpha = 0.5, scale = "area", size = 0.01, show.legend = FALSE) 
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + theme_minimal() + xlab("") + ylab("Constraint")
+p <- p + scale_fill_manual(values = c("Sex-DE" = "black", "Non sex-DE" = "lightgrey"),
+                           name = "")
+p <- p + stat_compare_means(method = "wilcox.test",
+                            label = "p.signif", label.x = 1.4)
+p
+# save plot
+ggsave("prenatal_sexDEall_vs_constraint.png",
+       path = "images/5-postprocessing/1-GeneProperties/prenatal/",
+       width = 6, height = 8, units = "cm")
+```
+
+
 
 
 ## SexDE per constraint bin
