@@ -543,6 +543,138 @@ ggsave("enrichment_plot_sexDE_bayes_ctrlExpr.png",
       units = "cm", width = 15, height = 12)
 ```
 
+## Plot for supplementary figure
+
+### Plot enrichment results for sex-DE results controlling for gene expression
+
+First, we need to select the data we want to plot and format it.
+
+```{r select4plot_sexDE_ctrlExpr, echo=FALSE}
+# select analyses of interest
+enrichRes_sexDE_formated_ctrlExpr <- enrichRes[which(enrichRes$analysis %in% c("prenatal_sexDE", "adult_sexDE") &
+                                                       enrichRes$direction != "both" & enrichRes$ctrlExpr), ]
+```
+
+```{r format4plot_sexDE_ctrlExpr, echo=FALSE}
+# add * for signif enrichment or depletion (with a threshold of 0.05/8*8=0.00078)
+enrichRes_sexDE_formated_ctrlExpr$signif <- ifelse(enrichRes_sexDE_formated_ctrlExpr$pval_enrich<0.00078 & 
+                                                     enrichRes_sexDE_formated_ctrlExpr$permut_pval < 0.0005, "*", "")
+# order the different direction of effect
+enrichRes_sexDE_formated_ctrlExpr$direction <- factor(enrichRes_sexDE_formated_ctrlExpr$direction,
+                                                      levels = c("female", "male"))
+# split network names into disease and metaBrain Dataset
+enrichRes_sexDE_formated_ctrlExpr2 <- separate_wider_delim(data = enrichRes_sexDE_formated_ctrlExpr, cols = "geneList", delim = ".", names = c("disease", "metaBrainData")) 
+# rename metaBrainData into shorter version
+enrichRes_sexDE_formated_ctrlExpr2$metaBrainData <- factor(enrichRes_sexDE_formated_ctrlExpr2$metaBrainData, 
+                                                           levels = c("MetaBrain", "MetaBrainCerebellum", "MetaBrainCortex"), 
+                                                           labels = c("MetaBrain" = "AllBrain", "MetaBrainCerebellum" = "Cerebellum", "MetaBrainCortex" = "Cortex"))
+# order diseases
+enrichRes_sexDE_formated_ctrlExpr2$disease <- as.factor(enrichRes_sexDE_formated_ctrlExpr2$disease)
+levels(enrichRes_sexDE_formated_ctrlExpr2$disease) <- list("Amyotrophic lateral\nsclerosis" = "ALS",
+                                                           "Multiple sclerosis" = "MS",
+                                                           "Schizophrenia" = "Schizophrenia")
+# rename the 2 analyses
+enrichRes_sexDE_formated_ctrlExpr2$analysis <- factor(enrichRes_sexDE_formated_ctrlExpr2$analysis,
+                                                      levels = c("adult_sexDE", "prenatal_sexDE"),
+                                                      labels = c("Adult", "Prenatal"))
+
+# extract and transform the results for the random set of genes
+enrichRes_sexDE_random_formated_ctrlExpr2 <- enrichRes_sexDE_formated_ctrlExpr2[, c("disease", "metaBrainData", "analysis", "direction", "pval_enrich_random", "pval_deple_random", "relative_enrich_random")] %>% separate_longer_delim(cols = c(pval_enrich_random, pval_deple_random, relative_enrich_random), delim = ";")
+enrichRes_sexDE_random_formated_ctrlExpr2$pval_enrich_random <- as.numeric(enrichRes_sexDE_random_formated_ctrlExpr2$pval_enrich_random)
+enrichRes_sexDE_random_formated_ctrlExpr2$pval_deple_random <- as.numeric(enrichRes_sexDE_random_formated_ctrlExpr2$pval_deple_random)
+enrichRes_sexDE_random_formated_ctrlExpr2$relative_enrich_random <- as.numeric(enrichRes_sexDE_random_formated_ctrlExpr2$relative_enrich_random)
+```
+
+Then, we plot the enrichment results.
+
+```{r plot_sexDE_ctrlExpr, echo=FALSE}
+p <- ggplot(enrichRes_sexDE_random_formated_ctrlExpr2, aes(y = disease, x = relative_enrich_random, fill = direction, alpha = 0.4))
+p <- p + geom_violin(linewidth = 0.1)
+p <- p + geom_vline(xintercept = 1)
+p <- p + facet_grid(cols = vars(analysis), rows = vars(metaBrainData), scales = "free_y", space = "free_y", drop = TRUE)
+p <- p + scale_fill_manual(values = c("female" = "#ae4d4d", "male" = "#4d4dae"))
+p <- p + geom_point(data = enrichRes_sexDE_formated_ctrlExpr2, aes(y = disease, x = relative_enrich, color = direction), 
+                    position = position_dodge(0.9), size = 2, alpha = 1)
+p <- p + geom_text(data = enrichRes_sexDE_formated_ctrlExpr2, aes(y = disease, x = relative_enrich + 0.3, label = signif),
+                   position = position_dodge(0.9), size = 4, alpha = 1)
+p <- p + scale_color_manual(values = c("female" = "darkred", "male" = "darkblue"))
+p <- p + theme_minimal()
+p <- p + ylab("") + xlab("Relative enrichment")
+p <- p + guides(alpha="none", color="none", fill="none")
+p <- p + coord_cartesian(xlim = c(0,4))
+p
+# save plot
+ggsave("enrichment_plot_sexDE_adult_prenatal_diseaseOnly_ctrlExpr.png",
+      path = "images/5-postprocessing/6-Network/network_hyper/",
+      units = "cm", width = 10, height = 10)
+```
+
+
+### Plot enrichment results for sex-DE results controlling for gene expression
+
+First, we need tot select the data we want to plot and format it.
+
+```{r select4plot_bayes_ctrlExpr, echo=FALSE}
+# select analyses of interest
+enrichRes_bayes_formated_ctrlExpr <- enrichRes[which(enrichRes$analysis %in% c("prenatal_specific", "shared") &
+                                                       enrichRes$direction != "both" & enrichRes$ctrlExpr), ]
+```
+
+```{r format4plot_bayes_ctrlExpr, echo=FALSE}
+# add * for signif enrichment or depletion (with a threshold of 0.05/8*8=0.00078)
+enrichRes_bayes_formated_ctrlExpr$signif <- ifelse(enrichRes_bayes_formated_ctrlExpr$pval_enrich<0.00078 & 
+                                                     enrichRes_bayes_formated_ctrlExpr$permut_pval < 0.05, "*", "")
+# order the different direction of effect
+enrichRes_bayes_formated_ctrlExpr$direction <- factor(enrichRes_bayes_formated_ctrlExpr$direction,
+                                                      levels = c("female", "male"))
+# split network names into disease and metaBrain Dataset
+enrichRes_bayes_formated_ctrlExpr2 <- separate_wider_delim(data = enrichRes_bayes_formated_ctrlExpr, cols = "geneList", 
+                                                           delim = ".", names = c("disease", "metaBrainData")) 
+# rename metaBrainData into shorter version
+enrichRes_bayes_formated_ctrlExpr2$metaBrainData <- factor(enrichRes_bayes_formated_ctrlExpr2$metaBrainData, 
+                                                           levels = c("MetaBrain", "MetaBrainCerebellum", "MetaBrainCortex"), 
+                                                           labels = c("MetaBrain" = "AllBrain", "MetaBrainCerebellum" = "Cerebellum", "MetaBrainCortex" = "Cortex"))
+# order diseases
+enrichRes_bayes_formated_ctrlExpr2$disease <- as.factor(enrichRes_bayes_formated_ctrlExpr2$disease)
+levels(enrichRes_bayes_formated_ctrlExpr2$disease) <- list("Amyotrophic lateral\nsclerosis" = "ALS",
+                                                           "Multiple sclerosis" = "MS",
+                                                           "Schizophrenia" = "Schizophrenia")
+# rename the 2 analyses
+enrichRes_bayes_formated_ctrlExpr2$analysis <- factor(enrichRes_bayes_formated_ctrlExpr2$analysis,
+                                                      levels = c("prenatal_specific", "shared"),
+                                                      labels = c("Prenatal\nspecific", "Shared"))
+
+# extract and transform the results for the random set of genes
+enrichRes_bayes_random_formated_ctrlExpr2 <- enrichRes_bayes_formated_ctrlExpr2[, c("disease", "metaBrainData", "analysis", "direction", "pval_enrich_random", "pval_deple_random", "relative_enrich_random")] %>% separate_longer_delim(cols = c(pval_enrich_random, pval_deple_random, relative_enrich_random), delim = ";")
+enrichRes_bayes_random_formated_ctrlExpr2$pval_enrich_random <- as.numeric(enrichRes_bayes_random_formated_ctrlExpr2$pval_enrich_random)
+enrichRes_bayes_random_formated_ctrlExpr2$pval_deple_random <- as.numeric(enrichRes_bayes_random_formated_ctrlExpr2$pval_deple_random)
+enrichRes_bayes_random_formated_ctrlExpr2$relative_enrich_random <- as.numeric(enrichRes_bayes_random_formated_ctrlExpr2$relative_enrich_random)
+```
+
+
+```{r plot_bayes_ctrlExpr, echo=FALSE}
+p <- ggplot(enrichRes_bayes_random_formated_ctrlExpr2, aes(y = disease, x = relative_enrich_random, fill = direction, alpha = 0.4))
+p <- p + geom_violin(linewidth = 0.1)
+p <- p + geom_vline(xintercept = 1)
+p <- p + facet_grid(cols = vars(analysis), rows = vars(metaBrainData), scales = "free_y", space = "free_y", drop = TRUE)
+p <- p + scale_fill_manual(values = c("female" = "#ae4d4d", "male" = "#4d4dae"))
+p <- p + geom_point(data = enrichRes_bayes_formated_ctrlExpr2, aes(y = disease, x = relative_enrich, color = direction), 
+                    position = position_dodge(0.9), size = 2, alpha = 1)
+p <- p + geom_text(data = enrichRes_bayes_formated_ctrlExpr2, aes(y = disease, x = relative_enrich + 0.2, label = signif),
+                   position = position_dodge(0.9), size = 4, alpha = 1)
+p <- p + scale_color_manual(values = c("female" = "darkred", "male" = "darkblue"))
+p <- p + theme_minimal()
+p <- p + ylab("") + xlab("Relative enrichment")
+p <- p + guides(alpha="none", color="none", fill="none")
+p <- p + coord_cartesian(xlim = c(0,3.5))
+p
+# save plot
+ggsave("enrichment_plot_sexDE_bayes_diseaseOnly_ctrlExpr.png",
+      path = "images/5-postprocessing/6-Network/network_hyper/",
+      units = "cm", width = 10, height = 10)
+```
+
+
 
 # Session info
 
