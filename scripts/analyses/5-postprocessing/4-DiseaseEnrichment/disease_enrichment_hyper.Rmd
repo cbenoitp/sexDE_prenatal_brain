@@ -495,14 +495,14 @@ p <- p + scale_color_manual(values = c("female" = "darkred", "male" = "darkblue"
 p <- p + facet_grid(cols = vars(analysis), scales = "free", space = "free")
 p <- p + theme_minimal()
 p <- p + ylab("") + xlab("Relative enrichment")
-p <- p + guides(alpha="none")
+p <- p + guides(alpha = "none", color = "none", fill = "none")
 p <- p + coord_cartesian(xlim = c(0,4))
 p <- p + scale_y_discrete(limits = rev(levels(enrichRes_sexDE_random_formated_ctrlExpr$geneList))) # reverse order of phenotype
 p
 # save plot
 ggsave("enrichment_plot_sexDE_adult_prenatal_diseaseOnly_ctrlExpr.png",
       path = "images/5-postprocessing/4-DiseaseEnrichment/disease_hyper/",
-      units = "cm", width = 12, height = 10)
+      units = "cm", width = 10, height = 10)
 ```
 
 ### Plot enrichment results for sex-DE results controlling for gene expression
@@ -526,7 +526,7 @@ enrichRes_sexDE_formated_bayes_ctrlExpr$direction <- factor(enrichRes_sexDE_form
 # order the different phenotype
 enrichRes_sexDE_formated_bayes_ctrlExpr$geneList <- factor(enrichRes_sexDE_formated_bayes_ctrlExpr$geneList,
                                                            levels = c("ASD", "NDD", "epilepsy_ndd", "EPI", "scz", "BP", "MS", "ALS", "alzheimer"),
-                                                           labels = c("Autism", "Neurodevelopmental\ndisorder","Neurodevelopmental disorder\nwith epilepsy", "Epilepsy", 
+                                                           labels = c("Autism", "Neurodevelopmental\ndisorder","Neurodevelopmental\ndisorder with epilepsy", "Epilepsy", 
                                                                       "Schizophrenia", "Bipolar disorder", "Multiple sclerosis", "Amyotrophic lateral\nsclerosis", "Alzheimer"))
 # rename the 4 analyses
 enrichRes_sexDE_formated_bayes_ctrlExpr$analysis <- factor(enrichRes_sexDE_formated_bayes_ctrlExpr$analysis,
@@ -554,14 +554,14 @@ p <- p + scale_color_manual(values = c("female" = "darkred", "male" = "darkblue"
 p <- p + facet_grid(cols = vars(analysis), scales = "free", space = "free")
 p <- p + theme_minimal()
 p <- p + ylab("") + xlab("Relative enrichent")
-p <- p + guides(alpha="none")
+p <- p + guides(alpha = "none", color = "none", fill = "none")
 p <- p + coord_cartesian(xlim = c(0,6))
 p <- p + scale_y_discrete(limits = rev(levels(enrichRes_sexDE_random_formated_bayes_ctrlExpr$geneList))) # reverse order of phenotype
 p
 # save plot
 ggsave("enrichment_plot_sexDE_bayes_diseaseOnly_ctrlExpr.png",
       path = "images/5-postprocessing/4-DiseaseEnrichment/disease_hyper/",
-      units = "cm", width = 12, height = 10)
+      units = "cm", width = 10, height = 10)
 ```
 
 
