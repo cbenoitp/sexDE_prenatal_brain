@@ -61,11 +61,17 @@ p <- ggplot(metadata, aes(DevStage, pseudotime))
 p <- p + geom_boxplot(fill = "#DCDCDC", outlier.shape = NA)
 p <- p + theme_minimal() + xlab("Developmental stages")
 p <- p + geom_jitter(aes(color = Sex), position=position_jitter(0.2), show.legend = FALSE)
-p <- p + annotate("text", x = 1.6, y = 1.1, label = sprintf("tau = %.2f\n p-value = %.2e", corTestRes_Kendall$estimate, corTestRes_Kendall$p.value))
+p <- p + annotate("text", x = 6.5, y = -0.7, label = sprintf("tau = %.2f\n p-value = %.2e", corTestRes_Kendall$estimate, corTestRes_Kendall$p.value))
 p <- p + scale_color_manual(values = c("1" = "darkblue", "2" = "darkred"))
-p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1, size = 10),
+               axis.text.y = element_text(size = 10),
+               axis.title.x = element_text(size = 14),
+               axis.title.y = element_text(size = 14))
 p
 # save plot
+ggsave("1B_boxplot_devStages_vs_pseudotime.svg", 
+       path = "images/figures/",
+       plot = p, width = 10, height = 8, units = "cm")
 ggsave("1B_boxplot_devStages_vs_pseudotime.png", 
        path = "images/figures/",
        plot = p, width = 10, height = 8, units = "cm")
@@ -104,18 +110,35 @@ de_results_autosomes <- de_results_filtered[which(!de_results_filtered$chr %in% 
 
 ```{r function_barplot, echo=FALSE}
 barplot <- function(data, legend = TRUE, nrowLegend = 4,
-                    colors = c("Male-other" = "#053061", "Male-sex" = "#99b3ff", 
-                               "Female-other" = "#B2182B", "Female-sex" = "#f3a5ae"),
-                    labels = c("Female-other" = "Female autosomal", "Female-sex" = "Female sex chr.´",
-                               "Male-other" = "Male autosomal", "Male-sex" = "Male sex chr.")){
-  p <- ggplot(data, aes(x = variable, y = nbr_genes, fill = coloring))
-  p <- p + geom_bar(stat = "identity")
+                    colors = c("Male-autosomes" = 'darkblue', "Male-sex chr." = "#99b3ff", 
+                               "Female-autosomes" = "darkred", "Female-sex chr." = "#f3a5ae"),
+                    labels = c("Female-autosomes" = "Female autosomal", "Female-sex chr." = "Female sex chr.´",
+                               "Male-autosomes" = "Male autosomal", "Male-sex chr." = "Male sex chr.")){
+  if (legend){
+    p <- ggplot(data, aes(x = variable, y = nbr_genes, fill = coloring, color = chr))
+  } else{
+    p <- ggplot(data, aes(x = variable, y = nbr_genes, fill = coloring))
+  }
+  p <- p + geom_bar(stat = "identity", size = 0)
   p <- p + scale_fill_manual(values = colors, labels = labels)
   p <- p + theme_bw() + labs(x = "", y = "")
-  p <- p + theme(legend.position="bottom", legend.title = element_blank()) 
-  p <- p + guides(fill = guide_legend(nrow=nrowLegend, byrow=TRUE))
-  if (!legend){
-    p <- p +  guides(fill = "none")
+  p <- p + theme(legend.position="bottom", legend.title = element_blank(),
+                 legend.spacing.y = unit(1, 'mm'),
+                 plot.margin = margin(3,3,-5,-5, "mm"),
+                 legend.margin = margin(0,0,0,0, "mm"),
+                 legend.box.margin = margin(0,0,-10,0, "mm"),
+                 axis.title.x = element_text(size = 14),
+                 axis.title.y = element_text(size = 14),
+                 axis.text.x = element_text(size = 12),
+                 axis.text.y = element_text(size = 10),
+                 legend.text=element_text(size=12),
+                 legend.box.spacing = unit(0,"null"))
+   p <- p + guides(fill = "none")
+  if (legend){
+    p <- p + scale_color_manual(values = c("autosomes" = "black", "sex chr." = "grey"), labels = c("autosomes", "sex chr."), )
+    p <- p + guides(fill = "none",
+                  color = guide_legend(nrow=nrowLegend, byrow=TRUE, 
+                                       override.aes = list(fill = c("black", "grey"))))
   }
   return(p)
 }
@@ -125,7 +148,7 @@ barplot <- function(data, legend = TRUE, nrowLegend = 4,
 # prepare data
 sexChr <- c("chrY", "chrX")
 barplot_data_sexDE <- data.frame(variable = c("Female", "Female", "Male", "Male"), 
-                           chr = c("other", "sex", "other", "sex"), 
+                           chr = c("autosomes", "sex chr.", "autosomes", "sex chr."), 
                            nbr_genes = c(length(de_results_autosomes$gene_name[which(de_results_autosomes$qvalue < threshold_qvalue & de_results_autosomes$logFC > 0)]),
                                          length(de_results_filtered$gene_name[which((de_results_filtered$chr %in% sexChr) & de_results_filtered$qvalue < threshold_qvalue & de_results_filtered$logFC > 0)]),
                                          length(de_results_autosomes$gene_name[which(de_results_autosomes$qvalue < threshold_qvalue & de_results_autosomes$logFC < 0)]),
@@ -134,16 +157,12 @@ barplot_data_sexDE <- data.frame(variable = c("Female", "Female", "Male", "Male"
 
 barplot_data_sexDE$coloring <- paste(barplot_data_sexDE$variable, barplot_data_sexDE$chr, sep = "-")
 barplot_data_sexDE <- barplot_data_sexDE[order(barplot_data_sexDE$nbr_genes, decreasing = TRUE),] # order data
-barplot_data_sexDE$coloring <- factor(barplot_data_sexDE$coloring, levels = c("Male-sex", "Female-sex", "Male-other" , "Female-other"))
+barplot_data_sexDE$coloring <- factor(barplot_data_sexDE$coloring, levels = c("Male-sex chr.", "Female-sex chr.", "Male-autosomes" , "Female-autosomes"))
 barplot_data_sexDE$variable <- factor(barplot_data_sexDE$variable, levels = c("Male", "Female"))
 
 # barplot
 p_barplot <- barplot(barplot_data_sexDE)
 p_barplot
-# save plot
-# ggsave(plot = "1C_barplot_nbr_sexDE_genes.png", 
-#        path = 'images/figures/',
-#        namePlot, width = 8, height = 17.5, units = "cm")
 ```
 
 ## Volcanoplot
@@ -165,8 +184,8 @@ p_volcanoplot <- EnhancedVolcano(de_results_autosomes,
                                  lab = as.character(de_results_autosomes$gene_name),
                                  x = 'logFC',
                                  y = 'qvalue',
-                                 xlim = c(-2.5, 2.5),
-                                 ylim = c(0,20),
+                                 xlim = c(-1.5, 1.5),
+                                 ylim = c(0,16),
                                  FCcutoff = 2,
                                  pCutoff = 10E-15,
                                  cutoffLineType = 'blank',
@@ -176,21 +195,29 @@ p_volcanoplot <- EnhancedVolcano(de_results_autosomes,
                                  title = NULL,
                                  subtitle = NULL,
                                  caption = NULL)
-p_volcanoplot
+p_volcanoplot <- p_volcanoplot + theme_bw()
+p_volcanoplot <- p_volcanoplot + theme(plot.margin = margin(3,3,3,3, "mm"),
+                                       axis.title.x = element_text(size = 14),
+                                       axis.title.y = element_text(size = 14),
+                                       axis.text.x = element_text(size = 10),
+                                       axis.text.y = element_text(size = 10),
+                                       panel.border = element_rect(fill=NA, colour = "black", linewidth = 0.2))
+p_volcanoplot <- p_volcanoplot + guides(fill = "none", color = "none")
 
-# save plot
-# ggsave('1C_volcanoplot_colored_HDBR_dream_forebrain_pseudotime_sva_ind_interaction_sexDE_auto.png', 
-#        path = "images/figures/",
-#        width = 20, height = 15, units = "cm")
+p_volcanoplot
 ```
 
 ## Arrange 2 plots together
 
 ```{r figure1C_arrangePlots, echo=FALSE}
+ggsave("1C_volcanoplot_barplot_sexDE.svg", 
+       path = "images/figures/",
+       arrangeGrob(p_volcanoplot, p_barplot, ncol = 2, widths=c(4,2)),
+       width = 12, height = 8, units = "cm")
 ggsave("1C_volcanoplot_barplot_sexDE.png", 
        path = "images/figures/",
        arrangeGrob(p_volcanoplot, p_barplot, ncol = 2, widths=c(4,2)),
-       width = 16, height = 10, units = "cm")
+       width = 12, height = 8, units = "cm")
 ```
 
 
@@ -225,7 +252,7 @@ de_results_pseudotime_filtered <- de_results_pseudotime_filtered[which(!de_resul
 ## Barplot
 
 ```{r barplot_pseudotimeDE, echo=FALSE}
-barplot_data_pseudoDE <- data.frame(variable = c("Up", "Down"),
+barplot_data_pseudoDE <- data.frame(variable = c("Upregulated", "Downregulated"),
                            nbr_genes = c(length(de_results_pseudotime_filtered$gene_name[which(de_results_pseudotime_filtered$qvalue < threshold_qvalue & de_results_pseudotime_filtered$logFC > 0)]),
                                          length(de_results_pseudotime_filtered$gene_name[which(de_results_pseudotime_filtered$qvalue < threshold_qvalue & de_results_pseudotime_filtered$logFC < 0)]))
 )
@@ -235,14 +262,14 @@ barplot_data_pseudoDE <- barplot_data_pseudoDE[order(barplot_data_pseudoDE$nbr_g
 
 # barplot
 p_barplot <- barplot(barplot_data_pseudoDE,
-                     colors = c("Up" = 'aquamarine4', "Down" = "chocolate"),
-                     labels = c("Up" = 'Upregulated', "Down" = "Downregulated"), 
-                     nrowLegend = 2)
+                     colors = c("Upregulated" = 'aquamarine4', "Downregulated" = "chocolate"),
+                     labels = c("Upregulated" = 'Up-\nregulated', "Downregulated" = "Down-\nregulated"), 
+                     legend = FALSE)
+p_barplot <- p_barplot + scale_x_discrete(labels = c("Upregulated" = 'Up-\nregulated', "Downregulated" = "Down-\nregulated"))
+p_barplot <- p_barplot + guides(fill = "none")
+p_barplot <- p_barplot + theme(plot.margin = margin(3,3,-5,-5, "mm"),
+                               axis.text.x = element_text(angle = 45, vjust = 1, hjust=1, size = 12))
 p_barplot
-# save plot
-# ggsave(plot = "1D_barplot_nbr_pseudotimeDE_genes.png", 
-#        path = "images/figures/", 
-#        namePlot, width = 8, height = 16, units = "cm")
 ```
 
 ## Volcanoplot
@@ -264,6 +291,8 @@ p_volcanoplot <- EnhancedVolcano(de_results_pseudotime_filtered,
                                  lab = as.character(de_results_pseudotime_filtered$gene_name),
                                  x = 'logFC',
                                  y = 'qvalue',
+                                 xlim = c(-3.5, 3.5),
+                                 ylim = c(0,100),
                                  FCcutoff = 10,
                                  pCutoff = 10E-10,
                                  cutoffLineType = 'blank',
@@ -273,21 +302,29 @@ p_volcanoplot <- EnhancedVolcano(de_results_pseudotime_filtered,
                                  title = NULL,
                                  subtitle = NULL,
                                  caption = NULL)
-p_volcanoplot
+p_volcanoplot <- p_volcanoplot + theme_bw()
+p_volcanoplot <- p_volcanoplot + theme(plot.margin = margin(3,3,3,3, "mm"),
+                                       axis.title.x = element_text(size = 14),
+                                       axis.title.y = element_text(size = 14),
+                                       axis.text.x = element_text(size = 10),
+                                       axis.text.y = element_text(size = 10),
+                                       panel.border = element_rect(fill=NA, colour = "black", linewidth = 0.2))
+p_volcanoplot <- p_volcanoplot + guides(fill = "none", color = "none")
 
-# save plot
-# ggsave('1D_volcanoplot_colored_HDBR_dream_forebrain_pseudotime_sva_ind_interaction_pseudotimeDE.png', 
-#        path = "images/figures/",
-#        width = 12, height = 15, units = "cm")
+p_volcanoplot
 ```
 
 ## Arrange 2 plots together
 
 ```{r figure1D_arrangePlots, echo=FALSE}
+ggsave("1D_volcanoplot_barplot_pseudotimeDE.svg", 
+       path = "images/figures/",
+       arrangeGrob(p_volcanoplot, p_barplot, ncol = 2, widths=c(4,2)),
+       width = 12, height = 8, units = "cm")
 ggsave("1D_volcanoplot_barplot_pseudotimeDE.png", 
        path = "images/figures/",
        arrangeGrob(p_volcanoplot, p_barplot, ncol = 2, widths=c(4,2)),
-       width = 16, height = 10, units = "cm")
+       width = 12, height = 8, units = "cm")
 ```
 
 
@@ -330,30 +367,36 @@ Format the data for the upset plot from the ComplexHeatmap package.
 
 ```{r format_data_upset, echo=FALSE}
 combination_matrix <- make_comb_mat(merged_data[c(10, 11, 13, 14)])
+combination_matrix <- combination_matrix[comb_degree(combination_matrix) > 0]
 ```
 
 ## Upset plot
 
 ```{r upset_plot, echo=FALSE}
-colorVal <- list(group = c("up" = "#16967D", "down" = "#D35400", "male" = "#053061", "female" = "#B2182B"))
+colorVal <- list(group = c("up" = "#16967D", "down" = "#D35400", "male" = 'darkblue', "female" = "darkred"))
 p <- UpSet(combination_matrix, set_order = c("up", "down", "male", "female"), 
            comb_order = order(comb_size(combination_matrix), decreasing = TRUE),
            row_names_side = "left",
+           row_names_gp = gpar(fontsize = 0),
            top_annotation = upset_top_annotation(combination_matrix, 
                                                  show_annotation_name = FALSE,
                                                  add_numbers = TRUE,
                                                  numbers_rot = 0,
-                                                 numbers_gp = gpar(fontsize = 8),
+                                                 numbers_gp = gpar(fontsize = 10),
                                                  height = unit(5, "cm")),
            left_annotation = rowAnnotation(group = c("female", "male", "down", "up"), 
-                                            col = colorVal,
-                                            show_annotation_name = FALSE,
-                                            show_legend = FALSE)
+                                           col = colorVal,
+                                           show_annotation_name = FALSE,
+                                           show_legend = FALSE)
 )
 p
 # save plot
+svg("images/figures/1E_complexUpsetPlot_between_sexDE_pseudotimeDE.svg",
+    width = 3.15, height = 3.15)
+p
+dev.off()
 png("images/figures/1E_complexUpsetPlot_between_sexDE_pseudotimeDE.png",
-    width = 8, height = 8, units = "cm", res = 300)
+     width = 8, height = 8, units = "cm", res = 30)
 p
 dev.off()
 ```
@@ -368,12 +411,6 @@ Visualization of example genes.
 ```{r figure1F_load, echo=FALSE}
 # load sex-DE data
 load("data/3-DE/normCounts_dream_pseudotime_sva_ind_interaction_phenotypes.RData")
-de_results <- read.table("data/3-DE/VoomDream_topTable_forebrain_pseudotime_sva_ind_interaction.txt",
-                         header = TRUE)
-de_results_interaction <- read.table("data/3-DE/VoomDream_topTable_forebrain_pseudotime_sva_ind_interaction_term.txt", 
-                                     header = TRUE)
-de_results_pseudotime <- read.table("data/3-DE/VoomDream_topTable_forebrain_pseudotime_sva_ind_interaction_pseudotime.txt",
-                                    header = TRUE)
 ```
 
 ## Scatter plots for each example genes
@@ -381,65 +418,39 @@ de_results_pseudotime <- read.table("data/3-DE/VoomDream_topTable_forebrain_pseu
 Function to do the scatter plot.
 
 ```{r function_plot_gene_pseudotime, echo=FALSE}
-plot_Expr_Pseudotime_Sex <- function(expression, metadata, gene, DEinfo, xtext = 0.5, ytext = 6, legend = FALSE){
+plot_Expr_Pseudotime_Sex <- function(expression, metadata, gene, legend = FALSE){
   # extract gene expression
   gene_expr <- expression$E[which(expression$genes$gene_name == gene), ]
   data_plot <- data.frame(expr = gene_expr,
                           pseudotime = metadata$pseudotime,
                           sex = as.factor(metadata$Sex))
-  # text to add to the plot
-  textLogFC <- paste(paste0("logFC sex-DE = ", round(DEinfo$sex, digits = 2)),
-                     paste0("logFC pseudotime-DE = ", round(DEinfo$pseudotime, digits = 2)),
-                     paste0("logFC interaction-DE = ", round(DEinfo$interaction, digits = 2)), 
-                     sep = "\n")
   # plot gene expression
   p <- ggplot(data_plot, aes(x = pseudotime, y = expr, color = sex, group = sex))
   p <- p + geom_point()
   p <- p + geom_smooth(method = 'lm', formula = y ~ x)
-  p <- p + scale_color_manual(name = "Sex", values = c("1" = "#1565c1", "2" = "#B2182B"), labels = c("Male", "Female"))
+  p <- p + scale_color_manual(name = NULL, values = c("1" = "darkblue", "2" = "darkred"), labels = c("Male", "Female"))
   p <- p + theme_minimal()
   if (legend){
-    p <- p + theme(text = element_text(size=20))
+    p <- p + theme(text = element_text(size=14), legend.position = "inside", legend.position.inside = c(0.9, 0.85))
   } else{
-    p <- p + theme(text = element_text(size=20), legend.position="none")
+    p <- p + theme(text = element_text(size=14), legend.position="none")
   }
-  p <- p + annotate(geom = "text", x = xtext, y = ytext, label = textLogFC, hjust = "left", vjust = "top", size = 5)
-  p <- p + xlab("Pseudotime") + ylab("Gene expression") + ggtitle(gene)
+  p <- p + xlab("Pseudotime") + ylab("Gene expression") + ggtitle(NULL)
   return(p)
 }
 ```
 
-Plots the 5 example genes.
+Plot the example gene ZFX.
 
-```{r plot_exemple_genes, echo=FALSE}
-example_genes <- c("SERP2", "TTPA", "DOCK1", "BLK", "DCX")
-x_text_list <- c(-0.25, -1.01, -0.9, -1.01, -0.3)
-y_text_list <- c(2.7, -2, 3, -4, 7.5)
-legendBool <- c(TRUE, FALSE, FALSE, FALSE, FALSE)
-plots <- list()
-for (i in 1:5){
-  myGene <- example_genes[i]
-  x_text <- x_text_list[i]
-  y_text <- y_text_list[i]
-  DEinfo <- list("sex" = de_results$logFC[which(de_results$gene_name == myGene)], 
-                 "pseudotime" = de_results_pseudotime$logFC[which(de_results_pseudotime$gene_name == myGene)], 
-                 "interaction" = de_results_interaction$logFC[which(de_results_interaction$gene_name == myGene)])
-  p <- plot_Expr_Pseudotime_Sex(y, metadata, myGene, DEinfo = DEinfo, xtext = x_text, ytext = y_text, legend = legendBool[i])
-  plots[[i]] <- p
-}
-```
-
-Arrange the plots together and save the results.
-
-```{r figure1F_arrangePlots, echo=FALSE}
-legend <- as_ggplot(get_legend(plots[[1]])) # extract legend from first plot
-plots[[1]] <- plots[[1]] + theme(legend.position="none") # remove legend from this same plot
-layout_matrix <- matrix(c(1, 1, 2, 2, 3, 3, 7, 4, 4, 5, 5, 6), nrow = 2, byrow = TRUE)
-
-ggsave("1F_example_genes.png", 
-       path = "images/figures/",
-       grid.arrange(plots[[1]], plots[[2]], plots[[3]], plots[[4]], plots[[5]], legend, layout_matrix = layout_matrix),
-       width = 36, height = 24, units = "cm")
+```{r plot_example_gene_ZFX, echo=FALSE}
+myGene <- "ZFX"
+p <- plot_Expr_Pseudotime_Sex(y, metadata, myGene, legend = TRUE)
+p
+# save
+ggsave(plot = p, filename = "1F_example_gene_ZFX.png", 
+       path = "images/figures/", width = 12, height = 8, units = "cm")
+ggsave(plot = p, filename = "1F_example_gene_ZFX.svg", 
+       path = "images/figures/", width = 12, height = 8, units = "cm")
 ```
 
 
