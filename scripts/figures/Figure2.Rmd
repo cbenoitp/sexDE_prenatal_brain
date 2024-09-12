@@ -13,6 +13,8 @@ suppressPackageStartupMessages( library(ComplexHeatmap) )
 suppressPackageStartupMessages( library(ggpubr) )
 suppressPackageStartupMessages( library(ggrepel) )
 suppressPackageStartupMessages( library(ggpp) )
+suppressPackageStartupMessages( library(ggforce) )
+suppressPackageStartupMessages( library(patchwork) )
 suppressPackageStartupMessages( library(cowplot) )
 ```
 
@@ -102,18 +104,18 @@ combination_matrix <- combination_matrix[comb_degree(combination_matrix) > 0]
 ## Upset plot
 
 ```{r upset_plot, echo=FALSE}
-colorVal <- list(sex = c("male" = "#053061", "female" = "#B2182B"),
+colorVal <- list(sex = c("male" = "darkblue", "female" = "darkred"),
                  dataset = c("adult" = "#2bd494", "prenatal" = "#9729d6"))
 p <- UpSet(combination_matrix, set_order = c("prenatal male", "prenatal female", "adult male", "adult female"), 
            comb_order = order(comb_size(combination_matrix), decreasing = TRUE),
-           row_names_gp = gpar(fontsize = 8),
+           row_names_gp = gpar(fontsize = 0),
            row_names_side = "left",
            top_annotation = upset_top_annotation(combination_matrix, 
                                                  show_annotation_name = FALSE,
                                                  add_numbers = TRUE,
                                                  numbers_rot = 0,
-                                                 numbers_gp = gpar(fontsize = 8),
-                                                 height = unit(4.5, "cm")),
+                                                 numbers_gp = gpar(fontsize = 10),
+                                                 height = unit(5, "cm")),
            left_annotation = rowAnnotation(sex = c("male", "female", "male", "female"),
                                            dataset = c("prenatal", "prenatal", "adult", "adult"),
                                            col = colorVal,
@@ -122,8 +124,12 @@ p <- UpSet(combination_matrix, set_order = c("prenatal male", "prenatal female",
 )
 p
 # save plot
+svg("images/figures/2A_complexUpsetPlot_sexDE_between_prenatal_adult.svg",
+    width = 3.15, height = 3.15)
+p
+dev.off()
 png("images/figures/2A_complexUpsetPlot_sexDE_between_prenatal_adult.png",
-    width = 10, height = 8, units = "cm", res = 300)
+    width = 8, height = 8, units = "cm", res = 300)
 p
 dev.off()
 ```
@@ -160,7 +166,8 @@ scatter_logFC <- function(data1, data2, nameData1, nameData2, columnMerge = "ens
                  plot.subtitle = element_text(hjust = 0.5),
                  panel.grid = element_blank(),
                  axis.title.y = element_text(color = "#2bd494"),
-                 axis.title.x = element_text(color = "#9729d6"))
+                 axis.title.x = element_text(color = "#9729d6"),
+                 text = element_text(size=14))
   p <- p + geom_hline(yintercept = 0) + geom_vline(xintercept = 0)
   p <- p + xlab(paste0("logFC - ", nameData1)) + ylab(paste0("logFC - ", nameData2))
   if (corRes){
@@ -175,11 +182,15 @@ scatter_logFC <- function(data1, data2, nameData1, nameData2, columnMerge = "ens
 
 ```{r scatter_plot_sexDE_auto, echo=FALSE}
 p <- scatter_logFC(results_prenatal_auto, results_adult_auto, "Prenatal", "Adult")
+p <- p + theme(text = element_text(size=14))
 p 
 # save plot<
+ggsave("2B_scatterPlot_logFC_sexDE_prenatal_adult.svg",
+       path = "images/figures/",
+       width = 10, height = 8, units = "cm")
 ggsave("2B_scatterPlot_logFC_sexDE_prenatal_adult.png",
        path = "images/figures/",
-       width = 10, height = 8, units = "cm",)
+       width = 10, height = 8, units = "cm")
 ```
 
 
@@ -213,12 +224,16 @@ p <- p + scale_fill_manual(values = c("PRENATAL" = "#9729d6", "ADULT" = "#2bd494
                                        "SHARED2" = "#e6bf7f", "OPPOSITE" = "#Fbfd8e"),
                             guide = "none")
 p <- p + theme_minimal() + ylab("Proportion estimates") + xlab("")
-p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p <- p + theme(text = element_text(size=14),
+               axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
 p
 # save plot
+ggsave("2C_proportions_barplot.svg", 
+       path = 'images/figures/', 
+       plot = p, width = 8, height = 8, units = "cm")
 ggsave("2C_proportions_barplot.png", 
        path = 'images/figures/', 
-       plot = p, width = 5, height = 10, units = "cm")
+       plot = p, width = 8, height = 8, units = "cm")
 ```
 
 # Figure 2 D
@@ -236,8 +251,8 @@ dataToPlot$specificityDetailed <- factor(dataToPlot$specificity,
                                                     "SHARED0.5", "SHARED1", "SHARED2", "SHARED_UNSPECIFIED",
                                                     "OPPOSITE", "UNCLASSIFIED"),
                                          labels = c("PRENATAL" = "Prenatal specific", "ADULT" = "Adult specific", 
-                                                    "SHARED0.5" = "Shared - higher prenatal effect", "SHARED1" = "Shared - equal effect", 
-                                                    "SHARED2" = "Shared - higher adult effect", "SHARED_UNSPECIFIED" = "Shared - unspecified",
+                                                    "SHARED0.5" = "prenatal>adult", "SHARED1" = "prenatal=adult", 
+                                                    "SHARED2" = "prenatal<adult", "SHARED_UNSPECIFIED" = "unspecified",
                                                     "OPPOSITE" = "Opposite effect", "UNCLASSIFIED" = "Unclassified"))
 dataToPlot$specificity <- fct_collapse(dataToPlot$specificity, 'Prenatal' = c('PRENATAL'), 'Adult' = c('ADULT'), 'Shared' = c('SHARED0.5', 'SHARED1', 'SHARED2', 'SHARED_UNSPECIFIED'), 'Opposite' = c('OPPOSITE'), 'Unclassified' = c('UNCLASSIFIED'))
 dataToPlot$specificity <- factor(dataToPlot$specificity , levels = rev(c('Prenatal', 'Shared', 'Opposite', 'Adult', 'Unclassified')))
@@ -253,35 +268,162 @@ dataToPlot_prop$label_opposite <- ifelse(dataToPlot_prop$nbr < 10 | dataToPlot_p
 dataToPlot_prop$new_freq <- rev(cumsum(rev(dataToPlot_prop$freq)))
 ```
 
+Compute proportions only for shared categories using dplyr
+
+```{r compute_proportion_shared, echo=FALSE}
+dataToPlot_prop_shared <- dataToPlot %>% group_by(specificityDetailed) %>% summarise(nbr = n()) %>% mutate(freq = nbr / sum(nbr))
+dataToPlot_prop_shared <- dataToPlot_prop_shared[which(dataToPlot_prop_shared$specificityDetailed %in% c("prenatal>adult", "prenatal=adult", "prenatal<adult", "unspecified")), ]
+dataToPlot_prop_shared$label <- ifelse(dataToPlot_prop_shared$nbr < 50, "", dataToPlot_prop_shared$nbr)
+dataToPlot_prop_shared$label_shared_adult <- ifelse(dataToPlot_prop_shared$nbr >= 10, "", dataToPlot_prop_shared$nbr)
+dataToPlot_prop_shared$label_shared_equal <- ifelse(dataToPlot_prop_shared$nbr < 10 | dataToPlot_prop_shared$nbr > 50, "", dataToPlot_prop_shared$nbr)
+```
 
 
 ## Stacked barplot
 
+### All categories
+
 ```{r barplot_stacked_nbrGenes_perCategory, echo=FALSE}
 p <- ggplot(dataToPlot_prop, aes(x = 1, y = freq, fill = specificity))
-p <- p + geom_bar(position = "stack", stat = "identity")
+p <- p + geom_bar(position = "stack", stat = "identity", width = 0.5)
 p <- p + scale_y_continuous(labels = scales::percent)
 p <- p + scale_fill_manual(values = c('Prenatal' = "#9729d6", 'Adult' = "#2bd494",
                                       'Shared' = "#6b4b15", 'Opposite' = "#Fbfd8e", 'Unclassified' = "#d0d0d0"),
                            name = "Categories")
-p <- p + theme_minimal() + ylab("Proportions of genes") + xlab("")
-p <- p + geom_text(aes(label = label), size = 3, color = "black", position = position_stack(vjust = 0.5))
-p <- p + geom_text(aes(label = label_adult, x = 1), size = 3, color = "black", position = position_stacknudge(vjust = 0.5, x = 0.8, y = 0.05))
-p <- p + geom_text(aes(label = label_opposite, x = 1), size = 3, color = "black", position = position_stacknudge(vjust = 0.5, x = 0.7, y = -0.02))
-# TODO: add line for each number
-p <- p + geom_segment(aes(x = 1.45, y = 0.804, xend = 1.7, yend = 0.854), color = "black", linewidth = 0.1)
-p <- p + geom_segment(aes(x = 1.45, y = 0.795, xend = 1.55, yend = 0.775), color = "black", linewidth = 0.1)
-p <- p + theme(axis.title.x=element_blank(),
+p <- p + theme_minimal() + ylab("Proportions of genes\n (PP > 0.8)") + xlab(NULL) + xlim(0.75,2)
+p <- p + geom_text(aes(label = label), size = 4, color = "black", position = position_stack(vjust = 0.5))
+p <- p + geom_text(aes(label = label_adult, x = 1), size = 4, color = "black", position = position_stacknudge(vjust = 0.5, x = 0.57, y = 0.06))
+p <- p + geom_text(aes(label = label_opposite, x = 1), size = 4, color = "black", position = position_stacknudge(vjust = 0.5, x = 0.45, y = -0.02))
+#add line for each number
+p <- p + geom_segment(aes(x = 1.25, y = 0.804, xend = 1.5, yend = 0.854), color = "black", linewidth = 0.1)
+p <- p + geom_segment(aes(x = 1.25, y = 0.795, xend = 1.35, yend = 0.775), color = "black", linewidth = 0.1)
+p <- p + theme(text = element_text(size=14),
+               axis.title.x=element_blank(),
                axis.text.x=element_blank(),
                axis.ticks.x=element_blank(),
-               legend.position = "right",
-               legend.box.spacing = unit(-0.5, "cm"),
-               legend.justification = c(0,0.2))
+               legend.position = "inside", 
+               legend.position.inside = c(0.75, 0.3))
 p
 # save plot
+ggsave("2D_nbrGenes_specificity_stackedBarplot.svg", 
+       path = 'images/figures/',
+       plot = p, width = 8, height = 8, units = "cm")
 ggsave("2D_nbrGenes_specificity_stackedBarplot.png", 
        path = 'images/figures/',
-       plot = p, width = 6, height = 10, units = "cm")
+       plot = p, width = 8, height = 8, units = "cm")
+```
+
+
+### Subcategories from the shared one
+
+```{r barplot_stacked_nbrGenes_perCategory_shared, echo=FALSE}
+p_shared <- ggplot(dataToPlot_prop_shared, aes(x = 1, y = freq, fill = specificityDetailed))
+p_shared <- p_shared + geom_bar(position = "stack", stat = "identity", width = 0.5)
+p_shared <- p_shared + scale_y_continuous(labels = scales::percent, position = "right")
+p_shared <- p_shared + scale_fill_manual(values = c("unspecified" = "#6b4b15", "prenatal>adult" = "#95681d", "prenatal=adult" = "#d5952a", 
+                                                    "prenatal<adult" = "#e6bf7f"),
+                           name = "Shared")
+p_shared <- p_shared + theme_minimal() + ylab(NULL) + xlab(NULL) + xlim(0,1.25)
+p_shared <- p_shared + geom_text(aes(label = label), size = 4, color = "black", position = position_stack(vjust = 0.5))
+p_shared <- p_shared + geom_text(aes(label = label_shared_adult, x = 1), size = 4, color = "black", position = position_stacknudge(vjust = 0.5, x = -0.45, y = 0.015))
+p_shared <- p_shared + geom_text(aes(label = label_shared_equal, x = 1), size = 4, color = "black", position = position_stacknudge(vjust = 0.5, x = -0.4, y = -0.015))
+#add line for each number
+p_shared <- p_shared + geom_segment(aes(x = 0.75, y = 0.037, xend = 0.6, yend = 0.05), color = "black", linewidth = 0.1)
+p_shared <- p_shared + geom_segment(aes(x = 0.75, y = 0.034, xend = 0.65, yend = 0.025), color = "black", linewidth = 0.1)
+p_shared <- p_shared + theme(text = element_text(size=14),
+                             axis.title.x=element_blank(),
+                             axis.text.x=element_blank(),
+                             axis.ticks.x=element_blank(),
+                             legend.position = "inside", 
+                             legend.position.inside = c(0.25, 0.75))
+p_shared
+# save plot
+ggsave("2D_nbrGenes_specificity_shared_stackedBarplot.svg", 
+       path = 'images/figures/',
+       plot = p_shared, width = 8, height = 8, units = "cm")
+ggsave("2D_nbrGenes_specificity_shared_stackedBarplot.png", 
+       path = 'images/figures/',
+       plot = p_shared, width = 8, height = 8, units = "cm")
+```
+
+### Merge the 2 plots
+
+We want to make the shared barplot a zoom of the complete barplot.
+
+```{r barplot_stacked_nbrGenes_perCategory_merged, echo=FALSE}
+polygon_data <- data.frame(x = c(1.05, 1.17, 1.17, 1.05), y = c(0.785, 0.72, 0, 0.57))
+# full barplot
+p <- ggplot(dataToPlot_prop, aes(x = 1, y = freq, fill = specificity))
+p <- p + geom_bar(position = "stack", stat = "identity", width = 0.1)
+p <- p + geom_polygon(data = polygon_data, aes(x = x, y = y), fill = "#EBEBEB")
+p <- p + scale_y_continuous(labels = scales::percent, limits = c(0, 1), oob=scales::squish)
+p <- p + scale_fill_manual(values = c('Prenatal' = "#9729d6", 'Adult' = "#2bd494",
+                                      'Shared' = "#6b4b15", 'Opposite' = "#Fbfd8e", 'Unclassified' = "#d0d0d0"),
+                           name = "Categories")
+p <- p + theme_minimal() + ylab("Proportions of genes\n(PP > 0.8)") + xlab(NULL) + xlim(0.9,1.3)
+p <- p + geom_text(aes(label = label), size = 4, color = "black", position = position_stack(vjust = 0.5))
+p <- p + geom_text(aes(label = label_adult, x = 1), size = 4, color = "black", position = position_stacknudge(vjust = 0.5, x = 0.23, y = 0.06))
+p <- p + geom_text(aes(label = label_opposite, x = 1), size = 4, color = "black", position = position_stacknudge(vjust = 0.5, x = 0.22, y = -0.02))
+#add line for each number
+p <- p + geom_segment(aes(x = 1.05, y = 0.804, xend = 1.22, yend = 0.854), color = "black", linewidth = 0.1)
+p <- p + geom_segment(aes(x = 1.05, y = 0.795, xend = 1.2, yend = 0.775), color = "black", linewidth = 0.1)
+p <- p + theme(text = element_text(size=14),
+               axis.title.x=element_blank(),
+               axis.text.x=element_blank(),
+               axis.ticks.x=element_blank(),
+               legend.position = "bottom",
+               legend.direction = "vertical",
+               legend.background = element_rect(fill = "white", color = "white"),
+               plot.margin = unit(c(0, 0, 0, 0), "cm"))
+#p
+# get legend
+legend_all <- get_plot_component(p, 'guide-box-bottom', return_all = TRUE)
+p <- p + theme(legend.position = "none")
+
+# zoomed barplot
+p_shared <- ggplot(dataToPlot_prop_shared, aes(x = 1, y = freq, fill = specificityDetailed))
+p_shared <- p_shared + geom_bar(position = "stack", stat = "identity", width = 0.2)
+p_shared <- p_shared + scale_y_continuous(labels = scales::percent, position = "right", limits = c(0, 0.22))
+p_shared <- p_shared + scale_fill_manual(values = c("unspecified" = "#6b4b15", "prenatal>adult" = "#95681d", "prenatal=adult" = "#d5952a", 
+                                                    "prenatal<adult" = "#e6bf7f"),
+                           name = "")
+p_shared <- p_shared + theme_grey() + ylab(NULL) + xlab(NULL) + xlim(0.75, 1.1)
+p_shared <- p_shared + geom_text(aes(label = label), size = 4, color = "black", position = position_stack(vjust = 0.5))
+p_shared <- p_shared + geom_text(aes(label = label_shared_adult, x = 1), size = 4, color = "black", position = position_stacknudge(vjust = 0.5, x = -0.23, y = 0.015))
+p_shared <- p_shared + geom_text(aes(label = label_shared_equal, x = 1), size = 4, color = "black", position = position_stacknudge(vjust = 0.5, x = -0.2, y = -0.015))
+#add line for each number
+p_shared <- p_shared + geom_segment(aes(x = 0.9, y = 0.037, xend = 0.8, yend = 0.05), color = "black", linewidth = 0.1)
+p_shared <- p_shared + geom_segment(aes(x = 0.9, y = 0.034, xend = 0.85, yend = 0.025), color = "black", linewidth = 0.1)
+p_shared <- p_shared + theme(text = element_text(size=14),
+                             axis.title.x=element_blank(),
+                             axis.text.x=element_blank(),
+                             axis.ticks.x=element_blank(),
+                             panel.grid = element_blank(),
+                             legend.position = "bottom",
+                             legend.direction = "vertical",
+                             panel.background = element_rect(fill = "#EBEBEB"),
+                             plot.background = element_rect(fill = "#EBEBEB"),
+                             plot.margin = unit(c(0, 0, 0, 0), "cm"))
+#p_shared
+# get legend
+legend_shared <- get_plot_component(p_shared, 'guide-box-bottom', return_all = TRUE)
+p_shared <- p_shared + theme(legend.position = "none")
+
+
+# combined plot
+combined_plot <- p + inset_element(p_shared, left = 0.65, bottom = 0.05, right = 1, top = 0.7) 
+combined_plot <- combined_plot + theme(plot.margin = unit(c(0, 0, -0.5, 0), "cm"))
+legend_plot <- plot_grid(legend_all, legend_shared, nrow = 1, rel_widths = c(0.5, 0.5))
+final_plot <- plot_grid(combined_plot, legend_plot, nrow = 2, rel_heights = c(1,0.5)) #align = "vh", axis = "tblr",
+final_plot
+
+# save plot
+ggsave("2D_nbrGenes_specificity_stackedBarplot_merged.svg",
+       path = 'images/figures/',
+       plot = final_plot, width = 9, height = 12, units = "cm")
+ggsave("2D_nbrGenes_specificity_stackedBarplot_merged.png",
+       path = 'images/figures/',
+       plot = final_plot, width = 9, height = 12, units = "cm")
 ```
 
 
@@ -325,15 +467,17 @@ plot_logFC_geneList <- function(geneList, data, save = TRUE, limits = c(-1.7, 1.
   p <- p + geom_pointrange(size = 0.2, position = position_dodge(width = 0.5))
   p <- p + scale_color_manual(values = c("prenatal" = "#9729d6", "adult" = "#2bd494"), name = "Dataset")
   p <- p + theme_minimal() + ylab("LogFC") + xlab("")
-  p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+  p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1), 
+                 legend.position="bottom", legend.justification = "center", 
+                 text = element_text(size=14),
+                 strip.text = element_text(size = 12), strip.clip = "off")
   p <- p + geom_hline(yintercept = 0, color = "grey")
   p <- p + facet_grid(cols = vars(specificity), scales = "free", space = "free_x")
   p <- p + coord_cartesian(ylim = limits)
-  p <- p + theme(legend.position="bottom", legend.justification = "center")
   if (save){
     ggsave(paste0("logFC_", nameFig, ".png"), 
            path = 'images/4-GTEx/2-comparison/lineModel/examples/',
-           plot = p, width = 3+dim(data_gene_formated)[1]/2, height = 8, units = "cm")
+           plot = p, width = 3+dim(data_gene_formated)[1]/2.5, height = 4, units = "cm")
   }
   return(p)
 }
@@ -352,16 +496,16 @@ plot_post_proba_geneList <- function(geneList, data, save = TRUE, nameFig = "exa
   p <- p + scale_fill_manual(values = c("PRENATAL" = "#9729d6", "ADULT" = "#2bd494", "SHARED0.5" = "#95681d", "SHARED1" = "#d5952a", 
                                        "SHARED2" = "#e6bf7f", "OPPOSITE" = "#Fbfd8e"),
                             name = "")
-  p <- p + geom_bar(stat='identity', position = "stack")
+  p <- p + geom_bar(stat='identity', position = "stack", width = 0.8)
   p <- p + theme_minimal() + ylab("Posterior probability") + xlab("")
-  p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+  p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
+                 legend.position="none", text = element_text(size=14))
   p <- p + facet_grid(cols = vars(specificity), scales = "free", space = "free_x")
   p <- p + coord_cartesian(ylim = c(0,1))
-  p <- p + theme(legend.position="none")
   if (save){
     ggsave(paste0("posteriorProba_", nameFig, ".png"),
            path = 'images/4-GTEx/2-comparison/lineModel/examples/', 
-           plot = p, width = 5+dim(data_gene_formated)[1]/6, height = 6, units = "cm")
+           plot = p, width = 3+dim(data_gene_formated)[1]/2.5, height = 4, units = "cm")
   }
   return(p)
 }
@@ -388,8 +532,10 @@ Arrange 2 plots together.
 ```{r figure2E, echo=FALSE}
 final_plot <- plot_grid(example_logFC, example_PP, legend_logFC, ncol = 1, align = "v", axis = "rl", rel_heights = c(1, 1, .1))
 final_plot
+save_plot("images/figures/2E_example_auto_genes.svg", plot = final_plot, 
+          base_width = 9, base_height = 10, units = "cm")
 save_plot("images/figures/2E_example_auto_genes.png", plot = final_plot, 
-          base_width = 12, base_height = 10, units = "cm")
+          base_width = 9, base_height = 10, units = "cm")
 ```
 
 
