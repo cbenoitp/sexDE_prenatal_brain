@@ -257,6 +257,52 @@ ggsave("heatmap_magma_sexVSpseudotime.png", plot = p,
        width = 15, height = 18, units = "cm")
 ```
 
+## Plot betas only for disease gene lists
+
+Select the data of interest both in term of analysis and gene list.
+```{r select_format_sexDE, echo=FALSE}
+magma_sexDE_selected <- magma[grep("maleBiased", magma$FULL_NAME), ]
+magma_sexDE_selected <- magma_sexDE_selected[which(magma_sexDE_selected$TYPE %in% c("AD", "AN", "TS", "MDD", "BD", "SCZ", "Epilepsy", "ADHD", "ASD")), ]
+names(magma_sexDE_selected) <- c("Comparison", "Trait", "Ngenes", "Beta", "Beta_std", "SE", "pval", "Dataset")
+magma_sexDE_selected$Comparison <- magma_sexDE_selected$Dataset
+magma_sexDE_selected <- separate(magma_sexDE_selected, Dataset, sep = "_", into = c("Data", "Analysis", "Direction"))
+magma_sexDE_selected$Data <- factor(magma_sexDE_selected$Data, levels = c("hdbr", "gtex"), labels = c("Prenatal", "Adult"))
+magma_sexDE_selected$Direction <- factor(magma_sexDE_selected$Direction, levels = c("maleBiased", "femaleBiased"))
+magma_sexDE_selected$Trait <- factor(magma_sexDE_selected$Trait, 
+                                     levels = c("AD", "AN", "TS", "MDD", "BD", "SCZ", "Epilepsy", "ADHD", "ASD"),
+                                     labels = c("Alzheimer", "Anorexia", "Tourette", "Major depressive disorder", "Bipolar", 
+                                                "Schizophrenia", "Epilepsy", "ADHD", "Autism"))
+```
+
+
+Prepare the significance annotation.
+```{r annot_signif_sexDE, echo=FALSE}
+magma_sexDE_selected$signif <- ifelse(magma_sexDE_selected$pval<0.0069, "*", "")
+```
+
+```{r plot_betas_sexDE_prenatal_adult, echo=FALSE}
+p <- ggplot(magma_sexDE_selected, aes(x = Beta, y = Trait, xmin = Beta-SE, xmax = Beta+SE, 
+                                      color = Direction, fill = Direction, ))
+p <- p + geom_vline(xintercept = 0, color = "darkgrey")
+p <- p + geom_pointrange(position = position_dodge(width = 0.75))
+p <- p + scale_color_manual(values = c("maleBiased" = 'darkblue', "femaleBiased" = 'darkred'), 
+                            labels = c("maleBiased" = 'Male biased', "femaleBiased" = 'Female biased'),
+                            name = "Direction of effect")
+p <- p + scale_fill_manual(values = c("maleBiased" = 'darkblue', "femaleBiased" = 'darkred'), 
+                            labels = c("maleBiased" = 'Male biased', "femaleBiased" = 'Female biased'),
+                            name = "Direction of effect")
+
+p <- p + facet_grid(cols = vars(Data))
+# add significance to plot
+p <- p + geom_text(aes(x = Beta+SE+0.05, y = Trait, label = signif), size = 5, position = position_dodge(width = 0.05))
+p <- p + theme_minimal()
+p
+# save plot
+ggsave("magma_betas_sexDE_prenatalVSadult.png", plot = p, 
+       path = "images/5-postprocessing/5-MAGMA/",
+       width = 12, height = 10, units = "cm")
+```
+
 
 
 # MAGMA analysis on HDBR-specific and shared signal with GTEx
@@ -394,6 +440,54 @@ Comparison for Epilepsy in males.
 ```{r Epilepsy_males, echo=FALSE}
 Epilepsy_males <- magmaSpe_transformed[which(magmaSpe_transformed$Trait == "Epilepsy" & magmaSpe_transformed$Direction == "maleBiased"),]
 compareBetas(Epilepsy_males[which(Epilepsy_males$Analysis == "prenatal_specific"), ], Epilepsy_males[which(Epilepsy_males$Analysis == "shared"), ])
+```
+
+## Plot betas only for disease gene lists
+
+Select the data of interest both in term of analysis and gene list.
+```{r select_format_bayes, echo=FALSE}
+magma_bayes_selected <- magmaSpe[grep("maleBiased", magmaSpe$FULL_NAME), ]
+magma_bayes_selected <- magma_bayes_selected[which(magma_bayes_selected$TYPE %in% c("AD", "AN", "TS", "MDD", "BD", "SCZ", "Epilepsy", "ADHD", "ASD")), ]
+names(magma_bayes_selected) <- c("Comparison", "Trait", "Ngenes", "Beta", "Beta_std", "SE", "pval", "Dataset")
+magma_bayes_selected$Comparison <- magma_bayes_selected$Dataset
+magma_bayes_selected <- separate(magma_bayes_selected, Dataset, sep = '([shared|specific]_)', into = c("Analysis", "Direction")) ## Strange behavior: the last character is removed. Why??
+magma_bayes_selected$Analysis <- factor(magma_bayes_selected$Analysis, 
+                                        levels = c("prenatal_specifi", "share"),
+                                        labels = c("prenatal_specific", "shared"))
+magma_bayes_selected$Direction <- factor(magma_bayes_selected$Direction, levels = c("maleBiased", "femaleBiased"))
+magma_bayes_selected$Trait <- factor(magma_bayes_selected$Trait, 
+                                     levels = c("AD", "AN", "TS", "MDD", "BD", "SCZ", "Epilepsy", "ADHD", "ASD"),
+                                     labels = c("Alzheimer", "Anorexia", "Tourette", "Major depressive disorder", "Bipolar", 
+                                                "Schizophrenia", "Epilepsy", "ADHD", "Autism"))
+```
+
+
+Prepare the significance annotation.
+```{r annot_signif_bayes, echo=FALSE}
+magma_bayes_selected$signif <- ifelse(magma_bayes_selected$pval<0.0069, "*", "")
+```
+
+```{r plot_betas_bayes, echo=FALSE}
+p <- ggplot(magma_bayes_selected, aes(x = Beta, y = Trait, xmin = Beta-SE, xmax = Beta+SE, 
+                                      color = Direction, fill = Direction, ))
+p <- p + geom_vline(xintercept = 0, color = "darkgrey")
+p <- p + geom_pointrange(position = position_dodge(width = 0.75))
+p <- p + scale_color_manual(values = c("maleBiased" = 'darkblue', "femaleBiased" = 'darkred'), 
+                            labels = c("maleBiased" = 'Male biased', "femaleBiased" = 'Female biased'),
+                            name = "Direction of effect")
+p <- p + scale_fill_manual(values = c("maleBiased" = 'darkblue', "femaleBiased" = 'darkred'), 
+                            labels = c("maleBiased" = 'Male biased', "femaleBiased" = 'Female biased'),
+                            name = "Direction of effect")
+
+p <- p + facet_grid(cols = vars(Analysis))
+# add significance to plot
+p <- p + geom_text(aes(x = Beta+SE+0.05, y = Trait, label = signif), size = 5, position = position_dodge(width = 0.05))
+p <- p + theme_minimal()
+p
+# save plot
+ggsave("magma_betas_bayes.png", plot = p, 
+       path = "images/5-postprocessing/5-MAGMA/",
+       width = 12, height = 10, units = "cm")
 ```
 
 
