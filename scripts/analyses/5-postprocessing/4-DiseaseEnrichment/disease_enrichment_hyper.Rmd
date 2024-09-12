@@ -432,13 +432,136 @@ p <- p + facet_grid(cols = vars(analysis), scales = "free", space = "free")
 p <- p + theme_minimal()
 p <- p + ylab("") + xlab("Relative enrichent")
 p <- p + guides(alpha="none")
-p <- p + coord_cartesian(xlim = c(0,5))
+p <- p + coord_cartesian(xlim = c(0,6))
 p <- p + scale_y_discrete(limits = rev(levels(enrichRes_random_formated_bayes_ctrlExpr$geneList))) # reverse order of phenotype
 p
 # save plot
 ggsave("enrichment_plot_sexDE_bayes_ctrlExpr.png",
       path = "images/5-postprocessing/4-DiseaseEnrichment/disease_hyper/",
-      units = "cm", width = 15, height = 12)
+      units = "cm", width = 15, height = 16)
+```
+
+## Plot for supplementary figure
+
+### Plot enrichment results for sex-DE results controlling for gene expression
+
+First, we need tot select the data we want to plot and format it.
+
+```{r select4plot_sexDE_ctrlExpr, echo=FALSE}
+# select analyses of interest
+enrichRes_sexDE_formated_ctrlExpr <- enrichRes[which(enrichRes$analysis %in% c("prenatal_sexDE", "adult_sexDE") & enrichRes$direction != "both" & enrichRes$ctrlExpr), ]
+# select traits of interest
+enrichRes_sexDE_formated_ctrlExpr <- enrichRes_sexDE_formated_ctrlExpr[which(enrichRes_sexDE_formated_ctrlExpr$geneList %in% c("ASD", "NDD", "epilepsy_ndd", "EPI", "scz", "BP", "MS", "ALS", "alzheimer")), ]
+```
+
+
+```{r format4plot_sexDE_ctrlExpr, echo=FALSE}
+# add * for signif enrichment or depletion (with a threshold of 0.05/9*8=0.00069)
+enrichRes_sexDE_formated_ctrlExpr$signif <- ifelse(enrichRes_sexDE_formated_ctrlExpr$pval_enrich<0.00069 & 
+                                                     enrichRes_sexDE_formated_ctrlExpr$permut_pval < 0.05, "*", "")
+# order the different direction of effect
+enrichRes_sexDE_formated_ctrlExpr$direction <- factor(enrichRes_sexDE_formated_ctrlExpr$direction,
+                                                      levels = c("female", "male"))
+# order the different phenotype
+enrichRes_sexDE_formated_ctrlExpr$geneList <- factor(enrichRes_sexDE_formated_ctrlExpr$geneList,
+                                                     levels = c("ASD", "NDD", "epilepsy_ndd", "EPI", "scz", "BP", "MS", "ALS", "alzheimer"),
+                                                     labels = c("Autism", "Neurodevelopmental\ndisorder","Neurodevelopmental\ndisorder with epilepsy", "Epilepsy", 
+                                                                "Schizophrenia", "Bipolar disorder", "Multiple sclerosis", "Amyotrophic lateral\nsclerosis",
+                                                                "Alzheimer"))
+# rename the 4 analyses
+enrichRes_sexDE_formated_ctrlExpr$analysis <- factor(enrichRes_sexDE_formated_ctrlExpr$analysis,
+                                                     levels = c("prenatal_sexDE", "adult_sexDE"),
+                                                     labels = c("Prenatal", "Adult"))
+
+# extract and transform the results for the random set of genes
+enrichRes_sexDE_random_formated_ctrlExpr <- enrichRes_sexDE_formated_ctrlExpr[, c("geneList", "analysis", "direction", "pval_enrich_random", "pval_deple_random", "relative_enrich_random")] %>% separate_longer_delim(cols = c(pval_enrich_random, pval_deple_random, relative_enrich_random), delim = ";")
+enrichRes_sexDE_random_formated_ctrlExpr$pval_enrich_random <- as.numeric(enrichRes_sexDE_random_formated_ctrlExpr$pval_enrich_random)
+enrichRes_sexDE_random_formated_ctrlExpr$pval_deple_random <- as.numeric(enrichRes_sexDE_random_formated_ctrlExpr$pval_deple_random)
+enrichRes_sexDE_random_formated_ctrlExpr$relative_enrich_random <- as.numeric(enrichRes_sexDE_random_formated_ctrlExpr$relative_enrich_random)
+```
+
+Then, we plot the enrichment results.
+
+```{r plot_sexDE_ctrlExpr, echo=FALSE}
+p <- ggplot(enrichRes_sexDE_random_formated_ctrlExpr, aes(y = geneList, x = relative_enrich_random, fill = direction, alpha = 0.4))
+p <- p + geom_violin(linewidth = 0.1)
+p <- p + geom_vline(xintercept = 1)
+p <- p + scale_fill_manual(values = c("female" = "#ae4d4d", "male" = "#4d4dae"))
+p <- p + geom_point(data = enrichRes_sexDE_formated_ctrlExpr, aes(y = geneList, x = relative_enrich, color = direction), 
+                    position = position_dodge(0.9), size = 2, alpha = 1)
+p <- p + geom_text(data = enrichRes_sexDE_formated_ctrlExpr, aes(y = geneList, x = relative_enrich + 0.3, label = signif),
+                   position = position_dodge(0.9), size = 4, alpha = 1)
+p <- p + scale_color_manual(values = c("female" = "darkred", "male" = "darkblue"))
+p <- p + facet_grid(cols = vars(analysis), scales = "free", space = "free")
+p <- p + theme_minimal()
+p <- p + ylab("") + xlab("Relative enrichment")
+p <- p + guides(alpha="none")
+p <- p + coord_cartesian(xlim = c(0,4))
+p <- p + scale_y_discrete(limits = rev(levels(enrichRes_sexDE_random_formated_ctrlExpr$geneList))) # reverse order of phenotype
+p
+# save plot
+ggsave("enrichment_plot_sexDE_adult_prenatal_diseaseOnly_ctrlExpr.png",
+      path = "images/5-postprocessing/4-DiseaseEnrichment/disease_hyper/",
+      units = "cm", width = 12, height = 10)
+```
+
+### Plot enrichment results for sex-DE results controlling for gene expression
+
+First, we need tot select the data we want to plot and format it.
+
+```{r select4plot_sexDE_ctrlExpr, echo=FALSE}
+# select analyses of interest
+enrichRes_sexDE_formated_bayes_ctrlExpr <- enrichRes[which(enrichRes$analysis %in% c("prenatal_specific", "shared") &
+                                                             enrichRes$direction != "both" & enrichRes$ctrlExpr), ]
+# select traits of interest
+enrichRes_sexDE_formated_bayes_ctrlExpr <- enrichRes_sexDE_formated_bayes_ctrlExpr[which(enrichRes_sexDE_formated_bayes_ctrlExpr$geneList %in% c("ASD", "NDD", "epilepsy_ndd", "EPI", "scz", "BP", "MS", "ALS", "alzheimer")), ]
+```
+
+```{r format4plot_bayes_ctrlExpr, echo=FALSE}
+# add * for signif enrichment or depletion (with a threshold of 0.05/9*8=0.00069)
+enrichRes_sexDE_formated_bayes_ctrlExpr$signif <- ifelse(enrichRes_sexDE_formated_bayes_ctrlExpr$pval_enrich<0.00069 & enrichRes_sexDE_formated_bayes_ctrlExpr$permut_pval < 0.0003, "*", "")
+# order the different direction of effect
+enrichRes_sexDE_formated_bayes_ctrlExpr$direction <- factor(enrichRes_sexDE_formated_bayes_ctrlExpr$direction,
+                                                            levels = c("female", "male"))
+# order the different phenotype
+enrichRes_sexDE_formated_bayes_ctrlExpr$geneList <- factor(enrichRes_sexDE_formated_bayes_ctrlExpr$geneList,
+                                                           levels = c("ASD", "NDD", "epilepsy_ndd", "EPI", "scz", "BP", "MS", "ALS", "alzheimer"),
+                                                           labels = c("Autism", "Neurodevelopmental\ndisorder","Neurodevelopmental disorder\nwith epilepsy", "Epilepsy", 
+                                                                      "Schizophrenia", "Bipolar disorder", "Multiple sclerosis", "Amyotrophic lateral\nsclerosis", "Alzheimer"))
+# rename the 4 analyses
+enrichRes_sexDE_formated_bayes_ctrlExpr$analysis <- factor(enrichRes_sexDE_formated_bayes_ctrlExpr$analysis,
+                                                           levels = c("prenatal_specific", "shared"),
+                                                           labels = c("Prenatal\nspecific", "Shared"))
+
+# extract and transform the results for the random set of genes
+enrichRes_sexDE_random_formated_bayes_ctrlExpr <- enrichRes_sexDE_formated_bayes_ctrlExpr[, c("geneList", "analysis", "direction", "pval_enrich_random", "pval_deple_random", "relative_enrich_random")] %>% separate_longer_delim(cols = c(pval_enrich_random, pval_deple_random, relative_enrich_random), delim = ";")
+enrichRes_sexDE_random_formated_bayes_ctrlExpr$pval_enrich_random <- as.numeric(enrichRes_sexDE_random_formated_bayes_ctrlExpr$pval_enrich_random)
+enrichRes_sexDE_random_formated_bayes_ctrlExpr$pval_deple_random <- as.numeric(enrichRes_sexDE_random_formated_bayes_ctrlExpr$pval_deple_random)
+enrichRes_sexDE_random_formated_bayes_ctrlExpr$relative_enrich_random <- as.numeric(enrichRes_sexDE_random_formated_bayes_ctrlExpr$relative_enrich_random)
+```
+
+
+```{r plot_bayes_ctrlExpr, echo=FALSE}
+p <- ggplot(enrichRes_sexDE_random_formated_bayes_ctrlExpr, aes(y = geneList, x = relative_enrich_random, fill = direction, alpha = 0.4))
+p <- p + geom_violin(linewidth = 0.1)
+p <- p + geom_vline(xintercept = 1)
+p <- p + scale_fill_manual(values = c("female" = "#ae4d4d", "male" = "#4d4dae"))
+p <- p + geom_point(data = enrichRes_sexDE_formated_bayes_ctrlExpr, aes(y = geneList, x = relative_enrich, color = direction), 
+                    position = position_dodge(0.9), size = 2, alpha = 1)
+p <- p + geom_text(data = enrichRes_sexDE_formated_bayes_ctrlExpr, aes(y = geneList, x = relative_enrich + 0.2, label = signif),
+                   position = position_dodge(0.9), size = 4, alpha = 1)
+p <- p + scale_color_manual(values = c("female" = "darkred", "male" = "darkblue"))
+p <- p + facet_grid(cols = vars(analysis), scales = "free", space = "free")
+p <- p + theme_minimal()
+p <- p + ylab("") + xlab("Relative enrichent")
+p <- p + guides(alpha="none")
+p <- p + coord_cartesian(xlim = c(0,6))
+p <- p + scale_y_discrete(limits = rev(levels(enrichRes_sexDE_random_formated_bayes_ctrlExpr$geneList))) # reverse order of phenotype
+p
+# save plot
+ggsave("enrichment_plot_sexDE_bayes_diseaseOnly_ctrlExpr.png",
+      path = "images/5-postprocessing/4-DiseaseEnrichment/disease_hyper/",
+      units = "cm", width = 12, height = 10)
 ```
 
 
