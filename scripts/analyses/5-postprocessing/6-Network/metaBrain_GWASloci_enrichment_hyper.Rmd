@@ -1,0 +1,260 @@
+---
+title: "MetaBrain GWAS loci enrichment analysis with hypergeometric test"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r load_library, echo=FALSE}
+suppressPackageStartupMessages( library(edgeR) )
+suppressPackageStartupMessages( library(limma) )
+suppressPackageStartupMessages( library(qvalue) )
+suppressPackageStartupMessages( library(variancePartition) )
+suppressPackageStartupMessages( library(tibble) )
+suppressPackageStartupMessages( library(tidyverse) )
+suppressPackageStartupMessages( library(ggnewscale) )
+suppressPackageStartupMessages( library(fgsea) )
+suppressPackageStartupMessages( library(gridExtra) )
+suppressPackageStartupMessages( library(data.table) )
+suppressPackageStartupMessages( library(fastmatch) )
+suppressPackageStartupMessages( library(scales) )
+suppressPackageStartupMessages( library(readxl) )
+```
+
+```{r, setup, include=FALSE, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+# Load data and functions
+
+## Load functions for GSEA analysis with control
+
+```{r load_gsea_withCtrl_function, echo=FALSE}
+source("scripts/analyses/5-postprocessing/4-DiseaseEnrichment/enrichment_hyper.R")
+```
+
+
+## Create genesets from metabrain data
+
+Load dowstreamer results from the metaBrain paper for each diseases: ALS, Parkinson, Alzheimer, Schizophrenia and MS.
+And create genesets from the loaded data.
+
+```{r load_downstreamer_function, echo=FALSE}
+load_downstreamer <- function(file, sheetName){
+  my_data <- read_excel(file, sheet = sheetName)
+  return(my_data)
+}
+```
+
+```{r generate_geneset_function, echo=FALSE}
+generate_geneset <- function(myData){
+  return(myData$`Gene ID`[which(myData$`Distance to lead GWAS variant` == 0)])
+}
+```
+
+
+```{r loadNformat_downstreamer_data, echo=FALSE}
+excel_files <- c("data/5-postprocessing/6-Network/deKlein_2023_MetaBrain/Supplementary Table 25 - Downstreamer - ALS EUR_ASIA enrichments.xlsx",
+                 "data/5-postprocessing/6-Network/deKlein_2023_MetaBrain/Supplementary Table 26 - Downstreamer - Parkinsons Nalls2019 enrichments.xlsx",
+                 "data/5-postprocessing/6-Network/deKlein_2023_MetaBrain/Supplementary Table 27 - Downstreamer - Schizophrenia Ripke2014 enrichments.xlsx",
+                 "data/5-postprocessing/6-Network/deKlein_2023_MetaBrain/Supplementary Table 28 - Downstreamer - Alzheimers Kunkle enrichments.xlsx",
+                 "data/5-postprocessing/6-Network/deKlein_2023_MetaBrain/Supplementary Table 29 - Downstreamer - Multiple sclerosis Patsopoulos enrichments.xlsx")
+traits <- c("ALS", "Parkinsons", "Schizophrenia", "Alzheimer", "MS")
+# for each trait, load the downstreamer results and extract the gene associated to the GWAS loci
+downstreamer_data <- list()
+downstreamer_genesets <- list()
+i <- 1
+for (myFile in excel_files){
+    myTrait <- traits[i]
+    loaded_data <- load_downstreamer(myFile, "GenePrioritization_MetaBrain")
+    downstreamer_data[[myTrait]] <- loaded_data
+    myGeneset <- generate_geneset(loaded_data)
+    downstreamer_genesets[[myTrait]] <- myGeneset
+  i <- i + 1
+}
+```
+
+Get the list of genes analyzed in every downstreamer analysis used in the enrichment analysis.
+
+```{r background_downstreamer, echo=FALSE}
+analyses <- names(downstreamer_genesets)
+# for each analysis, get all ensembl gene id
+background_tmp <- c()
+for (i in 1:length(analyses)){
+  background_tmp <- c(background_tmp, downstreamer_data[[i]]$`Gene ID`)
+}
+background <- unique(background_tmp)
+```
+
+
+
+## Load DE and bayes data
+
+For each analysis, keep only the genes that were analyzed in the metaBrain analysis.
+
+### HDBR
+
+Load HDBR sex-DE data.
+
+```{r load_data_HDBR_sexDE, echo=FALSE}
+hdbr_sexDE_results <- read.table("data/3-DE/VoomDream_topTable_forebrain_pseudotime_sva_ind_interaction.txt",
+                         header = TRUE, check.names=FALSE)
+# remove genes used for sex assignment
+genes2remove <- c("XIST", as.character(hdbr_sexDE_results$gene_name[which(hdbr_sexDE_results$chr == "chrY" & hdbr_sexDE_results$gene_type == "protein_coding")]))
+hdbr_sexDE_results <- hdbr_sexDE_results[which(!hdbr_sexDE_results$gene_name %in% genes2remove),]
+# format
+hdbr_sexDE_results$ensemblID <- sapply(strsplit(as.character(hdbr_sexDE_results$gene_id), "\\."), function(x){x[1]})
+hdbr_sexDE_results$exprbin <- cut(hdbr_sexDE_results$AveExpr, quantile(hdbr_sexDE_results$AveExpr, seq(0,1,0.1)), 
+                                  labels=c(1:10), include.lowest=T) # add expression bins
+hdbr_sexDE_results_filtered <- hdbr_sexDE_results[which(hdbr_sexDE_results$ensemblID %in% background), ]
+```
+
+Load HDBR pseudotime-DE data.
+
+```{r load_data_HDBR_pseudotimeDE, echo=FALSE}
+hdbr_pseudotimeDE_results <- read.table("data/3-DE/VoomDream_topTable_forebrain_pseudotime_sva_ind_interaction_pseudotime.txt",
+                         header = TRUE, check.names=FALSE)
+# remove genes used to infer pseudotime
+load("data/2-pseudotime/forebrain_pseudotime_analysis.RData")
+genes2remove <- rownames(selectedCounts)
+hdbr_pseudotimeDE_results <- hdbr_pseudotimeDE_results[which(!hdbr_pseudotimeDE_results$gene_name %in% genes2remove),]
+# format
+hdbr_pseudotimeDE_results$ensemblID <- sapply(strsplit(as.character(hdbr_pseudotimeDE_results$gene_id), "\\."), function(x){x[1]})
+hdbr_pseudotimeDE_results$exprbin <- cut(hdbr_pseudotimeDE_results$AveExpr, quantile(hdbr_pseudotimeDE_results$AveExpr, seq(0,1,0.1)), 
+                                         labels=c(1:10), include.lowest=T) # add expression bins
+hdbr_pseudotimeDE_results_filtered <- hdbr_pseudotimeDE_results[which(hdbr_pseudotimeDE_results$ensemblID %in% background), ]
+```
+
+
+### GTEx
+
+Load GTEx sex-DE data.
+
+```{r load_data_GTEx_sexDE, echo=FALSE}
+gtex_sexDE_results <- read.table("data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_VoomDream_topTable_with_sva_ind_pseudotime_interaction.txt",
+                         header = TRUE, check.names=FALSE)
+# remove genes used for sex assignment
+genes2remove <- c("XIST", as.character(gtex_sexDE_results$gene_name[which(gtex_sexDE_results$chr == "chrY" & gtex_sexDE_results$gene_type == "protein_coding")]))
+gtex_sexDE_results <- gtex_sexDE_results[which(!gtex_sexDE_results$gene_name %in% genes2remove),]
+# format
+gtex_sexDE_results$ensemblID <- sapply(strsplit(as.character(gtex_sexDE_results$gene_id), "\\."), function(x){x[1]})
+gtex_sexDE_results$exprbin <- cut(gtex_sexDE_results$AveExpr, quantile(gtex_sexDE_results$AveExpr, seq(0,1,0.1)), 
+                                  labels=c(1:10), include.lowest=T) # add expression bins
+gtex_sexDE_results_filtered <- gtex_sexDE_results[which(gtex_sexDE_results$ensemblID %in% background), ]
+```
+
+
+Load GTEx pseudotime-DE data.
+
+```{r load_data_GTEx_pseudotimeDE, echo=FALSE}
+gtex_pseudotimeDE_results <- read.table("data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_VoomDream_topTable_with_sva_ind_pseudotime_interaction_pseudotime.txt",
+                         header = TRUE, check.names=FALSE)
+# remove genes used to infer pseudotime
+load("data/4-GTEx/1-GTEx_analysis/GTEx_v8_forebrain_pseudotime_analysis.RData")
+genes2remove <- rownames(selectedCounts)
+gtex_pseudotimeDE_results <- gtex_pseudotimeDE_results[which(!gtex_pseudotimeDE_results$gene_name %in% genes2remove),]
+# format
+gtex_pseudotimeDE_results$ensemblID <- sapply(strsplit(as.character(gtex_pseudotimeDE_results$gene_id), "\\."), function(x){x[1]})
+gtex_pseudotimeDE_results$exprbin <- cut(gtex_pseudotimeDE_results$AveExpr, quantile(gtex_pseudotimeDE_results$AveExpr, seq(0,1,0.1)), 
+                                         labels=c(1:10), include.lowest=T) # add expression bins
+gtex_pseudotimeDE_results_filtered <- gtex_pseudotimeDE_results[which(gtex_pseudotimeDE_results$ensemblID %in% background), ]
+```
+
+
+### Bayesian score
+
+```{r load_bayes_results, echo=FALSE}
+bayesResults <- read.table("/Users/benoicla/Desktop/Workspace/HDBR/sexDE_prenatal_brain/data/4-postprocessing/4-Comparison_GTEx/sexDE_specificity/lineModel_prenatalVSadult_6models.txt", header = TRUE)
+# merge bayes results with prenatal sex-DE results
+bayesResults_merged <- merge(bayesResults, hdbr_sexDE_results, by = "ensemblID", suffixes = c("", "_DE"))
+# format specificity variable
+bayesResults_merged$specificity <- factor(bayesResults_merged$specificity,
+                                          levels = c("ADULT", "OPPOSITE", "PRENATAL", "SHARED_UNSPECIFIED", 
+                                                     "SHARED0.5", "SHARED1", "SHARED2", "UNCLASSIFIED"),
+                                          labels = c("adult_specific", "opposite", "prenatal_specific", "shared", 
+                                                     "shared", "shared", "shared", "unclassified"))
+bayesResults_merged_filtered <- bayesResults_merged[which(bayesResults_merged$ensemblID %in% background), ]
+```
+
+
+# Enrichment analyses
+
+## Launch enrichment analyses
+
+Number of enrichment analyses to do:
+- 6 datasets: HDBR (sex-DE & pseudotime-DE), GTEx (sex-DE & pseudotime-DE), shared and prenatal specific 
+- 3 directions: both, female-biased and male-biased
+- with or without controlling for gene expression level
+
+```{r enrichment_analyses, echo=FALSE}
+enrichRes <- data.frame("analysis" = NA, "direction" = NA, "geneList" = NA, "nbr_DE" = NA, "nbr_geneList" = NA, 
+                        "overlap" = NA, "N" = NA, "pval_enrich" = NA, "pval_deple" = NA, "relative_enrich" = NA,
+                        "pval_enrich_random" = NA, "pval_deple_random" = NA, "relative_enrich_random" = NA, 
+                        "ctrlExpr" = NA)
+enrichRes <- enrichRes[0,]
+
+analysesList <- list(hdbr_sexDE_results_filtered, hdbr_pseudotimeDE_results_filtered, gtex_sexDE_results_filtered, gtex_pseudotimeDE_results_filtered, bayesResults_merged_filtered, bayesResults_merged_filtered)
+analysesNameList <- c("prenatal_sexDE", "prenatal_pseudotimeDE", "adult_sexDE", "adult_pseudotimeDE", "prenatal_specific", "shared")
+analysesTypeList <- c("sexDE", "pseudotimeDE", "sexDE", "pseudotimeDE", "sexDE", "sexDE")
+directions <- c("both", "up", "down")
+ctrlExprList <- c(FALSE, TRUE)
+for (i in 1:length(analysesList)){
+  analyseData <- analysesList[[i]]
+  analyseName <- analysesNameList[i]
+  analyseType <- analysesTypeList[i]
+  print(paste0(">>>>> ", analyseName))
+  for (ctrlExpr in ctrlExprList){
+    print(paste0(">>> ctrlExpr=", as.character(ctrlExpr)))
+    for (myDirection in directions){
+      print(paste0("> direction=", myDirection))
+      bayes <- FALSE
+      bayesDataType <- NULL
+      if (analyseName %in% c("prenatal_specific", "shared")){
+        bayes <- TRUE
+        bayesDataType <- analyseName
+      }
+      resTmp <- enrichment_analysis_permut(DEresults = analyseData, geneList = downstreamer_genesets, 
+                                           analysisName = analyseName, geneListNames = names(downstreamer_genesets),
+                                           nbr_permut = 1000, pval_threshold = 0.05, direction = myDirection, 
+                                           bayes = bayes, bayesDataType = bayesDataType, ctrlExpr = ctrlExpr, geneName = FALSE)
+      if (analyseType == "sexDE"){
+        if (myDirection == "up"){
+          resTmp$direction <- "male"
+        } else if (myDirection == "down"){
+          resTmp$direction <- "female"
+        }
+      }
+      # add results to the global enrichment abject
+      enrichRes <- rbind(enrichRes, resTmp)
+    }
+  }
+}
+```
+
+# Write results
+
+Add percentage of the DE genes are in gene list.
+
+```{r add_percent, echo=FALSE}
+enrichRes$percent <- enrichRes$overlap/enrichRes$nbr_DE*100
+```
+
+Write the complete enrichment results into a file.
+
+```{r write_res, echo=FALSE}
+write.table(enrichRes, "data/5-postprocessing/6-Network/results_GWASloci_hyper/enrichment_results.txt", 
+            quote = FALSE, row.names = FALSE, col.names = TRUE, sep = "\t")
+```
+
+
+# Plot the results
+
+
+
+
+
+# Session info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```
