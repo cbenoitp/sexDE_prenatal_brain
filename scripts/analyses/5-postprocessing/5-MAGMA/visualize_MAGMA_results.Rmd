@@ -270,14 +270,14 @@ magma_sexDE_selected$Data <- factor(magma_sexDE_selected$Data, levels = c("hdbr"
 magma_sexDE_selected$Direction <- factor(magma_sexDE_selected$Direction, levels = c("maleBiased", "femaleBiased"))
 magma_sexDE_selected$Trait <- factor(magma_sexDE_selected$Trait, 
                                      levels = c("AD", "AN", "TS", "MDD", "BD", "SCZ", "Epilepsy", "ADHD", "ASD"),
-                                     labels = c("Alzheimer", "Anorexia", "Tourette", "Major depressive disorder", "Bipolar", 
+                                     labels = c("Alzheimer", "Anorexia", "Tourette", "Major depressive\ndisorder", "Bipolar", 
                                                 "Schizophrenia", "Epilepsy", "ADHD", "Autism"))
 ```
 
 
 Prepare the significance annotation.
 ```{r annot_signif_sexDE, echo=FALSE}
-magma_sexDE_selected$signif <- ifelse(magma_sexDE_selected$pval<0.0069, "*", "")
+magma_sexDE_selected$signif <- ifelse(magma_sexDE_selected$pval<0.00069, "*", "")
 ```
 
 ```{r plot_betas_sexDE_prenatal_adult, echo=FALSE}
@@ -295,12 +295,13 @@ p <- p + scale_fill_manual(values = c("maleBiased" = 'darkblue', "femaleBiased" 
 p <- p + facet_grid(cols = vars(Data))
 # add significance to plot
 p <- p + geom_text(aes(x = Beta+SE+0.05, y = Trait, label = signif), size = 5, position = position_dodge(width = 0.05))
-p <- p + theme_minimal()
+p <- p + guides(color="none", fill="none")
+p <- p + theme_minimal() + ylab("")
 p
 # save plot
 ggsave("magma_betas_sexDE_prenatalVSadult.png", plot = p, 
        path = "images/5-postprocessing/5-MAGMA/",
-       width = 12, height = 10, units = "cm")
+       width = 10, height = 10, units = "cm")
 ```
 
 
@@ -453,18 +454,18 @@ magma_bayes_selected$Comparison <- magma_bayes_selected$Dataset
 magma_bayes_selected <- separate(magma_bayes_selected, Dataset, sep = '([shared|specific]_)', into = c("Analysis", "Direction")) ## Strange behavior: the last character is removed. Why??
 magma_bayes_selected$Analysis <- factor(magma_bayes_selected$Analysis, 
                                         levels = c("prenatal_specifi", "share"),
-                                        labels = c("prenatal_specific", "shared"))
+                                        labels = c("Prenatal\nspecific", "Shared"))
 magma_bayes_selected$Direction <- factor(magma_bayes_selected$Direction, levels = c("maleBiased", "femaleBiased"))
 magma_bayes_selected$Trait <- factor(magma_bayes_selected$Trait, 
                                      levels = c("AD", "AN", "TS", "MDD", "BD", "SCZ", "Epilepsy", "ADHD", "ASD"),
-                                     labels = c("Alzheimer", "Anorexia", "Tourette", "Major depressive disorder", "Bipolar", 
+                                     labels = c("Alzheimer", "Anorexia", "Tourette", "Major depressive\ndisorder", "Bipolar", 
                                                 "Schizophrenia", "Epilepsy", "ADHD", "Autism"))
 ```
 
 
 Prepare the significance annotation.
 ```{r annot_signif_bayes, echo=FALSE}
-magma_bayes_selected$signif <- ifelse(magma_bayes_selected$pval<0.0069, "*", "")
+magma_bayes_selected$signif <- ifelse(magma_bayes_selected$pval<0.00069, "*", "")
 ```
 
 ```{r plot_betas_bayes, echo=FALSE}
@@ -482,12 +483,13 @@ p <- p + scale_fill_manual(values = c("maleBiased" = 'darkblue', "femaleBiased" 
 p <- p + facet_grid(cols = vars(Analysis))
 # add significance to plot
 p <- p + geom_text(aes(x = Beta+SE+0.05, y = Trait, label = signif), size = 5, position = position_dodge(width = 0.05))
-p <- p + theme_minimal()
+p <- p + guides(color="none", fill="none")
+p <- p + theme_minimal()  + ylab("")
 p
 # save plot
 ggsave("magma_betas_bayes.png", plot = p, 
        path = "images/5-postprocessing/5-MAGMA/",
-       width = 12, height = 10, units = "cm")
+       width = 10, height = 10, units = "cm")
 ```
 
 
