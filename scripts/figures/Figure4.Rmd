@@ -1,0 +1,267 @@
+---
+title: 'Scripts to create the main figures: Figure 4'
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r load_library, echo=FALSE}
+suppressPackageStartupMessages( library(tidyverse) )
+suppressPackageStartupMessages( library(edgeR) )
+suppressPackageStartupMessages( library(limma) )
+suppressPackageStartupMessages( library(gridExtra) )
+suppressPackageStartupMessages( library(ggpubr) )
+suppressPackageStartupMessages( library(ggpp) )
+suppressPackageStartupMessages( library(cowplot) )
+suppressPackageStartupMessages( library(ggh4x) )
+```
+
+```{r setup, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+
+This figure shows the enrichment results with the different methods (exome, GWAS and metabrain network) for schizophreania (SCZ).
+
+# Load and format metabrain data
+
+## Load data
+
+```{r load_metabrain_data, echo=FALSE}
+metabrain_enrichRes <- read.table("data/5-postprocessing/6-Network/results_hyper/enrichment_results.txt", header = TRUE, sep = "\t")
+```
+
+## Format data
+
+Select only the data of interest:
+- bayes results (prenatal-specific and shared) for male- and female-biased genes
+- corrected for level of expression
+- cortex
+- SCZ
+
+```{r select_metabrain_data, echo=FALSE}
+metabrain_enrichRes_selected <- metabrain_enrichRes[which(metabrain_enrichRes$analysis %in% c("prenatal_specific", "shared") &
+                                                            metabrain_enrichRes$direction != "both" &
+                                                            metabrain_enrichRes$ctrlExpr &
+                                                            metabrain_enrichRes$geneList == "Schizophrenia.MetaBrainCortex"), ]
+```
+
+Format data for the plot.
+
+```{r format_metabrain_data, echo=FALSE}
+# add * for signif enrichment or depletion (with a threshold of 0.05/8*8=0.0078)
+metabrain_enrichRes_selected$signif <- ifelse(metabrain_enrichRes_selected$relative_enrich > 1, 
+                                              ifelse(metabrain_enrichRes_selected$pval_enrich<0.0078 & metabrain_enrichRes_selected$permut_pval < 0.05, "*", ""),
+                                              ifelse(metabrain_enrichRes_selected$pval_deple<0.0078 & metabrain_enrichRes_selected$permut_pval < 0.05, "*", ""))
+# order the different direction of effect
+metabrain_enrichRes_selected$direction <- factor(metabrain_enrichRes_selected$direction,
+                                                 levels = c("female", "male"))
+# split network names into disease and metaBrain Dataset
+metabrain_enrichRes_selected2 <- separate_wider_delim(data = metabrain_enrichRes_selected, cols = "geneList", delim = ".", names = c("disease", "metaBrainData")) 
+# rename metaBrainData
+metabrain_enrichRes_selected2$metaBrainData <- "MetaBrain\nCortex"
+# rename the 2 analyses
+metabrain_enrichRes_selected2$analysis <- factor(metabrain_enrichRes_selected2$analysis,
+                                                 levels = c("prenatal_specific", "shared"),
+                                                 labels = c("Prenatal\nspecific", "Shared"))
+
+# extract and transform the results for the random set of genes
+metabrain_enrichRes_random_selected2 <- metabrain_enrichRes_selected2[, c("disease", "metaBrainData", "analysis", "direction", "pval_enrich_random", "pval_deple_random", "relative_enrich_random")] %>% separate_longer_delim(cols = c(pval_enrich_random, pval_deple_random, relative_enrich_random), delim = ";")
+metabrain_enrichRes_random_selected2$pval_enrich_random <- as.numeric(metabrain_enrichRes_random_selected2$pval_enrich_random)
+metabrain_enrichRes_random_selected2$pval_deple_random <- as.numeric(metabrain_enrichRes_random_selected2$pval_deple_random)
+metabrain_enrichRes_random_selected2$relative_enrich_random <- as.numeric(metabrain_enrichRes_random_selected2$relative_enrich_random)
+```
+
+
+
+# Load and format exome diseases enrichment results
+
+## Load data
+
+```{r load_exome_data, echo=FALSE}
+exome_results <- read.table("data/5-postprocessing/4-DiseaseEnrichment/results_disease_hyper/enrichment_results.txt", 
+                            header = TRUE, sep = "\t")
+```
+
+## Format data
+
+Select only the data of interest:
+- bayes results (prenatal-specific and shared) for male- and female-biased genes
+- corrected for level of expression
+- SCZ
+
+```{r select_exome_data, echo=FALSE}
+exome_results_selected <- exome_results[which(exome_results$analysis %in% c("prenatal_specific", "shared") & 
+                                                exome_results$direction != "both" & 
+                                                exome_results$ctrlExpr &
+                                                exome_results$geneList == "scz"), ]
+```
+
+Format data for the plot.
+
+```{r format_exome_data, echo=FALSE}
+# add * for signif enrichment or depletion (with a threshold of 0.05/9*8=0.00069)
+exome_results_selected$signif <- ifelse(exome_results_selected$relative_enrich > 1, 
+                                        ifelse(exome_results_selected$pval_enrich<0.00069 & exome_results_selected$permut_pval < 0.05, "*", ""),
+                                        ifelse(exome_results_selected$pval_deple<0.00069 & exome_results_selected$permut_pval < 0.05, "*", ""))
+# order the different direction of effect
+exome_results_selected$direction <- factor(exome_results_selected$direction,
+                                           levels = c("female", "male"))
+# rename the 2 analyses
+exome_results_selected$analysis <- factor(exome_results_selected$analysis,
+                                          levels = c("prenatal_specific", "shared"),
+                                          labels = c("Prenatal\nspecific", "Shared"))
+
+# extract and transform the results for the random set of genes
+exome_results_random_selected <- exome_results_selected[, c("geneList", "analysis", "direction", "pval_enrich_random", "pval_deple_random", "relative_enrich_random")] %>% separate_longer_delim(cols = c(pval_enrich_random, pval_deple_random, relative_enrich_random), delim = ";")
+exome_results_random_selected$pval_enrich_random <- as.numeric(exome_results_random_selected$pval_enrich_random)
+exome_results_random_selected$pval_deple_random <- as.numeric(exome_results_random_selected$pval_deple_random)
+exome_results_random_selected$relative_enrich_random <- as.numeric(exome_results_random_selected$relative_enrich_random)
+```
+
+
+# Load and format MAGMA results
+
+## Load data
+
+```{r load_MAGMA_data, echo=FALSE}
+magma_results <- read.table("data/5-postprocessing/5-MAGMA/Magma_allLists_res.txt", header = TRUE)
+names(magma_results) <- c("Comparison", "Trait", "Ngenes", "Beta", "Beta_std", "SE", "pval", "Dataset")
+```
+
+## Format data
+
+Select only the data of interest:
+- bayes results (prenatal-specific and shared) for male- and female-biased genes
+- SCZ
+
+
+```{r select_MAGMA_data, echo=FALSE}
+magma_results_selected <- magma_results[which(magma_results$Dataset %in% c("prenatal_specific_femaleBiased", "prenatal_specific_maleBiased", "shared_femaleBiased", "shared_maleBiased") &
+                                                magma_results$Trait == "SCZ"),]
+```
+
+Format the data for the plot.
+
+```{r format_MAGMA_data, echo=FALSE}
+magma_results_selected$Comparison <-magma_results_selected$Dataset
+magma_results_selected <- separate(magma_results_selected, Dataset, sep = '([shared|specific]_)', into = c("Analysis", "Direction")) ## Strange behavior: the last character is removed. Why??
+magma_results_selected$Direction <- factor(magma_results_selected$Direction, 
+                                           levels = c("femaleBiased", "maleBiased"), 
+                                           labels = c("femaleBiased" = "female", "maleBiased" = "male"))
+magma_results_selected$Analysis <- factor(magma_results_selected$Analysis, levels = c("prenatal_specifi", "share"),
+                                          labels = c("Prenatal\nspecific", "Shared"))
+# add signif
+magma_results_selected$signif <- ifelse(magma_results_selected$pval<0.0069, "*", "")
+```
+
+
+# Plot
+
+## Plot Metabrain results
+
+```{r plot_metaBrain_data, echo=FALSE}
+# Colour strips
+strip <- strip_themed(background_x = elem_list_rect(fill = c("#9729d6", "#d5952a"), color = c("#9729d6", "#d5952a")))
+# plot
+p <- ggplot(metabrain_enrichRes_random_selected2, aes(x = direction, y = relative_enrich_random, fill = direction, alpha = 0.4))
+p <- p + geom_violin(linewidth = 0.1)
+p <- p + geom_hline(yintercept = 1)
+p <- p + facet_grid2(cols = vars(analysis), scales = "free_y", drop = TRUE, strip = strip, switch="x")
+p <- p + scale_fill_manual(values = c("female" = "#ae4d4d", "male" = "#4d4dae"),
+                           name = NULL)
+p <- p + geom_point(data = metabrain_enrichRes_selected2, aes(x = direction, y = relative_enrich, color = direction), 
+                    position = position_dodge(0.9), size = 2, alpha = 1)
+p <- p + geom_text(data = metabrain_enrichRes_selected2, aes(x = direction, y = ifelse(relative_enrich>1, relative_enrich + 0.05, relative_enrich - 0.2), label = signif),
+                   position = position_dodge(0.9), size = 5, alpha = 1)
+p <- p + scale_color_manual(values = c("female" = "darkred", "male" = "darkblue"),
+                            name = NULL)
+p <- p + theme_minimal()
+p <- p + xlab(NULL) + ylab("Relative enrichment")
+p <- p + guides(alpha="none") 
+p <- p + ggtitle("SCZ MetaBrain\nnetwork")
+p <- p + theme(text = element_text(size=14),
+               strip.text.x = element_text(size = 0),
+               plot.title = element_text(hjust = 0.5),
+               title = element_text(size = 12),
+               strip.clip = "off",
+               axis.text.x = element_blank())
+p_metabrain <- p + coord_cartesian(xlim = c(0,1.75))
+p_metabrain
+```
+
+
+## Plot exome results
+
+```{r plot_bayes_ctrlExpr, echo=FALSE}
+# Colour strips
+strip <- strip_themed(background_x = elem_list_rect(fill = c("#9729d6", "#d5952a"), color = c("#9729d6", "#d5952a")))
+# plot
+p <- ggplot(exome_results_random_selected, aes(x = direction, y = relative_enrich_random, fill = direction, alpha = 0.4))
+p <- p + geom_violin(linewidth = 0.1)
+p <- p + geom_hline(yintercept = 1)
+p <- p + scale_fill_manual(values = c("female" = "#ae4d4d", "male" = "#4d4dae"))
+p <- p + geom_point(data = exome_results_selected, aes(x = direction, y = relative_enrich, color = direction), 
+                    position = position_dodge(0.9), size = 2, alpha = 1)
+p <- p + geom_text(data = exome_results_selected, aes(x = direction, y = ifelse(relative_enrich>1, relative_enrich + 0.05, relative_enrich - 0.2), label = signif),
+                   position = position_dodge(0.9), size = 5, alpha = 1)
+p <- p + scale_color_manual(values = c("female" = "darkred", "male" = "darkblue"))
+p <- p + facet_grid2(cols = vars(analysis), scales = "free", space = "free", strip = strip, switch="x")
+p <- p + theme_minimal()
+p <- p + xlab(NULL) + ylab("Relative enrichent")
+p <- p + guides(alpha="none", fill="none", color="none") 
+p <- p + ggtitle("SCZ exome-seq\nstudy")
+p <- p + theme(text = element_text(size=14),
+               strip.text.x = element_text(size = 0),
+               plot.title = element_text(hjust = 0.5),
+               title = element_text(size = 12),
+               strip.clip = "off",
+               axis.text.x = element_blank())
+p_exome <- p + coord_cartesian(xlim = c(0,3))
+p_exome
+```
+
+## Plot MAGMA results 
+
+```{r plot_MAGMA_results, echo=FALSE}
+# Colour strips
+strip <- strip_themed(background_x = elem_list_rect(fill = c("#9729d6", "#d5952a"), color = c("#9729d6", "#d5952a")))
+# plot
+p <- ggplot(magma_results_selected, aes(y = Beta, x = Direction, ymin = Beta-SE, ymax = Beta+SE, 
+                                   color = Direction))
+p <- p + geom_hline(yintercept = 0, color = "darkgrey")
+p <- p + geom_pointrange(position = position_dodge(width = 0.75))
+p <- p + scale_color_manual(values = c("male" = 'darkblue', "female" = 'darkred'), 
+                            name = "Direction of effect")
+p <- p + facet_grid2(cols = vars(Analysis), scales = "free_y", space = "free_y", drop = TRUE, strip = strip, switch="x")
+# add significance to plot
+p <- p + geom_text(aes(y = Beta+SE+0.05, x = Direction, label = signif), size = 5, position = position_dodge(width = 0.2))
+p <- p + theme_minimal() + xlab(NULL)
+p <- p + guides(color="none") 
+p <- p + ggtitle("SCZ GWAS\n(MAGMA)")
+p <- p + theme(text = element_text(size=14),
+               strip.text.x = element_text(size = 0),
+               plot.title = element_text(hjust = 0.5),
+               title = element_text(size = 12),
+               strip.clip = "off",
+               axis.text.x = element_blank())
+p_magma <- p + coord_cartesian(ylim = c(-0.1, 0.2))
+p_magma
+```
+
+
+## Arrange the 3 plots together
+
+```{r figure4_mergedplot, echo=FALSE}
+ggsave("4_enrichment_analyses.png", 
+       path = "images/figures/",
+       arrangeGrob(p_exome, p_magma, p_metabrain, ncol = 3, widths=c(2,2,3.3)),
+       width = 18, height = 8, units = "cm")
+ggsave("4_enrichment_analyses.svg", 
+       path = "images/figures/",
+       arrangeGrob(p_exome, p_magma, p_metabrain, ncol = 3, widths=c(2,2,3.3)),
+       width = 18, height = 8, units = "cm")
+```
+
+
+
