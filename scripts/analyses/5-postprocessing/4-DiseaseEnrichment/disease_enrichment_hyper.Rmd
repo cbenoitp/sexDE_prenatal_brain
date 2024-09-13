@@ -564,6 +564,25 @@ ggsave("enrichment_plot_sexDE_bayes_diseaseOnly_ctrlExpr.png",
       units = "cm", width = 10, height = 10)
 ```
 
+### Save data for supplementary table
+
+Save the data from both plots for supplementary table.
+
+```{r save_data, echo=FALSE}
+# select the data of interest
+enrichRes_formated_ctrlExpr_toSave <- enrichRes[which(enrichRes$analysis %in% c("prenatal_sexDE", "adult_sexDE", "prenatal_specific", "shared") &
+                                                        enrichRes$direction != "both" & enrichRes$ctrlExpr), ]
+# select the disease traits
+enrichRes_formated_ctrlExpr_toSave <- enrichRes_formated_ctrlExpr_toSave[which(enrichRes_formated_ctrlExpr_toSave$geneList %in% c("ASD", "NDD", "epilepsy_ndd", "EPI", "scz", "BP", "MS", "ALS", "alzheimer")), ]
+# format the data by selecting the columns of interest
+enrichRes_formated_ctrlExpr_toSave <- enrichRes_formated_ctrlExpr_toSave[, c("analysis", "direction", "geneList", "nbr_DE", "nbr_geneList", "overlap", "N",  "pval_enrich", "relative_enrich", "pval_enrich_random", "relative_enrich_random", "permut_pval")]
+# format the analysis column
+enrichRes_formated_ctrlExpr_toSave$analysis <- str_remove(enrichRes_formated_ctrlExpr_toSave$analysis, "_sexDE")
+# save in file
+write.table(enrichRes_formated_ctrlExpr_toSave, file = "data/5-postprocessing/4-DiseaseEnrichment/results_disease_hyper/enrichment_results_formated.txt", 
+            quote = FALSE, row.names = FALSE, col.names = TRUE, sep = "\t")
+```
+
 
 # Session info
 

@@ -492,6 +492,27 @@ ggsave("magma_betas_bayes.png", plot = p,
        width = 10, height = 10, units = "cm")
 ```
 
+# Save data for supplementary table
+
+Save the necessary data for supplementary table.
+
+```{r save_data, echo=FALSE}
+# select the data of interest
+magma_formated_toSave <- magma_all[grep("maleBiased", magma_all$FULL_NAME),]
+# select disease traits
+magma_formated_toSave <- magma_formated_toSave[which(magma_formated_toSave$TYPE %in% c("AD", "AN", "TS", "MDD", "BD", "SCZ", "Epilepsy", "ADHD", "ASD")), ]
+# rename columns
+names(magma_formated_toSave) <- c("Comparison", "Trait", "Ngenes", "Beta", "Beta_std", "SE", "pval", "Dataset")
+magma_formated_toSave <- separate_wider_regex(magma_formated_toSave, Dataset, 
+                                              patterns = c("Analysis" = 'hdbr|gtex|shared|prenatal_specific', "_|_sexDE_", "Direction" = 'femaleBiased|maleBiased'))
+# select columns of interest
+magma_formated_toSave <- magma_formated_toSave[, c("Analysis", "Direction", "Trait", "Ngenes", "Beta", "Beta_std", "SE", "pval")]
+# save in file
+write.table(magma_formated_toSave, file = "data/5-postprocessing/5-MAGMA/Magma_results_formated.txt", 
+            quote = FALSE, row.names = FALSE, col.names = TRUE, sep = "\t")
+```
+
+
 
 
 # Session info
