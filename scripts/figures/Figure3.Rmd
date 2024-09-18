@@ -126,10 +126,10 @@ Re-order the different models.
 dataLineModel$specificityDetailed_formatted <- factor(dataLineModel$specificityDetailed,
                                                       levels = c("OTHER", "SHARED2", "SHARED1", "SHARED0.5", "SHARED_UNSPECIFIED"),
                                                       labels = c('',
-                                                                 'adult-biased', 
-                                                                 'equal', 
-                                                                 'prenatal-biased', 
-                                                                 'unspecified'),
+                                                                 'Adult-biased', 
+                                                                 'Equal', 
+                                                                 'Prenatal-biased', 
+                                                                 'Unspecified'),
                                                       ordered = TRUE)
 ```
 
