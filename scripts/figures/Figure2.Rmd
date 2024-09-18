@@ -212,6 +212,18 @@ Format data
 proportions <- as.data.frame(resLineModel_prop$params)
 ```
 
+Compute merged shared proportion with the associated confidence interval.
+
+```{r merge_shared, echo=FALSE}
+proportions_new <- proportions[c(1:3,6), ]
+rownames(proportions_new)[3] <- "SHARED"
+proportions_new[3, ] <- colSums(proportions[c(3:5), ])
+proportions_new[3, 4] <- sqrt( (proportions[3, 4]^2 + proportions[4, 4]^2 + proportions[5, 4]^2) / 9 )
+proportions_new[3, 2] <- proportions_new[3, 1] - 1.96*proportions_new[3, 4]
+proportions_new[3, 3] <- proportions_new[3, 1] + 1.96*proportions_new[3, 4]
+```
+
+
 
 ## Barplot
 
@@ -236,6 +248,56 @@ ggsave("2C_proportions_barplot.png",
        plot = p, width = 8, height = 8, units = "cm")
 ```
 
+## Barplot with shared merged as one
+
+```{r barplot_proportions_mergeShared, echo=FALSE}
+polygon_data <- data.frame(x = c(2.41, 2.95, 2.95, 2.41), y = c(0.305, 0.8, 0.13, 0.001))
+
+# plot all proportions with the shared ones merged into one
+proportions_new$data <- factor(rownames(proportions_new), levels = c("PRENATAL", "SHARED", "OPPOSITE", "ADULT"))
+p_all <- ggplot(proportions_new, aes(x = data, y = mean, fill = data))
+p_all <- p_all + geom_col(width = 0.8)
+p_all <- p_all + geom_polygon(data = polygon_data, aes(x = x, y = y), fill = "#EBEBEB")
+p_all <- p_all + geom_errorbar(aes(ymin = `95%low`, ymax = `95%up`), width = 0.2)
+p_all <- p_all + scale_fill_manual(values = c("PRENATAL" = "#9729d6", "ADULT" = "#2bd494", "SHARED" = "#6b4b15", "OPPOSITE" = "#Fbfd8e"),
+                                   guide = "none")
+p_all <- p_all + theme_minimal() + ylab("Proportion estimates") + xlab("")
+p_all <- p_all + theme(text = element_text(size=14),
+               axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p_all <- p_all + coord_cartesian(ylim = c(0, 0.7))
+#p_all
+
+# plot all shared proportions separately
+proportions$data <- factor(rownames(proportions), levels = c("PRENATAL", "SHARED0.5", "SHARED1", "SHARED2", "OPPOSITE", "ADULT"))
+p_shared <- ggplot(proportions[3:5, ], aes(x = data, y = mean, fill = data))
+p_shared<- p_shared + geom_col()
+p_shared <- p_shared + geom_errorbar(aes(ymin = `95%low`, ymax = `95%up`), width = 0.2)
+p_shared <- p_shared + scale_fill_manual(values = c("SHARED0.5" = "#95681d", "SHARED1" = "#d5952a", "SHARED2" = "#e6bf7f"),
+                                         guide = "none")
+p_shared <- p_shared + theme_grey()
+p_shared <- p_shared + theme(text = element_text(size=14),
+                             axis.title = element_blank(),
+                             axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
+                             panel.background = element_rect(fill = "#EBEBEB"),
+                             plot.background = element_rect(fill = "#EBEBEB", color = "#EBEBEB"),
+                             plot.margin = unit(c(0, 0, 0, 0), "cm"))
+#p_shared
+
+# combine plots
+combined_plot <- p_all + inset_element(p_shared, left = 0.59, bottom = 0.20, right = 1, top = 1) 
+combined_plot
+
+# save plot
+ggsave("2C_proportions_barplot_mergedShared.svg",
+       path = 'images/figures/',
+       plot = combined_plot, width = 8, height = 8, units = "cm")
+ggsave("2C_proportions_barplot_mergedShared.png",
+       path = 'images/figures/',
+       plot = combined_plot, width = 8, height = 8, units = "cm")
+```
+
+
+
 # Figure 2 D
 
 Stacked barplot of the genes categories assigned using the bayesian linemodel.
@@ -251,8 +313,8 @@ dataToPlot$specificityDetailed <- factor(dataToPlot$specificity,
                                                     "SHARED0.5", "SHARED1", "SHARED2", "SHARED_UNSPECIFIED",
                                                     "OPPOSITE", "UNCLASSIFIED"),
                                          labels = c("PRENATAL" = "Prenatal specific", "ADULT" = "Adult specific", 
-                                                    "SHARED0.5" = "prenatal>adult", "SHARED1" = "prenatal=adult", 
-                                                    "SHARED2" = "prenatal<adult", "SHARED_UNSPECIFIED" = "unspecified",
+                                                    "SHARED0.5" = "Prenatal-biased", "SHARED1" = "Equal", 
+                                                    "SHARED2" = "Adult-biased", "SHARED_UNSPECIFIED" = "Unspecified",
                                                     "OPPOSITE" = "Opposite effect", "UNCLASSIFIED" = "Unclassified"))
 dataToPlot$specificity <- fct_collapse(dataToPlot$specificity, 'Prenatal' = c('PRENATAL'), 'Adult' = c('ADULT'), 'Shared' = c('SHARED0.5', 'SHARED1', 'SHARED2', 'SHARED_UNSPECIFIED'), 'Opposite' = c('OPPOSITE'), 'Unclassified' = c('UNCLASSIFIED'))
 dataToPlot$specificity <- factor(dataToPlot$specificity , levels = rev(c('Prenatal', 'Shared', 'Opposite', 'Adult', 'Unclassified')))
@@ -272,7 +334,7 @@ Compute proportions only for shared categories using dplyr
 
 ```{r compute_proportion_shared, echo=FALSE}
 dataToPlot_prop_shared <- dataToPlot %>% group_by(specificityDetailed) %>% summarise(nbr = n()) %>% mutate(freq = nbr / sum(nbr))
-dataToPlot_prop_shared <- dataToPlot_prop_shared[which(dataToPlot_prop_shared$specificityDetailed %in% c("prenatal>adult", "prenatal=adult", "prenatal<adult", "unspecified")), ]
+dataToPlot_prop_shared <- dataToPlot_prop_shared[which(dataToPlot_prop_shared$specificityDetailed %in% c("Prenatal-biased", "Equal", "Adult-biased", "Unspecified")), ]
 dataToPlot_prop_shared$label <- ifelse(dataToPlot_prop_shared$nbr < 50, "", dataToPlot_prop_shared$nbr)
 dataToPlot_prop_shared$label_shared_adult <- ifelse(dataToPlot_prop_shared$nbr >= 10, "", dataToPlot_prop_shared$nbr)
 dataToPlot_prop_shared$label_shared_equal <- ifelse(dataToPlot_prop_shared$nbr < 10 | dataToPlot_prop_shared$nbr > 50, "", dataToPlot_prop_shared$nbr)
@@ -320,8 +382,8 @@ ggsave("2D_nbrGenes_specificity_stackedBarplot.png",
 p_shared <- ggplot(dataToPlot_prop_shared, aes(x = 1, y = freq, fill = specificityDetailed))
 p_shared <- p_shared + geom_bar(position = "stack", stat = "identity", width = 0.5)
 p_shared <- p_shared + scale_y_continuous(labels = scales::percent, position = "right")
-p_shared <- p_shared + scale_fill_manual(values = c("unspecified" = "#6b4b15", "prenatal>adult" = "#95681d", "prenatal=adult" = "#d5952a", 
-                                                    "prenatal<adult" = "#e6bf7f"),
+p_shared <- p_shared + scale_fill_manual(values = c("Unspecified" = "#6b4b15", "Prenatal-biased" = "#95681d", "Equal" = "#d5952a", 
+                                                    "Adult-biased" = "#e6bf7f"),
                            name = "Shared")
 p_shared <- p_shared + theme_minimal() + ylab(NULL) + xlab(NULL) + xlim(0,1.25)
 p_shared <- p_shared + geom_text(aes(label = label), size = 4, color = "black", position = position_stack(vjust = 0.5))
@@ -351,22 +413,23 @@ ggsave("2D_nbrGenes_specificity_shared_stackedBarplot.png",
 We want to make the shared barplot a zoom of the complete barplot.
 
 ```{r barplot_stacked_nbrGenes_perCategory_merged, echo=FALSE}
-polygon_data <- data.frame(x = c(1.05, 1.17, 1.17, 1.05), y = c(0.785, 0.72, 0, 0.57))
+polygon_data <- data.frame(x = c(1.05, 1.17, 1.17, 1.05), y = c(0.785, 0.72, -0.042, 0.57))
 # full barplot
 p <- ggplot(dataToPlot_prop, aes(x = 1, y = freq, fill = specificity))
 p <- p + geom_bar(position = "stack", stat = "identity", width = 0.1)
 p <- p + geom_polygon(data = polygon_data, aes(x = x, y = y), fill = "#EBEBEB")
-p <- p + scale_y_continuous(labels = scales::percent, limits = c(0, 1), oob=scales::squish)
+p <- p + scale_y_continuous(labels = scales::percent, oob=scales::squish)
 p <- p + scale_fill_manual(values = c('Prenatal' = "#9729d6", 'Adult' = "#2bd494",
                                       'Shared' = "#6b4b15", 'Opposite' = "#Fbfd8e", 'Unclassified' = "#d0d0d0"),
                            name = "Categories")
-p <- p + theme_minimal() + ylab("Proportions of genes\n(PP > 0.8)") + xlab(NULL) + xlim(0.9,1.3)
+p <- p + theme_minimal() + ylab("Proportions of genes\n(PP > 0.8)") + xlab(NULL)
 p <- p + geom_text(aes(label = label), size = 4, color = "black", position = position_stack(vjust = 0.5))
 p <- p + geom_text(aes(label = label_adult, x = 1), size = 4, color = "black", position = position_stacknudge(vjust = 0.5, x = 0.23, y = 0.06))
 p <- p + geom_text(aes(label = label_opposite, x = 1), size = 4, color = "black", position = position_stacknudge(vjust = 0.5, x = 0.22, y = -0.02))
 #add line for each number
 p <- p + geom_segment(aes(x = 1.05, y = 0.804, xend = 1.22, yend = 0.854), color = "black", linewidth = 0.1)
 p <- p + geom_segment(aes(x = 1.05, y = 0.795, xend = 1.2, yend = 0.775), color = "black", linewidth = 0.1)
+p <- p + coord_cartesian(xlim = c(0.9,1.3), ylim = c(0,1))
 p <- p + theme(text = element_text(size=14),
                axis.title.x=element_blank(),
                axis.text.x=element_blank(),
@@ -384,16 +447,17 @@ p <- p + theme(legend.position = "none")
 p_shared <- ggplot(dataToPlot_prop_shared, aes(x = 1, y = freq, fill = specificityDetailed))
 p_shared <- p_shared + geom_bar(position = "stack", stat = "identity", width = 0.2)
 p_shared <- p_shared + scale_y_continuous(labels = scales::percent, position = "right", limits = c(0, 0.22))
-p_shared <- p_shared + scale_fill_manual(values = c("unspecified" = "#6b4b15", "prenatal>adult" = "#95681d", "prenatal=adult" = "#d5952a", 
-                                                    "prenatal<adult" = "#e6bf7f"),
+p_shared <- p_shared + scale_fill_manual(values = c("Unspecified" = "#6b4b15", "Prenatal-biased" = "#95681d", "Equal" = "#d5952a", 
+                                                    "Adult-biased" = "#e6bf7f"),
                            name = "")
-p_shared <- p_shared + theme_grey() + ylab(NULL) + xlab(NULL) + xlim(0.75, 1.1)
+p_shared <- p_shared + theme_grey() + ylab(NULL) + xlab(NULL)
 p_shared <- p_shared + geom_text(aes(label = label), size = 4, color = "black", position = position_stack(vjust = 0.5))
 p_shared <- p_shared + geom_text(aes(label = label_shared_adult, x = 1), size = 4, color = "black", position = position_stacknudge(vjust = 0.5, x = -0.23, y = 0.015))
 p_shared <- p_shared + geom_text(aes(label = label_shared_equal, x = 1), size = 4, color = "black", position = position_stacknudge(vjust = 0.5, x = -0.2, y = -0.015))
 #add line for each number
 p_shared <- p_shared + geom_segment(aes(x = 0.9, y = 0.037, xend = 0.8, yend = 0.05), color = "black", linewidth = 0.1)
 p_shared <- p_shared + geom_segment(aes(x = 0.9, y = 0.034, xend = 0.85, yend = 0.025), color = "black", linewidth = 0.1)
+p_shared <- p_shared + coord_cartesian(xlim = c(0.75, 1.1))
 p_shared <- p_shared + theme(text = element_text(size=14),
                              axis.title.x=element_blank(),
                              axis.text.x=element_blank(),
@@ -401,8 +465,8 @@ p_shared <- p_shared + theme(text = element_text(size=14),
                              panel.grid = element_blank(),
                              legend.position = "bottom",
                              legend.direction = "vertical",
-                             panel.background = element_rect(fill = "#EBEBEB"),
-                             plot.background = element_rect(fill = "#EBEBEB"),
+                             panel.background = element_rect(fill = "#EBEBEB", color = "#EBEBEB"),
+                             plot.background = element_rect(fill = "#EBEBEB", color = "#EBEBEB"),
                              plot.margin = unit(c(0, 0, 0, 0), "cm"))
 #p_shared
 # get legend
@@ -411,7 +475,7 @@ p_shared <- p_shared + theme(legend.position = "none")
 
 
 # combined plot
-combined_plot <- p + inset_element(p_shared, left = 0.65, bottom = 0.05, right = 1, top = 0.7) 
+combined_plot <- p + inset_element(p_shared, left = 0.65, bottom = 0.07, right = 1, top = 0.7) 
 combined_plot <- combined_plot + theme(plot.margin = unit(c(0, 0, -0.5, 0), "cm"))
 legend_plot <- plot_grid(legend_all, legend_shared, nrow = 1, rel_widths = c(0.5, 0.5))
 final_plot <- plot_grid(combined_plot, legend_plot, nrow = 2, rel_heights = c(1,0.5)) #align = "vh", axis = "tblr",
