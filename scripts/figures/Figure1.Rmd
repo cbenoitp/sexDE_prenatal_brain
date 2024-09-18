@@ -121,7 +121,7 @@ barplot <- function(data, legend = TRUE, nrowLegend = 4,
   }
   p <- p + geom_bar(stat = "identity", size = 0)
   p <- p + scale_fill_manual(values = colors, labels = labels)
-  p <- p + theme_bw() + labs(x = "", y = "")
+  p <- p + theme_minimal() + labs(x = "", y = "")
   p <- p + theme(legend.position="bottom", legend.title = element_blank(),
                  legend.spacing.y = unit(1, 'mm'),
                  plot.margin = margin(3,3,-5,-5, "mm"),
@@ -195,13 +195,13 @@ p_volcanoplot <- EnhancedVolcano(de_results_autosomes,
                                  title = NULL,
                                  subtitle = NULL,
                                  caption = NULL)
-p_volcanoplot <- p_volcanoplot + theme_bw()
+p_volcanoplot <- p_volcanoplot + theme_minimal()
 p_volcanoplot <- p_volcanoplot + theme(plot.margin = margin(3,3,3,3, "mm"),
                                        axis.title.x = element_text(size = 14),
                                        axis.title.y = element_text(size = 14),
                                        axis.text.x = element_text(size = 10),
                                        axis.text.y = element_text(size = 10),
-                                       panel.border = element_rect(fill=NA, colour = "black", linewidth = 0.2))
+                                       panel.border = element_rect(fill = NA, colour = NA))
 p_volcanoplot <- p_volcanoplot + guides(fill = "none", color = "none")
 
 p_volcanoplot
@@ -302,13 +302,13 @@ p_volcanoplot <- EnhancedVolcano(de_results_pseudotime_filtered,
                                  title = NULL,
                                  subtitle = NULL,
                                  caption = NULL)
-p_volcanoplot <- p_volcanoplot + theme_bw()
+p_volcanoplot <- p_volcanoplot + theme_minimal()
 p_volcanoplot <- p_volcanoplot + theme(plot.margin = margin(3,3,3,3, "mm"),
                                        axis.title.x = element_text(size = 14),
                                        axis.title.y = element_text(size = 14),
                                        axis.text.x = element_text(size = 10),
                                        axis.text.y = element_text(size = 10),
-                                       panel.border = element_rect(fill=NA, colour = "black", linewidth = 0.2))
+                                       panel.border = element_rect(fill = NA, colour = NA))
 p_volcanoplot <- p_volcanoplot + guides(fill = "none", color = "none")
 
 p_volcanoplot
