@@ -141,8 +141,8 @@ totals_all <- dataLineModel %>%
   summarise(n=n())%>%
   mutate(percent = (n / sum(n)), 
          cumsum = cumsum(percent), 
-         label = ifelse(specificityDetailed_formatted == "unspecified", as.character(sum(n)),""),
-         total_percent = ifelse(specificityDetailed_formatted == "unspecified", as.numeric(sum(percent[which(specificityDetailed_formatted != "")])), 0))
+         label = ifelse(specificityDetailed_formatted == "Unspecified", as.character(sum(n)),""),
+         total_percent = ifelse(specificityDetailed_formatted == "Unspecified", as.numeric(sum(percent[which(specificityDetailed_formatted != "")])), 0))
 totals_all$category <- as.factor(ifelse(totals_all$annot_formatted != "Autosome", "X-chromosome", ""))
 totals_all$category <- factor(totals_all$category, levels = c("X-chromosome", ""), ordered = TRUE)
 ```
@@ -152,8 +152,8 @@ totals_all$category <- factor(totals_all$category, levels = c("X-chromosome", ""
 ```{r barplot_sharingModel_Xchr_autosome, echo=FALSE}
 p <- ggplot(totals_all, aes(x = annot_formatted, y = percent, fill = specificityDetailed_formatted))
 p <- p + geom_bar(position = 'fill', stat = "identity")
-p <- p + scale_fill_manual(values = c('prenatal-biased' = "#95681d", 'equal' = "#d5952a", 
-                                      'adult-biased' = "#e6bf7f", 'unspecified' = "#6b4b15"),
+p <- p + scale_fill_manual(values = c('Prenatal-biased' = "#95681d", 'Equal' = "#d5952a", 
+                                      'Adult-biased' = "#e6bf7f", 'Unspecified' = "#6b4b15"),
                            name = "Shared effect",
                            na.value = NA)
 p <- p + theme_minimal() + ylab("Percent of genes") + xlab(NULL)
