@@ -128,8 +128,18 @@ constraint_data <- constraint_data[which((constraint_data$mane_select == "true" 
 constraint_data <- constraint_data[c("gene_id", "lof.oe_ci.upper")]
 names(constraint_data) <- c("gene_id", "LOEUF")
 constraint_data_filtered <- na.exclude(constraint_data)
-constraint_data_filtered$LOEUF_bin <- cut(constraint_data_filtered$LOEUF, quantile(constraint_data_filtered$LOEUF, seq(0,1,0.1)), 
-                                          labels=c(1:10), include.lowest=T)
+```
+
+Make LOEUF bins for gene that are expressed in either adult or prenatal forebrain.
+
+```{r LOEUF_bins, echo=FALSE}
+# first merge the GTEx and HDBR DE results
+merged_sexDE_results <- merge(hdbr_sexDE_results, gtex_sexDE_results, by = "ensemblID", suffixes = c("_prenatal", "_adult"), all = TRUE)
+# add LOEUF score
+merged_sexDE_results <- merge(merged_sexDE_results, constraint_data_filtered, by.x = "ensemblID", by.y = "gene_id")
+# create bins of LOEUF value
+merged_sexDE_results$LOEUF_bin <- cut(merged_sexDE_results$LOEUF, quantile(merged_sexDE_results$LOEUF, seq(0,1,0.1)), 
+                                      labels=c(1:10), include.lowest=T)
 ```
 
 
@@ -140,35 +150,35 @@ In this analysis, we will focus on the constraint genes (3 lowest LOEUF deciles)
 - HDBR sex-DE
 
 ```{r select_HDBR_sexDE, echo=FALSE}
-hdbr_sexDE_results <- merge(hdbr_sexDE_results, constraint_data_filtered, by.x = "ensemblID", by.y = "gene_id", all.x = TRUE)
+hdbr_sexDE_results <- merge(hdbr_sexDE_results, merged_sexDE_results[, c(1,39,40)], by = "ensemblID", all.x = TRUE)
 hdbr_sexDE_results <- hdbr_sexDE_results[which(hdbr_sexDE_results$LOEUF_bin %in% c(1,2,3)), ]
 ```
 
 - HDBR pseudotime-DE
 
 ```{r select_HDBR_pseudoDE, echo=FALSE}
-hdbr_pseudotimeDE_results <- merge(hdbr_pseudotimeDE_results, constraint_data_filtered, by.x = "ensemblID", by.y = "gene_id", all.x = TRUE)
+hdbr_pseudotimeDE_results <- merge(hdbr_pseudotimeDE_results,  merged_sexDE_results[, c(1,39,40)], by = "ensemblID", all.x = TRUE)
 hdbr_pseudotimeDE_results <- hdbr_pseudotimeDE_results[which(hdbr_pseudotimeDE_results$LOEUF_bin %in% c(1,2,3)), ]
 ```
 
 - GTEx sex-DE
 
 ```{r select_GTEx_sexDE, echo=FALSE}
-gtex_sexDE_results <- merge(gtex_sexDE_results, constraint_data_filtered, by.x = "ensemblID", by.y = "gene_id", all.x = TRUE)
+gtex_sexDE_results <- merge(gtex_sexDE_results,  merged_sexDE_results[, c(1,39,40)], by = "ensemblID", all.x = TRUE)
 gtex_sexDE_results <- gtex_sexDE_results[which(gtex_sexDE_results$LOEUF_bin %in% c(1,2,3)), ]
 ```
 
 - GTEX pseudotime-DE
 
 ```{r select_GTEx_pseudoDE, echo=FALSE}
-gtex_pseudotimeDE_results <- merge(gtex_pseudotimeDE_results, constraint_data_filtered, by.x = "ensemblID", by.y = "gene_id", all.x = TRUE)
+gtex_pseudotimeDE_results <- merge(gtex_pseudotimeDE_results,  merged_sexDE_results[, c(1,39,40)], by = "ensemblID", all.x = TRUE)
 gtex_pseudotimeDE_results <- gtex_pseudotimeDE_results[which(gtex_pseudotimeDE_results$LOEUF_bin %in% c(1,2,3)), ]
 ```
 
 - bayesian DE results
 
 ```{r select_bayesian_DE, echo=FALSE}
-bayesResults_merged <- merge(bayesResults_merged, constraint_data_filtered, by.x = "ensemblID", by.y = "gene_id", all.x = TRUE)
+bayesResults_merged <- merge(bayesResults_merged,  merged_sexDE_results[, c(1,39,40)], by = "ensemblID", all.x = TRUE)
 bayesResults_merged <- bayesResults_merged[which(bayesResults_merged$LOEUF_bin %in% c(1,2,3)), ]
 ```
 
@@ -486,7 +496,7 @@ p
 #       units = "cm", width = 15, height = 16)
 ```
 
-## Plot for supplementary figure
+## Plot similar to the supplementary figure
 
 ### Plot enrichment results for sex-DE results controlling for gene expression
 
@@ -554,7 +564,7 @@ p
 
 First, we need tot select the data we want to plot and format it.
 
-```{r select4plot_sexDE_ctrlExpr, echo=FALSE}
+```{r select4plot_bayes_ctrlExpr, echo=FALSE}
 # select analyses of interest
 enrichRes_sexDE_formated_bayes_ctrlExpr <- enrichRes[which(enrichRes$analysis %in% c("prenatal_specific", "shared") &
                                                              enrichRes$direction != "both" & enrichRes$ctrlExpr), ]
@@ -562,7 +572,7 @@ enrichRes_sexDE_formated_bayes_ctrlExpr <- enrichRes[which(enrichRes$analysis %i
 enrichRes_sexDE_formated_bayes_ctrlExpr <- enrichRes_sexDE_formated_bayes_ctrlExpr[which(enrichRes_sexDE_formated_bayes_ctrlExpr$geneList %in% c("ASD", "NDD", "epilepsy_ndd", "EPI", "scz", "BP", "MS", "ALS", "alzheimer")), ]
 ```
 
-```{r format4plot_bayes_ctrlExpr, echo=FALSE}
+```{r format4plot_bayes_ctrlExpr2, echo=FALSE}
 # add * for signif enrichment or depletion (with a threshold of 0.05/9*8=0.00069)
 enrichRes_sexDE_formated_bayes_ctrlExpr$signif <- ifelse(enrichRes_sexDE_formated_bayes_ctrlExpr$pval_enrich<0.00069 & enrichRes_sexDE_formated_bayes_ctrlExpr$permut_pval < 0.0003, "*", "")
 # order the different direction of effect
@@ -586,7 +596,7 @@ enrichRes_sexDE_random_formated_bayes_ctrlExpr$relative_enrich_random <- as.nume
 ```
 
 
-```{r plot_bayes_ctrlExpr, echo=FALSE}
+```{r plot_bayes_ctrlExpr2, echo=FALSE}
 p <- ggplot(enrichRes_sexDE_random_formated_bayes_ctrlExpr, aes(y = geneList, x = relative_enrich_random, fill = direction, alpha = 0.4))
 p <- p + geom_violin(linewidth = 0.1)
 p <- p + geom_vline(xintercept = 1)
