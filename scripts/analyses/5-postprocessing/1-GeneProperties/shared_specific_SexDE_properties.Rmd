@@ -68,6 +68,62 @@ For the rest of the analyses, we only select the genes that were classified as s
 dataToPlotProperties_selected <- dataToPlotProperties[which(dataToPlotProperties$specificity %in% c("Prenatal", "Shared")), ]
 ```
 
+### Load constraint and format it in bins
+
+LOEUF score
+
+```{r load_LOEUF, echo=FALSE}
+# load loeuf score
+constraint_data <- read.table("data/5-postprocessing/1-GeneProperties/gnomad.v4.1.constraint_metrics.tsv", 
+                              header = TRUE, sep = "\t")
+constraint_data <- constraint_data[c("gene_id", "canonical", "mane_select", "lof.oe_ci.upper")]
+# keep MANE transcript or canonical if no MANE transcript for a gene
+constraint_data <- constraint_data[which((constraint_data$mane_select == "true" | constraint_data$canonical == "true") & startsWith(constraint_data$gene_id, "ENSG")), ]
+constraint_data <- constraint_data[c("gene_id", "lof.oe_ci.upper")]
+names(constraint_data) <- c("gene_id", "LOEUF")
+constraint_data_filtered <- na.exclude(constraint_data)
+```
+
+Load HDBR sex-DE data.
+
+```{r load_data_HDBR_sexDE, echo=FALSE}
+hdbr_sexDE_results <- read.table("data/3-DE/VoomDream_topTable_forebrain_pseudotime_sva_ind_interaction.txt",
+                         header = TRUE, check.names=FALSE)
+# remove genes used for sex assignment
+genes2remove <- c("XIST", as.character(hdbr_sexDE_results$gene_name[which(hdbr_sexDE_results$chr == "chrY" & hdbr_sexDE_results$gene_type == "protein_coding")]))
+hdbr_sexDE_results <- hdbr_sexDE_results[which(!hdbr_sexDE_results$gene_name %in% genes2remove),]
+# format
+hdbr_sexDE_results$ensemblID <- sapply(strsplit(as.character(hdbr_sexDE_results$gene_id), "\\."), function(x){x[1]})
+hdbr_sexDE_results$exprbin <- cut(hdbr_sexDE_results$AveExpr, quantile(hdbr_sexDE_results$AveExpr, seq(0,1,0.1)), 
+                                  labels=c(1:10), include.lowest=T) # add expression bins
+```
+
+Load GTEx sex-DE data.
+
+```{r load_data_GTEx_sexDE, echo=FALSE}
+gtex_sexDE_results <- read.table("data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_VoomDream_topTable_with_sva_ind_pseudotime_interaction.txt",
+                         header = TRUE, check.names=FALSE)
+# remove genes used for sex assignment
+genes2remove <- c("XIST", as.character(gtex_sexDE_results$gene_name[which(gtex_sexDE_results$chr == "chrY" & gtex_sexDE_results$gene_type == "protein_coding")]))
+gtex_sexDE_results <- gtex_sexDE_results[which(!gtex_sexDE_results$gene_name %in% genes2remove),]
+# format
+gtex_sexDE_results$ensemblID <- sapply(strsplit(as.character(gtex_sexDE_results$gene_id), "\\."), function(x){x[1]})
+gtex_sexDE_results$exprbin <- cut(gtex_sexDE_results$AveExpr, quantile(gtex_sexDE_results$AveExpr, seq(0,1,0.1)), 
+                                  labels=c(1:10), include.lowest=T) # add expression bins
+```
+
+Make LOEUF bins for gene that are expressed in either adult or prenatal forebrain.
+
+```{r LOEUF_bins, echo=FALSE}
+# first merge the GTEx and HDBR DE results
+merged_sexDE_results <- merge(hdbr_sexDE_results, gtex_sexDE_results, by = "ensemblID", suffixes = c("_prenatal", "_adult"), all = TRUE)
+# add LOEUF score
+merged_sexDE_results <- merge(merged_sexDE_results, constraint_data_filtered, by.x = "ensemblID", by.y = "gene_id")
+# create bins of LOEUF value
+merged_sexDE_results$LOEUF_bin <- cut(merged_sexDE_results$LOEUF, quantile(merged_sexDE_results$LOEUF, seq(0,1,0.1)), 
+                                      labels=c(1:10), include.lowest=T)
+```
+
 ## Create full merge data
 
 We also create the full set of genes with results in both data (both sex-DE and non sex-DE).
@@ -75,6 +131,12 @@ We also create the full set of genes with results in both data (both sex-DE and 
 ```{r full_merge, echo=FALSE}
 fullMerge <- merge(prenatal_properties[, c(1,6,17,18,19,20,21)], adult_properties[, c(1,7,23)], by = "ensemblID", suffixes = c("_prenatal", "_adult"))
 fullMerge <- merge(fullMerge, dataLineModel[, c(1,3,5,13,17,19:22)], by = "ensemblID", all.x = TRUE)
+```
+
+Also add the LOEUF bins of the merged sex-DE data.
+
+```{r add_LOEUF_bins, echo=FALSE}
+fullMerge_LOEUFbins <- merge(fullMerge, merged_sexDE_results[, c(1,40)], by = "ensemblID", suffixes = c("", "_allSexDE"))
 ```
 
 
@@ -194,8 +256,9 @@ p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
 p <- p + scale_fill_manual(values = c('non sexDE' = "black", 'sexDE' = "grey"))
 p <- p + theme_minimal() + xlab("") + ylab("Prenatal expression")
 p <- p + stat_compare_means(method = "wilcox.test",
-                            label = "p.signif", hide.ns = TRUE, vjust = 1,
-                            tip.length = 1, na.rm = TRUE)
+                            label = "p.signif", hide.ns = TRUE, vjust = 0,
+                            tip.length = 1, na.rm = TRUE,
+                            label.x = 1.5)
 p
 # save plot
 ggsave("prenatal_expression_sexDE_vs_nonsexDE.png",
@@ -214,7 +277,8 @@ p <- p + scale_fill_manual(values = c('non sexDE' = "black", 'sexDE' = "grey"))
 p <- p + theme_minimal() + xlab("") + ylab("Adult expression")
 p <- p + stat_compare_means(method = "wilcox.test",
                             label = "p.signif", hide.ns = TRUE, vjust = 1,
-                            tip.length = 1, na.rm = TRUE)
+                            tip.length = 1, na.rm = TRUE,
+                            label.x = 1.5)
 p
 # save plot
 ggsave("adult_expression_sexDE_vs_nonsexDE.png",
@@ -365,7 +429,7 @@ p <- p + geom_violin(aes(fill = specificity), alpha = 0.5, scale = "area", linew
 p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
 p <- p + scale_fill_manual(values = c('Prenatal' = "#9729d6", 'Shared' = "#d5952a"))
 p <- p + theme_minimal() + xlab("") + ylab("Expression breadth")
-p <- p + stat_compare_means(method = "wilcox.test", label = "p.signif", label.x = 1.4, hide.ns = TRUE)
+p <- p + stat_compare_means(method = "wilcox.test", label = "p.signif", label.x = 1.5, hide.ns = TRUE)
 p
 # save plot
 ggsave("gtexExpressionBreadth_byCategory.png", 
@@ -413,7 +477,8 @@ p <- p + scale_fill_manual(values = c('non sexDE' = "black", 'sexDE' = "grey"))
 p <- p + theme_minimal() + xlab("") + ylab("Constraint (LOEUF)")
 p <- p + stat_compare_means(method = "wilcox.test",
                             label = "p.signif", hide.ns = TRUE, vjust = 1,
-                            tip.length = 1, na.rm = TRUE)
+                            tip.length = 1, na.rm = TRUE,
+                            label.x.npc = "center")
 p
 # save plot
 ggsave("constraint_LOEUF_sexDE_vs_nonsexDE.png",
@@ -421,6 +486,54 @@ ggsave("constraint_LOEUF_sexDE_vs_nonsexDE.png",
        width = 6, height = 8, units = "cm")
 ```
 
+Same using the constraint bins computed for all genes analyzed in either the adult or prenatal data.
+
+```{r const_sexDEVSnonsexDE2, echo=FALSE}
+# add variable defining if the gene is sexDE in at least one of the 2 dataset
+fullMerge_LOEUFbins$category <- ifelse(is.na(fullMerge_LOEUFbins$specificity), "non sexDE", "sexDE")
+# compare means
+compare_means(LOEUF~category, fullMerge)
+# plot
+p <- ggplot(fullMerge_LOEUFbins, aes(x = category, y = LOEUF, fill = category))
+p <- p + geom_violin(alpha = 0.5, scale = "area", linewidth = 0.01, show.legend = FALSE) 
+p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
+p <- p + scale_fill_manual(values = c('non sexDE' = "black", 'sexDE' = "grey"))
+p <- p + theme_minimal() + xlab("") + ylab("Constraint (LOEUF)")
+p <- p + stat_compare_means(method = "wilcox.test",
+                            label = "p.signif", hide.ns = TRUE, vjust = 1,
+                            tip.length = 1, na.rm = TRUE,
+                            label.x.npc = "center")
+p
+# save plot
+ggsave("constraint_LOEUF_sexDE_vs_nonsexDE_new.png",
+       path = "images/5-postprocessing/1-GeneProperties/shared/",
+       width = 6, height = 8, units = "cm")
+```
+
+Also plot the proportion of sex-DE genes per bin of constraint (bin of LOEUF score).
+
+```{r const_sexDEVSnonsexDE, echo=FALSE}
+# format data
+fullMerge_LOEUFbins_plot <- fullMerge_LOEUFbins[, c(1,18,19)] %>%
+  group_by(LOEUF_bin_allSexDE, category) %>%
+  summarise(count = n()) %>%
+  ungroup() %>%
+  group_by(LOEUF_bin_allSexDE) %>%
+  mutate(proportion = count / sum(count))
+# plot
+p <- ggplot(fullMerge_LOEUFbins_plot, aes(x = LOEUF_bin_allSexDE, y = proportion, fill = category, alpha = category))
+p <- p + geom_bar(stat = "identity", position = "fill")  # Stacked bar plot with proportional fill
+p <- p + scale_y_continuous(labels = scales::percent_format())  # Show y-axis as percentages
+p <- p + labs(x = "Constraint bins (LOEUF)", y = "Gene proportion")
+p <- p + scale_fill_manual(values = c('non sexDE' = "black", 'sexDE' = "grey"), name = "")
+p <- p + scale_alpha_manual(values = c('non sexDE' = 0.5, 'sexDE' = 0.5), name = "")
+p <- p + theme_minimal()
+p
+# save plot
+ggsave("proportion_sexDE per_constraint_LOEUF_bin.png",
+       path = "images/5-postprocessing/1-GeneProperties/shared/",
+       width = 12, height = 8, units = "cm")
+```
 
 
 ## Tissue specificity
@@ -575,7 +688,6 @@ ggsave("sexDE_sharing_byCat.png",
        plot = p, width = 6, height = 8, units = "cm")
 ```
 
-WARNING: modify starting from here
 
 
 ## Cell type enrichment of these gene lists
@@ -601,7 +713,7 @@ compare_means(meanExpr~specificity, cellTypeExprProfile_formated_selected,
 p <- ggplot(cellTypeExprProfile_formated[which(cellTypeExprProfile_formated$specificity %in% c("Prenatal", "Shared")),], aes(x = specificity, y = meanExpr))
 p <- p + geom_violin(aes(fill = specificity), alpha = 0.5, scale = "area", linewidth = 0.01, show.legend = FALSE) 
 p <- p + stat_summary(fun.data=data_summary, size=0.1, show.legend = FALSE)
-p <- p + facet_wrap(vars(CellType), scales = "free_y", ncol = 3)
+p <- p + facet_wrap(vars(CellType), scales = "free_y", ncol = 2)
 p <- p + scale_fill_manual(values = c('Prenatal' = "#9729d6", 'Shared' = "#d5952a"))
 p <- p + theme_minimal() + xlab("") + ylab("Mean expression")
 p <- p + stat_compare_means(method = "wilcox.test", label = "p.signif", hide.ns = TRUE,
@@ -611,7 +723,7 @@ p
 # save plot
 ggsave("cellType_expression_byCategory.png", 
        path = "images/5-postprocessing/1-GeneProperties/shared/",
-       width = 10, height = 15, units = "cm")
+       width = 10, height = 20, units = "cm")
 ```
 
 ```{r compare_expr_cellType_mainFig, echo=FALSE}
