@@ -1,0 +1,536 @@
+---
+title: "Check for bias in pseudotime computation"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r load_library, echo=FALSE}
+suppressPackageStartupMessages( library(tidyverse) )
+suppressPackageStartupMessages(library(GenomicFeatures))
+suppressPackageStartupMessages( library(edgeR) )
+suppressPackageStartupMessages( library(limma) )
+suppressPackageStartupMessages(library(SummarizedExperiment))
+suppressPackageStartupMessages( library(phenopath) )
+suppressPackageStartupMessages( library(qvalue) )
+suppressPackageStartupMessages( library(sva) )
+suppressPackageStartupMessages( library(doParallel) )
+suppressPackageStartupMessages( library(variancePartition) )
+suppressPackageStartupMessages( library(ComplexHeatmap) )
+```
+
+```{r setup, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+```{r init_seed}
+set.seed(12345)
+```
+
+```{r parallel_processing_param, echo=FALSE}
+# Specify parallel processing parameters
+# this is used implicitly by dream() to run in parallel
+param <- SnowParam(4, "SOCK", progressbar=TRUE)
+register(param)
+```
+
+# Goal
+
+The goal is to check if there could be a bias introduced by the pseudotime inference to could explain the consistency in direction of effect between sex-DE and pseudotime-DE.
+For this, we will create a random binary variable (1 or 2) for each individual. We will use this variable as a covariate in the new computation of the pseudotime. Then, we will do the same DE analysis using this random variable and this new pseudotime. Finally, we will compare how correlated this random variable and this new pseudotime are compared to the correlation between pseudotime and sex.
+
+
+# Pseudotime analysis
+
+## Prepare data
+
+### Load data
+
+First, we load the count and phenotype data needed for this analysis.
+
+```{r load_data, echo=FALSE}
+load("data/1-preprocessing/counts_forebrain_phenotypes.RData")
+```
+
+### Prepare metadata
+
+Create a random binary variable.
+
+```{r create_random_binary_var, echo=FALSE}
+randomVar <- data.frame("ind" = unique(phenotypes$ind),
+                        "randomVar" = sample(c(1,2), size = length(unique(phenotypes$ind)), replace = TRUE, prob = c(0.5, 0.5)))
+# merge this with phenotype
+phenotypes <- left_join(phenotypes, randomVar, by = "ind")
+sum(phenotypes$randomVar == 1)
+sum(phenotypes$randomVar == 2)
+```
+
+
+```{r prepare_metadata, echo=FALSE}
+RandomVar <- as.factor(phenotypes$randomVar)
+DevStage <- phenotypes$newDevStage
+Individual <- as.factor(phenotypes$ind)
+ForebrainRegion <- phenotypes$newBrainRegion
+Batch <- phenotypes$batch
+# metadata
+metadata <- data.frame(RandomVar = RandomVar, DevStage = DevStage, Individual = Individual, ForebrainRegion = ForebrainRegion, Batch = Batch)
+rownames(metadata) <- phenotypes$experiment_name
+```
+
+### Convert counts in TPM values
+
+Load the annotation file.
+
+```{r load_annotation, echo=FALSE}
+# First, import the GTF-file that you have also used as input for htseq-count
+txdb <- txdbmaker::makeTxDbFromGFF("data/0-input/gencode.v28.annotation.gff3",format="gff")
+
+# then collect the exons per gene id
+exons.list.per.gene <- exonsBy(txdb,by="gene")
+
+# then for each gene, reduce all the exons to a set of non overlapping exons, calculate their lengths (widths) and sum them
+exonic.gene.sizes <-  sum(width(reduce(exons.list.per.gene)))
+#names(exonic.gene.sizes)=matrix(unlist(strsplit(as.character(names(exonic.gene.sizes)),"\\.")),ncol=2,byrow=T)[,1]
+names(exonic.gene.sizes) <- names(exonic.gene.sizes)
+
+gtf.gene.length_df <- cbind(data.frame(names(exonic.gene.sizes)),as.numeric(exonic.gene.sizes))
+names(gtf.gene.length_df) <- c("gene_id","size")
+gtf.gene.length_df <- unique(gtf.gene.length_df)
+
+# Merge gene size with gene metadata
+gene_metadata <- merge(x$genes, gtf.gene.length_df)
+x$genes <- gene_metadata
+```
+
+Transform the counts data in log(TPM+1).
+
+```{r transform_counts, echo=FALSE}
+counts2tpm <- function(counts, genes){
+  # RPK = count/geneLength(kb)
+  counts <- counts/(genes$size*1e-3)
+  # Sum of RPK for each sample
+  library_depth <- colSums(counts)
+  # TPM = RPK/(sum(RPK)/1e6)
+  counts <- sweep(counts, 2, library_depth/1e6,`/`)
+  return(counts)
+}
+tpm <- counts2tpm(x$counts, x$genes)
+logTpm <- log2(tpm+1)
+rownames(logTpm) <- x$genes$gene_name
+```
+
+### Format data in a SummarizedExperiment object
+
+Select the genes to use in the phenopath analysis.
+
+```{r select_genes, echo=FALSE}
+# select higly variable genes
+variance <- rowVars(logTpm)
+ntop <- min(2000, dim(logTpm)[1])
+selectntop <- order(variance, decreasing=TRUE)[seq_len(ntop)]
+selectedCounts <- logTpm[selectntop,]
+```
+
+Create the SummarizedExperiment object
+
+```{r summarizedExperiment_obj, echo=FALSE}
+# initialize sce object
+sce <- SummarizedExperiment(assays = list(exprs = selectedCounts), 
+                            colData = metadata)
+sce
+```
+
+## Phenopath analysis
+
+Analysis with the random variable as a covariate.
+
+```{r fit_phenopath_model, echo=FALSE}
+x_mat <- model.matrix(~ RandomVar)
+fit <- phenopath(sce, x_mat, elbo_tol = 1e-6, thin = 20)
+```
+
+Elbo plot
+
+```{r elbo_plot, echo=FALSE}
+p <- plot_elbo(fit)
+p
+# save plot
+ggsave("Elbo_plot.png",
+       path = "images/2-pseudotime/biasCheck/",
+       plot = p, width = 12, height = 10, units = "cm")
+```
+
+Summary of the pseudotime.
+
+```{r summary_pseudotime, echo=FALSE}
+summary(trajectory(fit))
+```
+
+Add pseudotime to metadata.
+
+```{r infered_pseudotime, echo=FALSE}
+metadata$pseudotime <- trajectory(fit)
+```
+
+## Save the pseudotime results in a RData
+
+```{r save_pseudotime_res, echo=FALSE}
+save(fit, sce, x_mat, selectedCounts, metadata, file = "data/2-pseudotime/biasCheck/forebrain_pseudotime_analysis.RData")
+```
+
+```{r save_metadata, echo=FALSE}
+save(metadata, file = "data/2-pseudotime/biasCheck/forebrain_metadata_pseudotime.RData")
+```
+
+
+# DE analysis
+
+## Prepare data
+
+### Prepare design
+
+```{r prepare_metadata, echo=FALSE}
+metadata <- metadata[,c(1,6,3)]
+# design for voomDream (the variable to be tested must be a fixed effect)
+form <- ~ RandomVar + pseudotime + RandomVar:pseudotime + (1|Individual)
+# design for sva computation
+design <- model.matrix(~metadata$RandomVar + metadata$pseudotime + metadata$RandomVar:metadata$pseudotime)
+```
+
+### Prepare counts for DE analysis
+
+Estimate weights using linear mixed model of dream
+
+```{r voom_norm, echo=FALSE, warning=FALSE}
+png('images/2-pseudotime/biasCheck/trendplot/trendplot_VoomDream_forebrain_pseudotime_ind_interaction.png')
+suppressWarnings( vobjDream <- voomWithDreamWeights(x, form, metadata, plot = TRUE) )
+dev.off()
+```
+
+Estimate surrogates variables (svas) and add them to the model.
+
+```{r estimate_sva, echo=FALSE}
+n.sv <- num.sv(vobjDream$E, design, method = "be")
+sva.obj <- sva(vobjDream$E, design, method = "irw", n.sv = n.sv)
+# add svas to metadata
+metadata <- cbind(metadata, sva.obj$sv)
+names(metadata) <- c("RandomVar", "pseudotime", "Individual", paste0("X", 1:n.sv))
+# include svas in formula
+form <- reformulate(c("RandomVar", "pseudotime", "RandomVar:pseudotime", "(1|Individual)", paste0("X", 1:n.sv)))
+```
+
+Redo voom normalization with new design matrix (containing svas).
+
+```{r voom_norm_svas, echo=FALSE, warning=FALSE}
+suppressWarnings( y <- voomWithDreamWeights(x, form, metadata, plot = TRUE) )
+```
+
+Save the normalized counts and the phenotypes vectors in a RData file.
+
+```{r save_normCounts, echo=FALSE}
+save(y, phenotypes, form, sva.obj, metadata,
+     file = "data/2-pseudotime/biasCheck/DE/normCounts_dream_pseudotime_sva_ind_interaction_phenotypes.RData")
+```
+
+## Differential Expression (DE) analysis for the random variable
+
+Fit the dream model on each gene.
+
+```{r DE_analysis, echo=FALSE}
+# By default, uses the Satterthwaite approximation for the hypothesis test
+suppressWarnings( fitmm <- dream(y, form, metadata) )
+fitmm2 <- topTable(fitmm, coef = 2, number = 30000, sort.by = "none") 
+fitmm2$qvalue <- qvalue(fitmm2$P.Value)$qvalues
+```
+
+Save the fitmm object.
+```{r save_fitmm, echo=FALSE}
+save(fitmm, file = "data/2-pseudotime/biasCheck/DE/fitmm_dream_pseudotime_sva_ind_interaction_phenotypes.RData")
+```
+
+Compute the mean expression of each genes for male and female.
+
+```{r compute_mean_expr, echo=FALSE}
+fitmm2$Male <- rowMeans(y$E[,which(metadata$RandomVar==1)])
+fitmm2$VarMale <- rowVars(y$E[,which(metadata$RandomVar==1)])
+fitmm2$Female <- rowMeans(y$E[,which(metadata$RandomVar==2)])
+fitmm2$VarFemale <- rowVars(y$E[,which(metadata$RandomVar==2)])
+```
+
+Save results.
+
+```{r write_output, echo=FALSE}
+write.table(fitmm2, 
+            "data/2-pseudotime/biasCheck/DE/VoomDream_topTable_forebrain_pseudotime_sva_ind_interaction.txt", 
+            col.names = TRUE, row.names = FALSE, quote = FALSE)
+```
+
+Extract the interaction results.
+
+```{r interaction_results, echo=FALSE}
+fitmm_interaction <- topTable(fitmm, coef = "RandomVar2:pseudotime", number = 30000, sort.by = "none") 
+fitmm_interaction$qvalue <- qvalue(fitmm_interaction$P.Value)$qvalues
+```
+
+Save the interaction results.
+
+```{r save_interaction, echo=FALSE}
+write.table(fitmm_interaction, 
+            "data/2-pseudotime/biasCheck/DE/VoomDream_topTable_forebrain_pseudotime_sva_ind_interaction_term.txt", 
+            col.names = TRUE, row.names = FALSE, quote = FALSE)
+```
+
+Extract the results of the pseudotime-DE genes.
+
+```{r ipseudotime_DE_results, echo=FALSE}
+fitmm_pseudotime <- topTable(fitmm, coef = "pseudotime", number = 30000, sort.by = "none") 
+fitmm_pseudotime$qvalue <- qvalue(fitmm_pseudotime$P.Value)$qvalues
+```
+
+Save the interaction results.
+
+```{r save_pseudotime, echo=FALSE}
+write.table(fitmm_pseudotime, 
+            "data/2-pseudotime/biasCheck/DE/VoomDream_topTable_forebrain_pseudotime_sva_ind_interaction_pseudotime.txt", 
+            col.names = TRUE, row.names = FALSE, quote = FALSE)
+```
+
+
+# Assess DE results
+
+## Prepare data
+
+### Rename data
+
+RandomVar DE
+
+```{r randomVar_DE_data, echo=FALSE}
+de_results <- fitmm2
+```
+
+Pseudotime DE
+
+```{r pseudotime_DE_data, echo=FALSE}
+de_results_pseudotime <- fitmm_pseudotime
+```
+
+Interaction DE
+
+```{r interaction_DE_data, echo=FALSE}
+de_results_interaction <- fitmm_interaction
+```
+
+
+### Filter DE results
+
+From the pseudotime and interaction-DE genes remove the genes used to compute the pseudotime.
+
+```{r remove_pseudotime_genes, echo=FALSE}
+genes2remove <- rownames(selectedCounts)
+de_results_interaction_filtered <- de_results_interaction[which(!de_results_interaction$gene_name %in% genes2remove),]
+de_results_pseudotime_filtered <- de_results_pseudotime[which(!de_results_pseudotime$gene_name %in% genes2remove),]
+```
+
+## Statistics
+
+```{r qvalue_threshold, echo=FALSE}
+threshold_qvalue <- 0.01
+```
+
+### Number of DE genes with the randomVar
+
+Number of DE significant genes:
+
+```{r nbr_DE, echo=FALSE}
+nbr_DE_signif <- sum(de_results$qvalue < threshold_qvalue)
+percent_DE_signif <- nbr_DE_signif/length(de_results$gene_name)*100
+print(sprintf("Number of DE genes = %s (representing %.3f %% of the genes)", nbr_DE_signif, percent_DE_signif))
+# down-regulated genes
+nbr_downDE_signif <- length(de_results$gene_name[which(de_results$logFC < 0 & de_results$qvalue < threshold_qvalue)])
+percent_downDE_signif <- nbr_downDE_signif/nbr_DE_signif*100
+print(sprintf("Number of downregulated genes = %s (%.3f %% of DE genes)", nbr_downDE_signif, percent_downDE_signif))
+# upregulated genes
+nbr_upDE_signif <- length(de_results$gene_name[which(de_results$logFC > 0 & de_results$qvalue < threshold_qvalue)])
+percent_upDE_signif <- nbr_upDE_signif/nbr_DE_signif*100
+print(sprintf("Number of upregulated genes = %s (%.3f %% of DE genes)", nbr_upDE_signif, percent_upDE_signif))
+```
+
+### Number of pseudotime-DE genes
+
+Number of genes DE with pseudotime:
+
+```{r nbr_pseudotimeDE, echo=FALSE}
+nbr_sexDE_pseudotime_signif <- sum(de_results_pseudotime_filtered$qvalue < threshold_qvalue)
+percent_sexDE_pseudotime_signif <- nbr_sexDE_pseudotime_signif/length(de_results_pseudotime_filtered$gene_name)*100
+print(sprintf("Number of pseudotime-DE genes = %s (representing %.3f %% of the genes)", nbr_sexDE_pseudotime_signif, percent_sexDE_pseudotime_signif))
+# up-regulated genes
+nbr_up_pseudotime_signif <- length(de_results_pseudotime_filtered$gene_name[which(de_results_pseudotime_filtered$logFC > 0 & de_results_pseudotime_filtered$qvalue < threshold_qvalue)])
+percent_up_pseudotime_signif <- nbr_up_pseudotime_signif/nbr_sexDE_pseudotime_signif*100
+print(sprintf("Number of up-regulated genes = %s (%.3f %% of pseudotime-DE genes)", nbr_up_pseudotime_signif, percent_up_pseudotime_signif))
+# down-regulated genes
+nbr_down_pseudotime_signif <- length(de_results_pseudotime_filtered$gene_name[which(de_results_pseudotime_filtered$logFC < 0 & de_results_pseudotime_filtered$qvalue < threshold_qvalue)])
+percent_down_pseudotime_signif <- nbr_down_pseudotime_signif/nbr_sexDE_pseudotime_signif*100
+print(sprintf("Number of down-regulated genes = %s (%.3f %% of pseudotime-DE genes)", nbr_down_pseudotime_signif, percent_down_pseudotime_signif))
+```
+
+### Number of interaction-DE genes
+
+Number of interaction-DE significant genes:
+
+```{r nbr_interactionDE, echo=FALSE}
+nbr_sexDE_interaction_signif <- sum(de_results_interaction_filtered$qvalue < threshold_qvalue)
+percent_sexDE_interaction_signif <- nbr_sexDE_interaction_signif/length(de_results_interaction_filtered$gene_name)*100
+print(sprintf("Number of interaction-DE genes = %s (representing %.3f %% of the genes)", nbr_sexDE_interaction_signif, percent_sexDE_interaction_signif))
+# male-biased genes
+nbr_maleBiased_interaction_signif <- length(de_results_interaction_filtered$gene_name[which(de_results_interaction_filtered$logFC < 0 & de_results_interaction_filtered$qvalue < threshold_qvalue)])
+percent_maleBiased_interaction_signif <- nbr_maleBiased_interaction_signif/nbr_sexDE_interaction_signif*100
+print(sprintf("Number of down interaction genes = %s (%.3f %% of sex-DE genes)", nbr_maleBiased_interaction_signif, percent_maleBiased_interaction_signif))
+# female_biased genes
+nbr_femaleBiased_interaction_signif <- length(de_results_interaction_filtered$gene_name[which(de_results_interaction_filtered$logFC > 0 & de_results_interaction_filtered$qvalue < threshold_qvalue)])
+percent_femaleBiased_interaction_signif <- nbr_femaleBiased_interaction_signif/nbr_sexDE_interaction_signif*100
+print(sprintf("Number of up interaction genes = %s (%.3f %% of sex-DE genes)", nbr_femaleBiased_interaction_signif, percent_femaleBiased_interaction_signif))
+```
+
+## Comparison of the randomVar-DE and pseudotime-DE genes
+
+### Prepare data
+
+Merge sexDE and pseudotimeDE data to use it with ComplexUpSet package.
+
+```{r merge_data, echo=FALSE}
+merged_data <- merge(de_results[, c(1:4,6,12)], de_results_pseudotime_filtered[, c(1:4,6,12)], #all.x = TRUE,
+                     by = c("gene_id", "gene_name", "gene_type", "chr"), suffixes = c("_randomDE", "_pseudotimeDE"))
+merged_data$randomDE <- ifelse(merged_data$qvalue_randomDE<threshold_qvalue, TRUE, FALSE)
+merged_data$upRandomDE <- ifelse(merged_data$qvalue_randomDE<threshold_qvalue & merged_data$logFC_randomDE>0, TRUE, FALSE)
+merged_data$downRandomDE <- ifelse(merged_data$qvalue_randomDE<threshold_qvalue & merged_data$logFC_randomDE<0, TRUE, FALSE)
+merged_data$pseudotimeDE <- ifelse(merged_data$qvalue_pseudotimeDE<threshold_qvalue, TRUE, FALSE)
+merged_data$upPseudoDE <- ifelse(merged_data$qvalue_pseudotimeDE<threshold_qvalue & merged_data$logFC_pseudotimeDE>0, TRUE, FALSE)
+merged_data$downPseudoDE <- ifelse(merged_data$qvalue_pseudotimeDE<threshold_qvalue & merged_data$logFC_pseudotimeDE<0, TRUE, FALSE)
+```
+
+Rename columns to improve upset plot.
+
+```{r rename_col, echo=FALSE}
+names(merged_data)[c(10, 11, 13, 14)] <- c("upRandom","downRandom", "upPseudo", "downPseudo")
+```
+
+Format the data for the upset plot from the ComplexHeatmap package.
+
+```{r format_data_upset, echo=FALSE}
+combination_matrix <- make_comb_mat(merged_data[c(10, 11, 13, 14)])
+```
+
+
+### Upset plot
+
+```{r upset_plot, echo=FALSE}
+colorVal <- list(group = c("upPseudo" = "#16967D", "downPseudo" = "#D35400", "downRandom" = "#053061", "upRandom" = "#B2182B"))
+p <- UpSet(combination_matrix, set_order = c("upPseudo", "downPseudo", "downRandom", "upRandom"), 
+           comb_order = order(comb_size(combination_matrix), decreasing = TRUE),
+           row_names_side = "left",
+           top_annotation = upset_top_annotation(combination_matrix, 
+                                                 show_annotation_name = FALSE,
+                                                 add_numbers = TRUE,
+                                                 numbers_rot = 0,
+                                                 numbers_gp = gpar(fontsize = 8),
+                                                 height = unit(7, "cm")),
+           left_annotation = rowAnnotation(group = c("upRandom","downRandom", "downPseudo", "upPseudo"), 
+                                            col = colorVal,
+                                            show_annotation_name = FALSE,
+                                            show_legend = FALSE)
+)
+p
+# save plot
+png("images/2-pseudotime/biasCheck/UpsetPlot/complexUpsetPlot_between_randomDE_pseudotimeDE_allGenes.png",
+    width = 10, height = 10, units = "cm", res = 300)
+p
+dev.off()
+```
+
+## Compare pseudotime-DE genes from this analysis from the ones observed in the main analysis
+
+### Load and format pseudotime-DE genes from the main analysis
+
+```{r load_main_pseudotimeDE, echo=}
+de_results_pseudotime_main <- read.table("data/3-DE/VoomDream_topTable_forebrain_pseudotime_sva_ind_interaction_pseudotime.txt",
+                                         header = TRUE)
+```
+
+Also load the genes used in the pseudotime inference.
+
+```{r load_pseudotime_genes, echo=FALSE}
+tmp_env <- new.env()
+load("data/2-pseudotime/forebrain_pseudotime_analysis.RData", envir = tmp_env)
+selectedCounts_main <- tmp_env$selectedCounts
+rm(tmp_env)
+```
+
+```{r remove_pseudotime_genes, echo=FALSE}
+genes2remove <- rownames(selectedCounts_main)
+de_results_pseudotime_main_filtered <- de_results_pseudotime_main[which(!de_results_pseudotime_main$gene_name %in% genes2remove),]
+```
+
+## Overlap of pseudotime-DE genes between the 2 analyses
+
+Select significant genes in both analyses.
+
+```{r selext_signif_pseudotime_filtered, echo=FALSE}
+de_results_pseudotime_filtered_signif <- de_results_pseudotime_filtered[which(de_results_pseudotime_filtered$qvalue < threshold_qvalue), ]
+nbr_pseudoDE_new <- length(de_results_pseudotime_filtered_signif$gene_id)
+nbr_pseudoDE_new
+de_results_pseudotime_main_filtered_signif <- de_results_pseudotime_main_filtered[which(de_results_pseudotime_main_filtered$qvalue < threshold_qvalue), ]
+nbr_pseudoDE_old <- length(de_results_pseudotime_main_filtered_signif$gene_id)
+nbr_pseudoDE_old
+```
+
+And then compare them.
+
+```{r overlap_pseudotimeDE_filtered, echo=FALSE}
+nbr_overlap <- length(intersect(de_results_pseudotime_filtered_signif$gene_id, de_results_pseudotime_main_filtered_signif$gene_id))
+nbr_overlap
+nbr_overlap/nbr_pseudoDE_old*100
+nbr_overlap/nbr_pseudoDE_new*100
+nbr_uniq_new <- length(setdiff(de_results_pseudotime_filtered_signif$gene_id, de_results_pseudotime_main_filtered_signif$gene_id))
+nbr_uniq_new/nbr_pseudoDE_new*100
+nbr_uniq_old <- length(setdiff(de_results_pseudotime_main_filtered_signif$gene_id, de_results_pseudotime_filtered_signif$gene_id))
+nbr_uniq_old/nbr_pseudoDE_old*100
+```
+
+Do the exact same analysis on the unfiltered pseudotime-DE results.
+
+```{r selext_signif_pseudotime, echo=FALSE}
+de_results_pseudotime_signif <- de_results_pseudotime[which(de_results_pseudotime$qvalue < threshold_qvalue), ]
+nbr_pseudoDE_new <- length(de_results_pseudotime_signif$gene_id)
+nbr_pseudoDE_new
+de_results_pseudotime_main_signif <- de_results_pseudotime_main[which(de_results_pseudotime_main$qvalue < threshold_qvalue), ]
+nbr_pseudoDE_old <- length(de_results_pseudotime_main_signif$gene_id)
+nbr_pseudoDE_old
+```
+
+```{r overlap_pseudotimeDE, echo=FALSE}
+nbr_overlap <- length(intersect(de_results_pseudotime_signif$gene_id, de_results_pseudotime_main_signif$gene_id))
+nbr_overlap
+nbr_overlap/nbr_pseudoDE_old*100
+nbr_overlap/nbr_pseudoDE_new*100
+nbr_uniq_new <- length(setdiff(de_results_pseudotime_signif$gene_id, de_results_pseudotime_main_signif$gene_id))
+nbr_uniq_new/nbr_pseudoDE_new*100
+nbr_uniq_old <- length(setdiff(de_results_pseudotime_main_signif$gene_id, de_results_pseudotime_signif$gene_id))
+nbr_uniq_old/nbr_pseudoDE_old*100
+```
+
+## Correlation between the logFC of the 2 pseudotime results
+
+```{r cor_pseudotime, echo=FALSE}
+# merge the 2 pseudotime results
+merged_pseudotime <- merge(de_results_pseudotime[, c(1,6)], de_results_pseudotime_main[, c(1,5)], by = "gene_id", suffixes = c("_new", "_old"))
+# compute correlation
+cor.test(merged_pseudotime$logFC_new, merged_pseudotime$logFC_old)
+```
+
+
+
+# Session Info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```
