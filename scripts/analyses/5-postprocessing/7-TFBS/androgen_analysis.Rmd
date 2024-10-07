@@ -438,11 +438,9 @@ write.table(enrichRes, file = "data/5-postprocessing/7-TFBS/AndrogenAnalysis/enr
 
 ```{r format4plot_withPermut, echo=FALSE}
 enrichRes_formated <- enrichRes[which(!enrichRes$analysis %in% c("ARbound", "ARbound_geneBody", "ARbound_promoter", "ARbound_promoterTSS")), ]
-# add * for signif enrichment or depletion (with a threshold of 0.05)
+# add * for signif enrichment (with a threshold of 0.05 for the permutation and 0.0005 for the hypergeometric test)
 enrichRes_formated$signif <- ifelse(enrichRes_formated$permut_pval < 0.05,
-                                    ifelse(enrichRes_formated$relative_enrich > 1, 
-                                           ifelse(enrichRes_formated$pval_enrich<0.0005, "*", ""),
-                                           ifelse(enrichRes_formated$pval_deple<0.0005, "*", "")),
+                                    ifelse(enrichRes_formated$pval_enrich<0.0005, "*", ""),
                                     "")
 # order the different direction of effect
 enrichRes_formated$direction <- factor(enrichRes_formated$direction,
