@@ -384,7 +384,7 @@ p <- UpSet(combination_matrix, set_order = c("up", "down", "male", "female"),
                                                  numbers_rot = 0,
                                                  numbers_gp = gpar(fontsize = 10),
                                                  height = unit(5, "cm")),
-           left_annotation = rowAnnotation(group = c("female", "male", "down", "up"), 
+           left_annotation = rowAnnotation(group = c("female", "male", "up", "down"), 
                                            col = colorVal,
                                            show_annotation_name = FALSE,
                                            show_legend = FALSE)
@@ -396,7 +396,7 @@ svg("images/figures/1E_complexUpsetPlot_between_sexDE_pseudotimeDE.svg",
 p
 dev.off()
 png("images/figures/1E_complexUpsetPlot_between_sexDE_pseudotimeDE.png",
-     width = 8, height = 8, units = "cm", res = 30)
+     width = 8, height = 8, units = "cm", res = 300)
 p
 dev.off()
 ```
