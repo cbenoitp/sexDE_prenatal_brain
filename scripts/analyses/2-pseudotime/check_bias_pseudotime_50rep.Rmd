@@ -1,0 +1,106 @@
+---
+title: "Check for bias in pseudotime computation (100 times replication)"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r load_library, echo=FALSE}
+suppressPackageStartupMessages( library(tidyverse) )
+suppressPackageStartupMessages(library(GenomicFeatures))
+suppressPackageStartupMessages( library(edgeR) )
+suppressPackageStartupMessages( library(limma) )
+suppressPackageStartupMessages(library(SummarizedExperiment))
+suppressPackageStartupMessages( library(phenopath) )
+suppressPackageStartupMessages( library(qvalue) )
+suppressPackageStartupMessages( library(sva) )
+suppressPackageStartupMessages( library(doParallel) )
+suppressPackageStartupMessages( library(variancePartition) )
+suppressPackageStartupMessages( library(ComplexHeatmap) )
+```
+
+```{r setup, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+```{r parallel_processing_param, echo=FALSE}
+# Specify parallel processing parameters
+# this is used implicitly by dream() to run in parallel
+param <- SnowParam(4, "SOCK", progressbar=TRUE)
+register(param)
+```
+
+# Goal
+
+The goal is to check if there could be a bias introduced by the pseudotime inference to could explain the consistency in direction of effect between sex-DE and pseudotime-DE.
+For this, we will create a random binary variable (1 or 2) for each individual. We will use this variable as a covariate in the new computation of the pseudotime. Then, we will do the same DE analysis using this random variable and this new pseudotime. Finally, we will compare how correlated this random variable and this new pseudotime are compared to the correlation between pseudotime and sex.
+Do this analysis 100 times with different random seed.
+
+# Load data and functions
+
+## Load data
+
+Load count and phenotype data.
+
+```{r load_data, echo=FALSE}
+load("data/1-preprocessing/counts_forebrain_phenotypes.RData")
+```
+
+Load annotation.
+
+```{r load_annotation, echo=FALSE}
+# First, import the GTF-file that you have also used as input for htseq-count
+txdb <- txdbmaker::makeTxDbFromGFF("data/0-input/gencode.v28.annotation.gff3",format="gff")
+
+# then collect the exons per gene id
+exons.list.per.gene <- exonsBy(txdb,by="gene")
+
+# then for each gene, reduce all the exons to a set of non overlapping exons, calculate their lengths (widths) and sum them
+exonic.gene.sizes <-  sum(width(reduce(exons.list.per.gene)))
+#names(exonic.gene.sizes)=matrix(unlist(strsplit(as.character(names(exonic.gene.sizes)),"\\.")),ncol=2,byrow=T)[,1]
+names(exonic.gene.sizes) <- names(exonic.gene.sizes)
+
+gtf.gene.length_df <- cbind(data.frame(names(exonic.gene.sizes)),as.numeric(exonic.gene.sizes))
+names(gtf.gene.length_df) <- c("gene_id","size")
+gtf.gene.length_df <- unique(gtf.gene.length_df)
+```
+
+## Load functions
+
+```{r load_functions, echo=FALSE}
+source("scripts/analyses/2-pseudotime/check_bias_pseudotime_function.R")
+```
+
+# Run the analysis 50 times
+
+```{r run_50times, echo=FALSE}
+results <- data.frame("id" = NULL, "NbrIndRandom1" = NULL, "NbrIndRandom2" = NULL, "nbrRandomDE" = NULL, "nbrPseudotimeDE" = NULL, "overlap" = NULL, "percent_overlap" = NULL, "r2" = NULL, "pval" = NULL)
+for (i in 1:50){
+  print(sprintf(">>>>>>>>>> %i <<<<<<<<<", i))
+  tmp_res <- full_analysis_random(x = x, phenotypes = phenotypes, seedNumber = i, gtf.gene.length_df = gtf.gene.length_df)
+  # add result to data frame
+  results <- rbind(results, c("id" = i, tmp_res))
+  names(results) <- c("id", "NbrIndRandom1", "NbrIndRandom2", "nbrRandomDE", "nbrPseudotimeDE", "overlap", "percent_overlap", "r2", "pval")
+}
+```
+
+Get some summary of the 50 runs.
+
+```{r summary, echo=FALSE}
+mean(results$percent_overlap)
+mean(results$r2)
+```
+
+Save results.
+
+```{r save_res, echo=FALSE}
+write.table(results, file = "data/2-pseudotime/biasCheck/checkBias_50permutation.txt",
+            quote = FALSE, sep = "\t", row.names = FALSE)
+```
+
+
+# Session Info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```
