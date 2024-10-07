@@ -423,7 +423,7 @@ p <- UpSet(combination_matrix, set_order = c("up", "down", "male", "female"),
                                                  numbers_rot = 0,
                                                  numbers_gp = gpar(fontsize = 8),
                                                  height = unit(7, "cm")),
-           left_annotation = rowAnnotation(group = c("female", "male", "down", "up"), 
+           left_annotation = rowAnnotation(group = c("female", "male", "up", "down"), 
                                             col = colorVal,
                                             show_annotation_name = FALSE,
                                             show_legend = FALSE)
