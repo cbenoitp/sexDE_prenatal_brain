@@ -1,0 +1,187 @@
+---
+title: "Create disease gene lists"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+---
+
+
+```{r load_library, echo=FALSE}
+suppressPackageStartupMessages( library(readxl) )
+suppressPackageStartupMessages( library(tibble) )
+suppressPackageStartupMessages( library(dplyr) )
+suppressPackageStartupMessages( library(genefilter) )
+suppressPackageStartupMessages( library(biomaRt) )
+suppressPackageStartupMessages( library(readxl) )
+```
+
+```{r, setup, include=FALSE, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+# Load data
+
+Load DE results.
+
+```{r load_DE_results_hdbr, echo=FALSE}
+de_results_hdbr <- read.table("data/3-DE/VoomDream_topTable_forebrain_pseudotime_sva_ind_interaction.txt",
+                         header = TRUE, check.names=FALSE)
+# keep only autosomal genes
+de_results_hdbr <- de_results_hdbr[which(!de_results_hdbr$chr %in% c("chrX", "chrY", "chrM")),]
+# remove the version number from the ensembl id
+de_results_hdbr$gene_id <-sapply(strsplit(as.character(de_results_hdbr$gene_id), "\\."), function(x){x[1]})
+```
+
+```{r load_DE_results_gtex, echo=FALSE}
+de_results_gtex <- read.table( "data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_VoomDream_topTable_with_sva_ind_pseudotime_interaction.txt",
+                         header = TRUE, check.names=FALSE)
+# keep only autosomal genes
+de_results_gtex <- de_results_gtex[which(!de_results_gtex$chr %in% c("chrX", "chrY", "chrM")),]
+# remove the version number from the ensembl id
+de_results_gtex$gene_id <-sapply(strsplit(as.character(de_results_gtex$gene_id), "\\."), function(x){x[1]})
+```
+
+Function to check if the selected genes are present in the list of analyzed genes (and not in the sex chromosomes).
+
+```{r check_genes_present, echo=FALSE}
+getOnlyGenesAnalyzed <- function(x, genesAnalyzed){
+  return(x[which(x %in% genesAnalyzed)])
+}
+```
+
+Initisalize biomart connection.
+
+```{r init_biomart, echo=FALSE}
+ensembl <- useEnsembl(biomart="ensembl", dataset="hsapiens_gene_ensembl", version = "98")
+```
+
+
+# Prepare genesets
+
+Initialize gene lists
+
+```{r init, echo=FALSE}
+genesLists <- list()
+```
+
+## Schizophrenia
+
+Load data from Clifton et al., 2023.
+
+```{r load_scz, echo=FALSE}
+scz_gene_list <- read_excel("data/5-postprocessing/8-CaseControlEnrichment/geneLists/Clifton2023_SCZ_ajmgb32931-sup-0001-tables.xlsx",
+                            sheet = 2)
+```
+
+Select only the schizophrenia gene with a p-value less than 0.05 and split the up and down regulated genes.
+
+```{r select_scz, echo=FALSE}
+scz_gene_selected_up <- scz_gene_list$ensembl_ID[which(scz_gene_list$adj.P.Val < 0.05 & scz_gene_list$logFC > 0)] # genes upregulated in SCZ cases
+scz_gene_selected_down <- scz_gene_list$ensembl_ID[which(scz_gene_list$adj.P.Val < 0.05 & scz_gene_list$logFC < 0)] # genes downregulated in SCZ cases
+```
+
+Keep only genes that were also analyzed in our sex-DE analysis?
+
+```{r filter_scz, echo=FALSE, eval=FALSE}
+scz_gene_selected_hdbr <- scz_gene_selected[which(scz_gene_selected %in% de_results_hdbr$gene_id)]
+scz_gene_selected_gtex <- scz_gene_selected[which(scz_gene_selected %in% de_results_gtex$gene_id)]
+```
+
+Add to gene list.
+
+```{r add_scz, echo=FALSE}
+genesLists$sczUp <- scz_gene_selected_up
+genesLists$sczDown <- scz_gene_selected_down
+```
+
+
+## ASD
+
+Load data from Werling et al., 2016.
+
+```{r load_asd, echo=FALSE}
+asdUp_gene_list <- read_excel("data/5-postprocessing/8-CaseControlEnrichment/geneLists/Werling2016_ASD_41467_2016_BFncomms10717_MOESM1122_ESM.xlsx",
+                            sheet = 5, skip = 1)
+asdDown_gene_list <- read_excel("data/5-postprocessing/8-CaseControlEnrichment/geneLists/Werling2016_ASD_41467_2016_BFncomms10717_MOESM1122_ESM.xlsx",
+                            sheet = 6, skip = 1)
+asdM12_gene_list <- read_excel("data/5-postprocessing/8-CaseControlEnrichment/geneLists/Werling2016_ASD_41467_2016_BFncomms10717_MOESM1122_ESM.xlsx",
+                            sheet = 7, skip = 1)
+asdM16_gene_list <- read_excel("data/5-postprocessing/8-CaseControlEnrichment/geneLists/Werling2016_ASD_41467_2016_BFncomms10717_MOESM1122_ESM.xlsx",
+                            sheet = 8, skip = 1)
+```
+
+Add to gene list.
+
+```{r add_asd, echo=FALSE}
+genesLists$asdUp <- asdUp_gene_list$ensembl_gene_id
+genesLists$asdDown <- asdDown_gene_list$ensembl_gene_id
+genesLists$asdM12 <- asdM12_gene_list$ensembl_gene_id
+genesLists$asdM16 <- asdM16_gene_list$ensembl_gene_id
+```
+
+
+## MDD
+
+Load data from Maitra et al., 2023.
+
+```{r load_mdd, echo=FALSE}
+mdd_males_gene_list <- read_excel("data/5-postprocessing/8-CaseControlEnrichment/geneLists/Maitra2023_MDD_41467_2023_38530_MOESM3_ESM.xlsx",
+                            sheet = 5, skip = 2)
+mdd_females_gene_list <- read_excel("data/5-postprocessing/8-CaseControlEnrichment/geneLists/Maitra2023_MDD_41467_2023_38530_MOESM3_ESM.xlsx",
+                            sheet = 6, skip = 2)
+```
+
+For each sex, get the up and down regulated genes.
+
+```{r filter_mdd, echo=FALSE}
+mdd_males_gene_list_up <- mdd_males_gene_list$gene[which(mdd_males_gene_list$p_adj.glb < 0.05 & mdd_males_gene_list$logFC > 0)]
+mdd_males_gene_list_down <- mdd_males_gene_list$gene[which(mdd_males_gene_list$p_adj.glb < 0.05 & mdd_males_gene_list$logFC < 0)]
+mdd_females_gene_list_up <- mdd_females_gene_list$gene[which(mdd_females_gene_list$p_adj.glb < 0.05 & mdd_females_gene_list$logFC > 0)]
+mdd_females_gene_list_down <- mdd_females_gene_list$gene[which(mdd_females_gene_list$p_adj.glb < 0.05 & mdd_females_gene_list$logFC < 0)]
+```
+
+Convert gene name to ensemblID.
+
+```{r convert_geneName_mdd, echo=FALSE}
+mdd_males_gene_list_up_ensemblID <- getBM(filters = "hgnc_symbol", attributes = c("ensembl_gene_id"), 
+                                          values = mdd_males_gene_list_up, mart = ensembl)[,1]
+mdd_males_gene_list_down_ensemblID <- getBM(filters = "hgnc_symbol", attributes = c("ensembl_gene_id"), 
+                                            values = mdd_males_gene_list_down, mart = ensembl)[,1]
+mdd_females_gene_list_up_ensemblID <- getBM(filters = "hgnc_symbol", attributes = c("ensembl_gene_id"), 
+                                            values = mdd_females_gene_list_up, mart = ensembl)[,1]
+mdd_females_gene_list_down_ensemblID <- getBM(filters = "hgnc_symbol", attributes = c("ensembl_gene_id"), 
+                                              values = mdd_females_gene_list_down, mart = ensembl)[,1]
+```
+
+Add to gene list.
+
+```{r add_mdd, echo=FALSE}
+genesLists$mddUpFemale <- mdd_females_gene_list_up_ensemblID
+genesLists$mddDownFemale <- mdd_females_gene_list_down_ensemblID
+genesLists$mddUpMale <- mdd_males_gene_list_up_ensemblID
+genesLists$mddDownMale <- mdd_males_gene_list_down_ensemblID
+```
+
+
+# Save gene list
+
+```{r save_geneList, echo=FALSE}
+save(genesLists, file = "data/5-postprocessing/8-CaseControlEnrichment/geneLists/caseCtrlGeneLists.RData")
+```
+
+
+# Some statistics of the gene sets
+
+```{r stat_geneList, echo=FALSE}
+unlist(lapply(genesLists, length))
+```
+
+
+# Session info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```
