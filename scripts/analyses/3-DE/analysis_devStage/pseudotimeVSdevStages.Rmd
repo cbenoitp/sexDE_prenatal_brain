@@ -283,6 +283,29 @@ listData <- list(pseudotime = signifGenes_pseudo$gene_name, devStage = signifGen
 permutation_test(listData, merged_data$gene_name, binwidth = 1)
 ```
 
+## Overlap with different q-value threshold
+
+For the following q-value threshold (q>=0.1, q<0.1, q<0.05, q<0.01) applied to the analysis using the developmental stages as covariate, we look at how many genes are sex-DE or not in the analysis using the pseudotime as covariate.
+
+```{r table_overlap_qvalue, echo=FALSE}
+merged_data$sexDE_pseudotime <- ifelse(merged_data$qvalue_pseudo < qvalue_threshold, "Yes", "No")
+merged_data$qvalue_cat_devStage <- ifelse(merged_data$qvalue_devStages < 0.01, "q<0.01",
+                                            ifelse(merged_data$qvalue_devStages < 0.05, "q<0.05",
+                                                   ifelse(merged_data$qvalue_devStages < 0.1, "q<0.1", "q>0.1")))
+table(merged_data$sexDE_pseudotime, merged_data$qvalue_cat_devStage)
+```
+
+Do the same but looking at the p-value.
+
+```{r table_overlap_pvalue, echo=FALSE}
+merged_data$sexDE_pseudotime <- ifelse(merged_data$qvalue_pseudo < qvalue_threshold, "Yes", "No")
+merged_data$pvalue_cat_devStage <- ifelse(merged_data$P.Value_devStages < 0.01, "p<0.01",
+                                            ifelse(merged_data$P.Value_devStages < 0.05, "p<0.05",
+                                                   ifelse(merged_data$P.Value_devStages < 0.1, "p<0.1", "p>0.1")))
+table(merged_data$sexDE_pseudotime, merged_data$pvalue_cat_devStage)
+```
+
+
 
 ## Replication rate
 
