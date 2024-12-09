@@ -81,6 +81,12 @@ Redo voom normalization with new design matrix (containing svas).
 y <- voomWithDreamWeights(x, form, metadata, plot = TRUE)
 ```
 
+Save the normalized counts and the phenotypes vectors in a RData file.
+
+```{r save_normCounts, echo=FALSE}
+save(y, phenotypes, form, sva.obj, metadata,
+     file = "data/3-DE/analysis_devStage/normCounts_dream_dev_sva_ind_interaction_phenotypes.RData")
+```
 
 ## Sex-Differential Expression (sex-DE) analysis
 
