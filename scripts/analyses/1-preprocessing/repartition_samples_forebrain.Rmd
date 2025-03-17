@@ -47,6 +47,13 @@ length(unique(phenotypes$ind[which(phenotypes$assigned_sex == 2)]))
 
 35 male individuals and 37 female individuals
 
+Mean number of samples per individuals.
+
+```{r mean_nbrSamplesPerInd, echo=FALSE}
+nbrSamplePerInd <- phenotypes %>% group_by(ind) %>% summarise(nbrSample = n())
+mean(nbrSamplePerInd$nbrSample)
+```
+
 
 ## Repartition plots 
 

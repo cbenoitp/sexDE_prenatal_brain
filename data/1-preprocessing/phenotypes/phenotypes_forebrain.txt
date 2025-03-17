@@ -1,0 +1,267 @@
+experiment_name	ind	dev_stage	brain_region	karyotype	batch	sex	new_devStage	newDevStage	new_brainRegion	newBrainRegion	new_batch	assigned_sex
+HDBR251	1406	Carnegie Stage 23	telencephalon	46, xx	FC2014_038	2	8PCW	8PCW	Forebrain	telencephalon	FC2014_038	2
+HDBR254	1406	Carnegie Stage 23	diencephalon	46, xx	FC2014_038	2	8PCW	8PCW	Forebrain	diencephalon	FC2014_038	2
+HDBR256	11823	Carnegie Stage 23	telencephalon	46, xy	FC2014_038	1	8PCW	8PCW	Forebrain	telencephalon	FC2014_038	1
+HDBR259	11823	Carnegie Stage 23	telencephalon	46, xy	FC2014_038	1	8PCW	8PCW	Forebrain	telencephalon	FC2014_038	1
+HDBR263	11823	Carnegie Stage 23	diencephalon	46, xy	FC2014_038	1	8PCW	8PCW	Forebrain	diencephalon	FC2014_038	1
+HDBR264	11823	Carnegie Stage 23	diencephalon	46, xy	FC2014_038, FC2014_117	1	8PCW	8PCW	Forebrain	diencephalon	FC2014_038	1
+HDBR265	11826	Carnegie Stage 23	cerebral cortex	46, xx	FC2014_038	2	8PCW	8PCW	Forebrain	telencephalon	FC2014_038	2
+HDBR268	11826	Carnegie Stage 23	diencephalon	46, xx	FC2014_038	2	8PCW	8PCW	Forebrain	diencephalon	FC2014_038	2
+HDBR269	11826	Carnegie Stage 23	diencephalon	46, xx	FC2014_038	2	8PCW	8PCW	Forebrain	diencephalon	FC2014_038	2
+HDBR273	11826	Carnegie Stage 23	cerebral cortex	46, xx	FC2014_038	2	8PCW	8PCW	Forebrain	telencephalon	FC2014_038	2
+HDBR275	11827	Carnegie Stage 23	cerebral cortex	46, xx	FC2014_038	2	8PCW	8PCW	Forebrain	telencephalon	FC2014_038	2
+HDBR278	11827	Carnegie Stage 23	diencephalon	46, xx	FC2014_038	2	8PCW	8PCW	Forebrain	diencephalon	FC2014_038	2
+HDBR279	11827	Carnegie Stage 23	diencephalon	46, xx	FC2014_032, FC2014_117	2	8PCW	8PCW	Forebrain	diencephalon	FC2014_032	2
+HDBR283	11827	Carnegie Stage 23	cerebral cortex	46, xx	FC2014_030	2	8PCW	8PCW	Forebrain	telencephalon	FC2014_030	2
+HDBR285	11846	Carnegie Stage 23	cerebral cortex	46, xx	FC2014_030	2	8PCW	8PCW	Forebrain	telencephalon	FC2014_030	2
+HDBR288	11846	Carnegie Stage 23	cerebral cortex	46, xx	FC2014_030	2	8PCW	8PCW	Forebrain	telencephalon	FC2014_030	2
+HDBR289	11846	Carnegie Stage 23	diencephalon	46, xx	FC2014_030	2	8PCW	8PCW	Forebrain	diencephalon	FC2014_030	2
+HDBR290	11846	Carnegie Stage 23	diencephalon	46, xx	FC2014_030	2	8PCW	8PCW	Forebrain	diencephalon	FC2014_030	2
+HDBR298	11848	Carnegie Stage 23	forebrain	46, xy	FC2014_035, FC2014_117	1	8PCW	8PCW	Forebrain	forebrain fragment	FC2014_035	1
+HDBR301	11884	Carnegie Stage 23	telencephalon	46, xx	FC2014_030	2	8PCW	8PCW	Forebrain	telencephalon	FC2014_030	2
+HDBR303	11884	Carnegie Stage 23	telencephalon	46, xx	FC2014_030	2	8PCW	8PCW	Forebrain	telencephalon	FC2014_030	2
+HDBR304	11884	Carnegie Stage 23	diencephalon	46, xx	FC2014_030, FC2014_117	2	8PCW	8PCW	Forebrain	diencephalon	FC2014_030	2
+HDBR308	11918	Carnegie Stage 23	cerebral cortex	46, xx	FC2014_030	2	8PCW	8PCW	Forebrain	telencephalon	FC2014_030	2
+HDBR311	11918	Carnegie Stage 23	cerebral cortex	46, xx	FC2014_030	2	8PCW	8PCW	Forebrain	telencephalon	FC2014_030	2
+HDBR313	11918	Carnegie Stage 23	diencephalon	46, xx	FC2014_030, FC2014_151	2	8PCW	8PCW	Forebrain	diencephalon	FC2014_030	2
+HDBR319	11814	Carnegie Stage 22	telencephalon	46, xy	FC2014_032	1	8PCW	8PCW	Forebrain	telencephalon	FC2014_032	1
+HDBR323	11814	Carnegie Stage 22	pituitary and diencephalon	46, xy	FC2014_032	1	8PCW	8PCW	Forebrain	diencephalon	FC2014_032	1
+HDBR325	11815	Carnegie Stage 22	forebrain	46, xx	FC2014_032	2	8PCW	8PCW	Forebrain	forebrain fragment	FC2014_032	2
+HDBR328	11820	9 post conception weeks	cerebral cortex	46, xx	FC2014_032	2	9PCW	9PCW	Forebrain	telencephalon	FC2014_032	2
+HDBR329	11820	9 post conception weeks	temporal lobe	46, xx	FC2014_032	2	9PCW	9PCW	Forebrain	telencephalon	FC2014_032	2
+HDBR332	11820	9 post conception weeks	cerebral cortex	46, xx	FC2014_032	2	9PCW	9PCW	Forebrain	telencephalon	FC2014_032	2
+HDBR333	11820	9 post conception weeks	cerebral cortex	46, xx	FC2014_032	2	9PCW	9PCW	Forebrain	telencephalon	FC2014_032	2
+HDBR335	11820	9 post conception weeks	cerebral cortex	46, xx	FC2014_035	2	9PCW	9PCW	Forebrain	telencephalon	FC2014_035	2
+HDBR336	11820	9 post conception weeks	cerebral cortex	46, xx	FC2014_035	2	9PCW	9PCW	Forebrain	telencephalon	FC2014_035	2
+HDBR337	11820	9 post conception weeks	temporal lobe	46, xx	FC2014_035	2	9PCW	9PCW	Forebrain	telencephalon	FC2014_035	2
+HDBR339	11820	9 post conception weeks	diencephalon	46, xx	FC2014_035	2	9PCW	9PCW	Forebrain	diencephalon	FC2014_035	2
+HDBR341	11828	Carnegie Stage 22	telencephalon	46, xx	FC2014_035, FC2014_117	2	8PCW	8PCW	Forebrain	telencephalon	FC2014_035	2
+HDBR343	11828	Carnegie Stage 22	telencephalon	46, xx	FC2014_035	2	8PCW	8PCW	Forebrain	telencephalon	FC2014_035	2
+HDBR345	11829	Carnegie Stage 22	telencephalon	46, xy	FC2014_035	1	8PCW	8PCW	Forebrain	telencephalon	FC2014_035	1
+HDBR347	11829	Carnegie Stage 22	telencephalon	46, xy	FC2014_035	1	8PCW	8PCW	Forebrain	telencephalon	FC2014_035	1
+HDBR348	11831	Carnegie Stage 22	cerebral cortex	46, xy	FC2014_035	1	8PCW	8PCW	Forebrain	telencephalon	FC2014_035	1
+HDBR351	11831	Carnegie Stage 22	diencephalon	46, xy	FC2014_035, FC2014_117	1	8PCW	8PCW	Forebrain	diencephalon	FC2014_035	1
+HDBR352	11831	Carnegie Stage 22	cerebral cortex	46, xy	FC2014_035	1	8PCW	8PCW	Forebrain	telencephalon	FC2014_035	1
+HDBR356	11831	Carnegie Stage 22	diencephalon	46, xy	FC2014_030	1	8PCW	8PCW	Forebrain	diencephalon	FC2014_030	1
+HDBR358	11858	Carnegie Stage 22	cerebral cortex	46, xy	FC2014_037	1	8PCW	8PCW	Forebrain	telencephalon	FC2014_037	1
+HDBR362	11865	Carnegie Stage 22	telencephalon	46, xy	FC2014_043	1	8PCW	8PCW	Forebrain	telencephalon	FC2014_043	1
+HDBR364	11871	Carnegie Stage 22	telencephalon	46, xx	FC2014_035	2	8PCW	8PCW	Forebrain	telencephalon	FC2014_035	2
+HDBR365	11871	Carnegie Stage 22	telencephalon	46, xx	FC2014_035	2	8PCW	8PCW	Forebrain	telencephalon	FC2014_035	2
+HDBR366	11871	Carnegie Stage 22	forebrain fragment	46, xx	FC2014_035	2	8PCW	8PCW	Forebrain	forebrain fragment	FC2014_035	2
+HDBR369	11878	Carnegie Stage 22	telencephalon	46, xx	FC2014_035	2	8PCW	8PCW	Forebrain	telencephalon	FC2014_035	2
+HDBR372	11878	Carnegie Stage 22	diencephalon	46, xx	FC2014_037	2	8PCW	8PCW	Forebrain	diencephalon	FC2014_037	2
+HDBR373	11878	Carnegie Stage 22	telencephalon	46, xx	FC2014_037	2	8PCW	8PCW	Forebrain	telencephalon	FC2014_037	2
+HDBR378	11882	Carnegie Stage 21	forebrain	46, xx	FC2014_037	2	8PCW	8PCW	Forebrain	forebrain fragment	FC2014_037	2
+HDBR387	11904	Carnegie Stage 18	forebrain	46, xy	FC2014_037	1	7PCW	5-7PCW	Forebrain	forebrain fragment	FC2014_037	1
+HDBR392	11931	Carnegie Stage 17	forebrain	unknown	FC2014_037	0	6PCW	5-7PCW	Forebrain	forebrain fragment	FC2014_037	2
+HDBR395	11947	13 post conception weeks	telencephalon	46, xx	FC2014_037	2	13PCW	13PCW	Forebrain	telencephalon	FC2014_037	2
+HDBR396	11840	Carnegie Stage 14	forebrain	46, xx	FC2014_037	2	5PCW	5-7PCW	Forebrain	forebrain fragment	FC2014_037	2
+HDBR399	11837	Carnegie Stage 14	forebrain	46, xy	FC2014_037	1	5PCW	5-7PCW	Forebrain	forebrain fragment	FC2014_037	1
+HDBR402	11810	9 post conception weeks	forebrain	46, xx	FC2014_037	2	9PCW	9PCW	Forebrain	forebrain fragment	FC2014_037	2
+HDBR405	11845	9 post conception weeks	cerebral cortex	46, xy	FC2014_040	1	9PCW	9PCW	Forebrain	telencephalon	FC2014_040	1
+HDBR406	11845	9 post conception weeks	cerebral cortex	46, xy	FC2014_040	1	9PCW	9PCW	Forebrain	telencephalon	FC2014_040	1
+HDBR407	11845	9 post conception weeks	temporal lobe	46, xy	FC2014_043	1	9PCW	9PCW	Forebrain	telencephalon	FC2014_043	1
+HDBR410	11845	9 post conception weeks	diencephalon	46, xy	FC2014_043	1	9PCW	9PCW	Forebrain	diencephalon	FC2014_043	1
+HDBR411	11845	9 post conception weeks	temporal lobe	46, xy	FC2014_043	1	9PCW	9PCW	Forebrain	telencephalon	FC2014_043	1
+HDBR412	11845	9 post conception weeks	diencephalon	46, xy	FC2014_043	1	9PCW	9PCW	Forebrain	diencephalon	FC2014_043	1
+HDBR414	11845	9 post conception weeks	cerebral cortex	46, xy	FC2014_043	1	9PCW	9PCW	Forebrain	telencephalon	FC2014_043	1
+HDBR415	11845	9 post conception weeks	cerebral cortex	46, xy	FC2014_043	1	9PCW	9PCW	Forebrain	telencephalon	FC2014_043	1
+HDBR416	11845	9 post conception weeks	diencephalon	46, xy	FC2014_043	1	9PCW	9PCW	Forebrain	diencephalon	FC2014_043	1
+HDBR417	11845	9 post conception weeks	temporal lobe	46, xy	FC2014_043	1	9PCW	9PCW	Forebrain	telencephalon	FC2014_043	1
+HDBR418	11845	9 post conception weeks	temporal lobe	46, xy	FC2014_043	1	9PCW	9PCW	Forebrain	telencephalon	FC2014_043	1
+HDBR421	11845	9 post conception weeks	cerebral cortex	46, xy	FC2014_043	1	9PCW	9PCW	Forebrain	telencephalon	FC2014_043	1
+HDBR422	11845	9 post conception weeks	cerebral cortex	46, xy	FC2014_043	1	9PCW	9PCW	Forebrain	telencephalon	FC2014_043	1
+HDBR423	11851	9 post conception weeks	cerebral cortex	46, xx	FC2014_043	2	9PCW	9PCW	Forebrain	telencephalon	FC2014_043	2
+HDBR424	11851	9 post conception weeks	cerebral cortex	46, xx	FC2014_043	2	9PCW	9PCW	Forebrain	telencephalon	FC2014_043	2
+HDBR425	11851	9 post conception weeks	temporal lobe	46, xx	FC2014_043	2	9PCW	9PCW	Forebrain	telencephalon	FC2014_043	2
+HDBR431	11851	9 post conception weeks	temporal lobe	46, xx	FC2014_066	2	9PCW	9PCW	Forebrain	telencephalon	FC2014_066	2
+HDBR434	11851	9 post conception weeks	cerebral cortex	46, xx	FC2014_066	2	9PCW	9PCW	Forebrain	telencephalon	FC2014_066	2
+HDBR435	11851	9 post conception weeks	cerebral cortex	46, xx	FC2014_066	2	9PCW	9PCW	Forebrain	telencephalon	FC2014_066	2
+HDBR436	11851	9 post conception weeks	temporal lobe	46, xx	FC2014_066	2	9PCW	9PCW	Forebrain	telencephalon	FC2014_066	2
+HDBR438	11851	9 post conception weeks	cerebral cortex	46, xx	FC2014_066	2	9PCW	9PCW	Forebrain	telencephalon	FC2014_066	2
+HDBR439	11851	9 post conception weeks	cerebral cortex	46, xx	FC2014_066	2	9PCW	9PCW	Forebrain	telencephalon	FC2014_066	2
+HDBR440	11851	9 post conception weeks	cerebral cortex	46, xx	FC2014_066	2	9PCW	9PCW	Forebrain	telencephalon	FC2014_066	2
+HDBR441	11873	9 post conception weeks	cerebral cortex	46, xx	FC2014_066	2	9PCW	9PCW	Forebrain	telencephalon	FC2014_066	2
+HDBR442	11873	9 post conception weeks	cerebral cortex	46, xx	FC2014_066	2	9PCW	9PCW	Forebrain	telencephalon	FC2014_066	2
+HDBR443	11873	9 post conception weeks	temporal lobe	46, xx	FC2014_066	2	9PCW	9PCW	Forebrain	telencephalon	FC2014_066	2
+HDBR447	11873	9 post conception weeks	diencephalon	46, xx	FC2014_075	2	9PCW	9PCW	Forebrain	diencephalon	FC2014_075	2
+HDBR450	11873	9 post conception weeks	cerebral cortex	46, xx	FC2014_075	2	9PCW	9PCW	Forebrain	telencephalon	FC2014_075	2
+HDBR451	11873	9 post conception weeks	cerebral cortex	46, xx	FC2014_066	2	9PCW	9PCW	Forebrain	telencephalon	FC2014_066	2
+HDBR452	11873	9 post conception weeks	cerebral cortex	46, xx	FC2014_066	2	9PCW	9PCW	Forebrain	telencephalon	FC2014_066	2
+HDBR453	11873	9 post conception weeks	cerebral cortex	46, xx	FC2014_066	2	9PCW	9PCW	Forebrain	telencephalon	FC2014_066	2
+HDBR454	11873	9 post conception weeks	temporal lobe	46, xx	FC2014_066	2	9PCW	9PCW	Forebrain	telencephalon	FC2014_066	2
+HDBR455	11873	9 post conception weeks	diencephalon	46, xx	FC2014_066	2	9PCW	9PCW	Forebrain	diencephalon	FC2014_066	2
+HDBR458	11606	9 post conception weeks	forebrain	46, xy	FC2014_066	1	9PCW	9PCW	Forebrain	forebrain fragment	FC2014_066	1
+HDBR459	11606	9 post conception weeks	forebrain	46, xy	FC2014_066	1	9PCW	9PCW	Forebrain	forebrain fragment	FC2014_066	1
+HDBR461	11912	9 post conception weeks	telencephalon	46, xy	FC2014_066, FC2014_117	1	9PCW	9PCW	Forebrain	telencephalon	FC2014_066	1
+HDBR462	11912	9 post conception weeks	telencephalon	46, xy	FC2014_066	1	9PCW	9PCW	Forebrain	telencephalon	FC2014_066	1
+HDBR465	11874	9 post conception weeks	forebrain fragment	46, xy	FC2014_066	1	9PCW	9PCW	Forebrain	forebrain fragment	FC2014_066	1
+HDBR469	11626	9 post conception weeks	forebrain fragment	46, xx	FC2014_150	2	9PCW	9PCW	Forebrain	forebrain fragment	FC2014_150	2
+HDBR470	11832	Late 8 post conception weeks	cerebral cortex	46, xx	FC2014_150	2	8PCW	8PCW	Forebrain	telencephalon	FC2014_150	2
+HDBR474	11832	Late 8 post conception weeks	diencephalon	46, xx	FC2014_065, FC2014_117	2	8PCW	8PCW	Forebrain	diencephalon	FC2014_065	2
+HDBR475	11832	Late 8 post conception weeks	cerebral cortex	46, xx	FC2014_150	2	8PCW	8PCW	Forebrain	telencephalon	FC2014_150	2
+HDBR478	11832	Late 8 post conception weeks	diencephalon	46, xx	FC2014_071	2	8PCW	8PCW	Forebrain	diencephalon	FC2014_071	2
+HDBR480	11830	Late 8 post conception weeks	cerebral cortex	46, xx	FC2014_071	2	8PCW	8PCW	Forebrain	telencephalon	FC2014_071	2
+HDBR484	11830	Late 8 post conception weeks	diencephalon	46, xx	FC2014_071	2	8PCW	8PCW	Forebrain	diencephalon	FC2014_071	2
+HDBR485	11830	Late 8 post conception weeks	diencephalon	46, xx	FC2014_071	2	8PCW	8PCW	Forebrain	diencephalon	FC2014_071	2
+HDBR504	1107	16 post conception weeks	cerebral cortex	unknown	FC2014_073	0	16PCW	14-17PCW	Forebrain	telencephalon	FC2014_073	1
+HDBR507	1107	16 post conception weeks	cerebral cortex	unknown	FC2014_073	0	16PCW	14-17PCW	Forebrain	telencephalon	FC2014_073	1
+HDBR515	1107	16 post conception weeks	cerebral cortex	unknown	FC2014_054	0	16PCW	14-17PCW	Forebrain	telencephalon	FC2014_054	1
+HDBR517	1107	16 post conception weeks	cerebral cortex	unknown	FC2014_054	0	16PCW	14-17PCW	Forebrain	telencephalon	FC2014_054	1
+HDBR518	1107	16 post conception weeks	cerebral cortex	unknown	FC2014_054	0	16PCW	14-17PCW	Forebrain	telencephalon	FC2014_054	1
+HDBR522	11920	Carnegie Stage 23	cerebral cortex	46, xy	FC2014_054, FC2014_117	1	8PCW	8PCW	Forebrain	telencephalon	FC2014_054	1
+HDBR527	11907	16 post conception weeks	temporal lobe	46, xx	FC2014_054	2	16PCW	14-17PCW	Forebrain	telencephalon	FC2014_054	2
+HDBR528	11907	16 post conception weeks	temporal lobe	46, xx	FC2014_054	2	16PCW	14-17PCW	Forebrain	telencephalon	FC2014_054	2
+HDBR529	11907	16 post conception weeks	diencephalon	46, xx	FC2014_054, FC2014_117	2	16PCW	14-17PCW	Forebrain	diencephalon	FC2014_054	2
+HDBR532	11907	16 post conception weeks	cerebral cortex	46, xx	FC2014_054	2	16PCW	14-17PCW	Forebrain	telencephalon	FC2014_054	2
+HDBR533	11907	16 post conception weeks	cerebral cortex	46, xx	FC2014_054	2	16PCW	14-17PCW	Forebrain	telencephalon	FC2014_054	2
+HDBR534	11907	16 post conception weeks	cerebral cortex	46, xx	FC2014_054	2	16PCW	14-17PCW	Forebrain	telencephalon	FC2014_054	2
+HDBR535	11907	16 post conception weeks	cerebral cortex	46, xx	FC2014_054	2	16PCW	14-17PCW	Forebrain	telencephalon	FC2014_054	2
+HDBR536	11907	16 post conception weeks	cerebral cortex	46, xx	FC2014_054	2	16PCW	14-17PCW	Forebrain	telencephalon	FC2014_054	2
+HDBR538	1117	15 post conception weeks	cerebral cortex	unknown	FC2014_054	0	15PCW	14-17PCW	Forebrain	telencephalon	FC2014_054	1
+HDBR539	1117	15 post conception weeks	cerebral cortex	unknown	FC2014_054	0	15PCW	14-17PCW	Forebrain	telencephalon	FC2014_054	1
+HDBR540	1117	15 post conception weeks	temporal lobe	unknown	FC2014_054, FC2014_151	0	15PCW	14-17PCW	Forebrain	telencephalon	FC2014_054	1
+HDBR541	1117	15 post conception weeks	cerebral cortex	unknown	FC2014_054	0	15PCW	14-17PCW	Forebrain	telencephalon	FC2014_054	1
+HDBR542	1117	15 post conception weeks	cerebral cortex	unknown	FC2014_054	0	15PCW	14-17PCW	Forebrain	telencephalon	FC2014_054	1
+HDBR543	1117	15 post conception weeks	cerebral cortex	unknown	FC2014_054	0	15PCW	14-17PCW	Forebrain	telencephalon	FC2014_054	1
+HDBR544	1117	15 post conception weeks	cerebral cortex	unknown	FC2014_054	0	15PCW	14-17PCW	Forebrain	telencephalon	FC2014_054	1
+HDBR545	1117	15 post conception weeks	cerebral cortex	unknown	FC2014_054	0	15PCW	14-17PCW	Forebrain	telencephalon	FC2014_054	1
+HDBR546	1117	15 post conception weeks	cerebral cortex	unknown	FC2014_054	0	15PCW	14-17PCW	Forebrain	telencephalon	FC2014_054	1
+HDBR547	1290	14 post conception weeks	telencephalon	46, xy	FC2014_055	1	14PCW	14-17PCW	Forebrain	telencephalon	FC2014_055	1
+HDBR551	11900	14 post conception weeks	temporal lobe	46, xy	FC2014_055	1	14PCW	14-17PCW	Forebrain	telencephalon	FC2014_055	1
+HDBR552	11900	14 post conception weeks	temporal lobe	46, xy	FC2014_055	1	14PCW	14-17PCW	Forebrain	telencephalon	FC2014_055	1
+HDBR553	11900	14 post conception weeks	cerebral cortex	46, xy	FC2014_055	1	14PCW	14-17PCW	Forebrain	telencephalon	FC2014_055	1
+HDBR554	11900	14 post conception weeks	cerebral cortex	46, xy	FC2014_055	1	14PCW	14-17PCW	Forebrain	telencephalon	FC2014_055	1
+HDBR555	11900	14 post conception weeks	cerebral cortex	46, xy	FC2014_055	1	14PCW	14-17PCW	Forebrain	telencephalon	FC2014_055	1
+HDBR556	11900	14 post conception weeks	cerebral cortex	46, xy	FC2014_055	1	14PCW	14-17PCW	Forebrain	telencephalon	FC2014_055	1
+HDBR558	1923	13 post conception weeks	cerebral cortex	46, xx	FC2014_055	2	13PCW	13PCW	Forebrain	telencephalon	FC2014_055	2
+HDBR561	1923	13 post conception weeks	cerebral cortex	46, xx	FC2014_058	2	13PCW	13PCW	Forebrain	telencephalon	FC2014_058	2
+HDBR562	1923	13 post conception weeks	cerebral cortex	46, xx	FC2014_058	2	13PCW	13PCW	Forebrain	telencephalon	FC2014_058	2
+HDBR563	1923	13 post conception weeks	cerebral cortex	46, xx	FC2014_055	2	13PCW	13PCW	Forebrain	telencephalon	FC2014_055	2
+HDBR567	1923	13 post conception weeks	diencephalon	46, xx	FC2014_055, FC2014_117	2	13PCW	13PCW	Forebrain	diencephalon	FC2014_055	2
+HDBR568	1923	13 post conception weeks	cerebral cortex	46, xx	FC2014_055	2	13PCW	13PCW	Forebrain	telencephalon	FC2014_055	2
+HDBR569	11892	13 post conception weeks	cerebral cortex	46, xy	FC2014_055	1	13PCW	13PCW	Forebrain	telencephalon	FC2014_055	1
+HDBR570	11844	13 post conception weeks	forebrain fragment	46, xy	FC2014_055	1	13PCW	13PCW	Forebrain	forebrain fragment	FC2014_055	1
+HDBR572	1835	12 post conception weeks	cerebral cortex	46, xy	FC2014_055	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_055	1
+HDBR573	1835	12 post conception weeks	cerebral cortex	46, xy	FC2014_055	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_055	1
+HDBR574	1835	12 post conception weeks	cerebral cortex	46, xy	FC2014_055	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_055	1
+HDBR575	1118	12 post conception weeks	temporal lobe	unknown	FC2014_055	0	12PCW	12PCW	Forebrain	telencephalon	FC2014_055	1
+HDBR578	11834	12 post conception weeks	cerebral cortex	46, xy	FC2014_055	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_055	1
+HDBR581	11834	12 post conception weeks	temporal lobe	46, xy	FC2014_055	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_055	1
+HDBR582	11834	12 post conception weeks	temporal lobe	46, xy	FC2014_055	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_055	1
+HDBR583	11834	12 post conception weeks	cerebral cortex	46, xy	FC2014_058	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_058	1
+HDBR584	11834	12 post conception weeks	cerebral cortex	46, xy	FC2014_058	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_058	1
+HDBR585	11834	12 post conception weeks	temporal lobe	46, xy	FC2014_058	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_058	1
+HDBR586	11834	12 post conception weeks	temporal lobe	46, xy	FC2014_058	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_058	1
+HDBR587	11834	12 post conception weeks	cerebral cortex	46, xy	FC2014_058	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_058	1
+HDBR588	11834	12 post conception weeks	cerebral cortex	46, xy	FC2014_058	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_058	1
+HDBR589	11834	12 post conception weeks	cerebral cortex	46, xy	FC2014_058	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_058	1
+HDBR591	11834	12 post conception weeks	cerebral cortex	46, xy	FC2014_069	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_069	1
+HDBR593	11834	12 post conception weeks	pituitary and diencephalon	46, xy	FC2014_069	1	12PCW	12PCW	Forebrain	diencephalon	FC2014_069	1
+HDBR594	1102	12 post conception weeks	forebrain	46, xx	FC2014_069	2	12PCW	12PCW	Forebrain	forebrain fragment	FC2014_069	2
+HDBR596	1558	12 post conception weeks	forebrain	46, xx	FC2014_069	2	12PCW	12PCW	Forebrain	forebrain fragment	FC2014_069	2
+HDBR597	1558	12 post conception weeks	forebrain	46, xx	FC2014_069	2	12PCW	12PCW	Forebrain	forebrain fragment	FC2014_069	2
+HDBR599	11885	12 post conception weeks	cerebral cortex	46, xy	FC2014_058	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_058	1
+HDBR600	11885	12 post conception weeks	cerebral cortex	46, xy	FC2014_058	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_058	1
+HDBR601	11885	12 post conception weeks	temporal lobe	46, xy	FC2014_058	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_058	1
+HDBR602	11885	12 post conception weeks	cerebral cortex	46, xy	FC2014_058	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_058	1
+HDBR603	11885	12 post conception weeks	cerebral cortex	46, xy	FC2014_043	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_043	1
+HDBR604	11885	12 post conception weeks	temporal lobe	46, xy	FC2014_043	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_043	1
+HDBR607	11885	12 post conception weeks	temporal lobe	46, xy	FC2014_043	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_043	1
+HDBR608	11885	12 post conception weeks	cerebral cortex	46, xy	FC2014_043	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_043	1
+HDBR609	11885	12 post conception weeks	cerebral cortex	46, xy	FC2014_043	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_043	1
+HDBR610	11885	12 post conception weeks	cerebral cortex	46, xy	FC2014_043	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_043	1
+HDBR611	11885	12 post conception weeks	temporal lobe	46, xy	FC2014_047	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_047	1
+HDBR612	11885	12 post conception weeks	diencephalon	46, xy	FC2014_047	1	12PCW	12PCW	Forebrain	diencephalon	FC2014_047	1
+HDBR615	11602	11 post conception weeks	forebrain	46, xy	FC2014_047	1	11PCW	11PCW	Forebrain	forebrain fragment	FC2014_047	1
+HDBR616	11602	11 post conception weeks	forebrain	46, xy	FC2014_047	1	11PCW	11PCW	Forebrain	forebrain fragment	FC2014_047	1
+HDBR619	1110	11 post conception weeks	temporal lobe	unknown	FC2014_047	0	11PCW	11PCW	Forebrain	telencephalon	FC2014_047	1
+HDBR620	1123	11 post conception weeks	telencephalon	unknown	FC2014_047	0	11PCW	11PCW	Forebrain	telencephalon	FC2014_047	1
+HDBR621	1123	11 post conception weeks	telencephalon	unknown	FC2014_047	0	11PCW	11PCW	Forebrain	telencephalon	FC2014_047	1
+HDBR622	1123	11 post conception weeks	telencephalon	unknown	FC2014_047	0	11PCW	11PCW	Forebrain	telencephalon	FC2014_047	1
+HDBR623	1123	11 post conception weeks	telencephalon	unknown	FC2014_047	0	11PCW	11PCW	Forebrain	telencephalon	FC2014_047	1
+HDBR624	1123	11 post conception weeks	telencephalon	unknown	FC2014_047	0	11PCW	11PCW	Forebrain	telencephalon	FC2014_047	1
+HDBR625	1123	11 post conception weeks	telencephalon	unknown	FC2014_047	0	11PCW	11PCW	Forebrain	telencephalon	FC2014_047	1
+HDBR626	11656	11 post conception weeks	cerebral cortex	46, xx	FC2014_047	2	11PCW	11PCW	Forebrain	telencephalon	FC2014_047	2
+HDBR630	11609	11 post conception weeks	telencephalon	46, xx	FC2014_047	2	11PCW	11PCW	Forebrain	telencephalon	FC2014_047	2
+HDBR633	11833	11 post conception weeks	diencephalon	46, xx	FC2014_047	2	11PCW	11PCW	Forebrain	diencephalon	FC2014_047	2
+HDBR642	11833	11 post conception weeks	diencephalon	46, xx	FC2014_047	2	11PCW	11PCW	Forebrain	diencephalon	FC2014_047	2
+HDBR643	11833	11 post conception weeks	temporal lobe	46, xx	FC2014_044	2	11PCW	11PCW	Forebrain	telencephalon	FC2014_044	2
+HDBR645	11833	11 post conception weeks	cerebral cortex	46, xx	FC2014_044	2	11PCW	11PCW	Forebrain	telencephalon	FC2014_044	2
+HDBR646	11833	11 post conception weeks	cerebral cortex	46, xx	FC2014_044	2	11PCW	11PCW	Forebrain	telencephalon	FC2014_044	2
+HDBR647	11833	11 post conception weeks	cerebral cortex	46, xx	FC2014_043	2	11PCW	11PCW	Forebrain	telencephalon	FC2014_043	2
+HDBR648	11833	11 post conception weeks	cerebral cortex	46, xx	FC2014_047	2	11PCW	11PCW	Forebrain	telencephalon	FC2014_047	2
+HDBR649	11833	11 post conception weeks	cerebral cortex	46, xx	FC2014_047	2	11PCW	11PCW	Forebrain	telencephalon	FC2014_047	2
+HDBR650	11893	11 post conception weeks	forebrain fragment	46, xx	FC2014_047	2	11PCW	11PCW	Forebrain	forebrain fragment	FC2014_047	2
+HDBR652	11930	11 post conception weeks	cerebral cortex	46, xx	FC2014_075	2	11PCW	11PCW	Forebrain	telencephalon	FC2014_075	2
+HDBR653	11930	11 post conception weeks	cerebral cortex	46, xx	FC2014_075	2	11PCW	11PCW	Forebrain	telencephalon	FC2014_075	2
+HDBR654	11930	11 post conception weeks	temporal lobe	46, xx	FC2014_075	2	11PCW	11PCW	Forebrain	telencephalon	FC2014_075	2
+HDBR655	11930	11 post conception weeks	diencephalon	46, xx	FC2014_044	2	11PCW	11PCW	Forebrain	diencephalon	FC2014_044	2
+HDBR658	11942	11 post conception weeks	diencephalon	46, xx	FC2014_044	2	11PCW	11PCW	Forebrain	diencephalon	FC2014_044	2
+HDBR660	11942	11 post conception weeks	cerebral cortex	46, xx	FC2014_044	2	11PCW	11PCW	Forebrain	telencephalon	FC2014_044	2
+HDBR661	1890	10 post conception weeks	diencephalon	unknown	FC2014_044	0	10PCW	10PCW	Forebrain	diencephalon	FC2014_044	2
+HDBR663	1281	10 post conception weeks	forebrain	46, xy	FC2014_044	1	10PCW	10PCW	Forebrain	forebrain fragment	FC2014_044	1
+HDBR664	1281	10 post conception weeks	forebrain	46, xy	FC2014_044	1	10PCW	10PCW	Forebrain	forebrain fragment	FC2014_044	1
+HDBR668	11841	10 post conception weeks	cerebral cortex	46, xy	FC2014_044	1	10PCW	10PCW	Forebrain	telencephalon	FC2014_044	1
+HDBR669	11841	10 post conception weeks	cerebral cortex	46, xy	FC2014_044	1	10PCW	10PCW	Forebrain	telencephalon	FC2014_044	1
+HDBR670	11841	10 post conception weeks	temporal lobe	46, xy	FC2014_044	1	10PCW	10PCW	Forebrain	telencephalon	FC2014_044	1
+HDBR673	11841	10 post conception weeks	cerebral cortex	46, xy	FC2014_044	1	10PCW	10PCW	Forebrain	telencephalon	FC2014_044	1
+HDBR675	11841	10 post conception weeks	diencephalon	46, xy	FC2014_044	1	10PCW	10PCW	Forebrain	diencephalon	FC2014_044	1
+HDBR676	11841	10 post conception weeks	temporal lobe	46, xy	FC2014_044	1	10PCW	10PCW	Forebrain	telencephalon	FC2014_044	1
+HDBR677	11841	10 post conception weeks	diencephalon	46, xy	FC2014_044	1	10PCW	10PCW	Forebrain	diencephalon	FC2014_044	1
+HDBR678	11841	10 post conception weeks	cerebral cortex	46, xy	FC2014_044	1	10PCW	10PCW	Forebrain	telencephalon	FC2014_044	1
+HDBR691	11947	13 post conception weeks	temporal lobe	46, xx	FC2014_045	2	13PCW	13PCW	Forebrain	telencephalon	FC2014_045	2
+HDBR692	11947	13 post conception weeks	diencephalon	46, xx	FC2014_045	2	13PCW	13PCW	Forebrain	diencephalon	FC2014_045	2
+HDBR696	11921	17 post conception weeks	cerebral cortex	46, xy	FC2014_044	1	17PCW	14-17PCW	Forebrain	telencephalon	FC2014_044	1
+HDBR698	11921	17 post conception weeks	temporal lobe	46, xy	FC2014_044	1	17PCW	14-17PCW	Forebrain	telencephalon	FC2014_044	1
+HDBR700	11921	17 post conception weeks	cerebral cortex	46, xy	FC2014_044	1	17PCW	14-17PCW	Forebrain	telencephalon	FC2014_044	1
+HDBR741	1851	Carnegie Stage 23	temporal lobe	unknown	FC2014_048	0	8PCW	8PCW	Forebrain	telencephalon	FC2014_048	2
+HDBR756	11920	Carnegie Stage 23	diencephalon	46, xy	FC2014_048	1	8PCW	8PCW	Forebrain	diencephalon	FC2014_048	1
+HDBR757	11121	Carnegie Stage 20	cerebral cortex	46, xy	FC2014_049	1	8PCW	8PCW	Forebrain	telencephalon	FC2014_049	1
+HDBR758	11118	Carnegie Stage 20	forebrain	46, xx	FC2014_049	2	8PCW	8PCW	Forebrain	forebrain fragment	FC2014_049	2
+HDBR821	1115	17 post conception weeks	hippocampus	unknown	FC2014_050	0	17PCW	14-17PCW	Forebrain	telencephalon	FC2014_050	2
+HDBR825	1107	16 post conception weeks	hippocampus	unknown	FC2014_050	0	16PCW	14-17PCW	Forebrain	telencephalon	FC2014_050	1
+HDBR828	1117	15 post conception weeks	temporal lobe	unknown	FC2014_050	0	15PCW	14-17PCW	Forebrain	telencephalon	FC2014_050	1
+HDBR832	1290	14 post conception weeks	diencephalon	46, xy	FC2014_050	1	14PCW	14-17PCW	Forebrain	diencephalon	FC2014_050	1
+HDBR857	1835	12 post conception weeks	cerebral cortex	46, xy	FC2014_058	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_058	1
+HDBR858	1118	12 post conception weeks	temporal lobe	unknown	FC2014_058	0	12PCW	12PCW	Forebrain	telencephalon	FC2014_058	1
+HDBR872	1110	11 post conception weeks	temporal lobe	unknown	FC2014_065	0	11PCW	11PCW	Forebrain	telencephalon	FC2014_065	1
+HDBR873	1123	11 post conception weeks	temporal lobe	unknown	FC2014_065	0	11PCW	11PCW	Forebrain	telencephalon	FC2014_065	1
+HDBR874	1111	11 post conception weeks	temporal lobe	unknown	FC2014_065	0	11PCW	11PCW	Forebrain	telencephalon	FC2014_065	1
+HDBR892	1046	10 post conception weeks	diencephalon	46, xx	FC2014_065	2	10PCW	10PCW	Forebrain	diencephalon	FC2014_065	2
+HDBR908	11942	11 post conception weeks	cerebral cortex	46, xx	FC2014_080	2	11PCW	11PCW	Forebrain	telencephalon	FC2014_080	2
+HDBR909	11666	12 post conception weeks	telencephalon	46, xy	FC2014_080	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_080	1
+HDBR910	11942	11 post conception weeks	temporal lobe	46, xx	FC2014_080	2	11PCW	11PCW	Forebrain	telencephalon	FC2014_080	2
+HDBR911	11942	11 post conception weeks	diencephalon	46, xx	FC2014_080	2	11PCW	11PCW	Forebrain	diencephalon	FC2014_080	2
+HDBR912	11851	9 post conception weeks	cerebral cortex	46, xx	FC2014_080	2	9PCW	9PCW	Forebrain	telencephalon	FC2014_080	2
+HDBR913	11851	9 post conception weeks	cerebral cortex	46, xx	FC2014_080	2	9PCW	9PCW	Forebrain	telencephalon	FC2014_080	2
+HDBR914	11851	9 post conception weeks	cerebral cortex	46, xx	FC2014_080	2	9PCW	9PCW	Forebrain	telencephalon	FC2014_080	2
+HDBR915	11942	11 post conception weeks	temporal lobe	46, xx	FC2014_080	2	11PCW	11PCW	Forebrain	telencephalon	FC2014_080	2
+HDBR916	12007	12 post conception weeks	cerebral cortex	46, xy	FC2014_080	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_080	1
+HDBR917	12007	12 post conception weeks	cerebral cortex	46, xy	FC2014_080	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_080	1
+HDBR918	12007	12 post conception weeks	cerebral cortex	46, xy	FC2014_080	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_080	1
+HDBR920	12007	12 post conception weeks	diencephalon	46, xy	FC2014_080	1	12PCW	12PCW	Forebrain	diencephalon	FC2014_080	1
+HDBR922	11666	12 post conception weeks	telencephalon	46, xy	FC2014_080	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_080	1
+HDBR923	11666	12 post conception weeks	telencephalon	46, xy	FC2014_080	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_080	1
+HDBR924	11666	12 post conception weeks	telencephalon	46, xy	FC2014_080	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_080	1
+HDBR925	11666	12 post conception weeks	telencephalon	46, xy	FC2014_080	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_080	1
+HDBR926	11683	12 post conception weeks	telencephalon	46, xx	FC2014_080	2	12PCW	12PCW	Forebrain	telencephalon	FC2014_080	2
+HDBR930	12007	12 post conception weeks	cerebral cortex	46, xy	FC2014_080	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_080	1
+HDBR931	12007	12 post conception weeks	diencephalon	46, xy	FC2014_080	1	12PCW	12PCW	Forebrain	diencephalon	FC2014_080	1
+HDBR937	11653	10 post conception weeks	telencephalon	46, xy	FC2014_089	1	10PCW	10PCW	Forebrain	telencephalon	FC2014_089	1
+HDBR938	11683	12 post conception weeks	telencephalon	46, xx	FC2014_089	2	12PCW	12PCW	Forebrain	telencephalon	FC2014_089	2
+HDBR939	11683	12 post conception weeks	telencephalon	46, xx	FC2014_089	2	12PCW	12PCW	Forebrain	telencephalon	FC2014_089	2
+HDBR940	11930	11 post conception weeks	cerebral cortex	46, xx	FC2014_080	2	11PCW	11PCW	Forebrain	telencephalon	FC2014_080	2
+HDBR943	11653	10 post conception weeks	telencephalon	46, xy	FC2014_080	1	10PCW	10PCW	Forebrain	telencephalon	FC2014_080	1
+HDBR945	11653	10 post conception weeks	telencephalon	46, xy	FC2014_081	1	10PCW	10PCW	Forebrain	telencephalon	FC2014_081	1
+HDBR946	11930	11 post conception weeks	cerebral cortex	46, xx	FC2014_081	2	11PCW	11PCW	Forebrain	telencephalon	FC2014_081	2
+HDBR948	12007	12 post conception weeks	cerebral cortex	46, xy	FC2014_081	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_081	1
+HDBR949	12007	12 post conception weeks	cerebral cortex	46, xy	FC2014_081	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_081	1
+HDBR952	11930	11 post conception weeks	cerebral cortex	46, xx	FC2014_081	2	11PCW	11PCW	Forebrain	telencephalon	FC2014_081	2
+HDBR953	11930	11 post conception weeks	cerebral cortex	46, xx	FC2014_081	2	11PCW	11PCW	Forebrain	telencephalon	FC2014_081	2
+HDBR954	11930	11 post conception weeks	cerebral cortex	46, xx	FC2014_081	2	11PCW	11PCW	Forebrain	telencephalon	FC2014_081	2
+HDBR955	11930	11 post conception weeks	cerebral cortex	46, xx	FC2014_081	2	11PCW	11PCW	Forebrain	telencephalon	FC2014_081	2
+HDBR956	11930	11 post conception weeks	cerebral cortex	46, xx	FC2014_081	2	11PCW	11PCW	Forebrain	telencephalon	FC2014_081	2
+HDBR957	11930	11 post conception weeks	cerebral cortex	46, xx	FC2014_081	2	11PCW	11PCW	Forebrain	telencephalon	FC2014_081	2
+HDBR965	11820	9 post conception weeks	cerebral cortex	46, xy	FC2014_081	2	9PCW	9PCW	Forebrain	telencephalon	FC2014_081	2
+HDBR969	12007	12 post conception weeks	cerebral cortex	46, xy	FC2014_089	1	12PCW	12PCW	Forebrain	telencephalon	FC2014_089	1
