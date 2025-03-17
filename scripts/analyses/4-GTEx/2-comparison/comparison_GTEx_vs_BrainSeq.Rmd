@@ -1,0 +1,831 @@
+---
+title: "Comparison between of sex-DE genes in cortex between GTEx and BrainSeq"
+author: "Clara Benoit-Pilven"
+date: "9/24/2021"
+output: html_document
+---
+
+```{r load_libraries, echo=FALSE}
+suppressPackageStartupMessages( library(edgeR) )
+suppressPackageStartupMessages( library(limma) )
+suppressPackageStartupMessages( library(tidyr) )
+suppressPackageStartupMessages( library(ggplot2) )
+suppressPackageStartupMessages( library(UpSetR) )
+suppressPackageStartupMessages( library(qvalue) )
+suppressPackageStartupMessages( library(ggalluvial) )
+suppressPackageStartupMessages( library(dplyr) )
+suppressPackageStartupMessages( library(tidyverse) )
+suppressPackageStartupMessages( library(gridExtra) )
+suppressPackageStartupMessages( library(fmsb) )
+suppressPackageStartupMessages( library(ComplexHeatmap) )
+```
+
+```{r setup, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+Parameters:
+```{r parameters, echo=FALSE}
+qvalue_threshold <- 0.01
+logFC_threshold <- 0
+```
+
+
+
+# Load data and function
+
+## Load and prepare sex-DE genes
+
+Load GTEx results.
+
+```{r load_GTEx, echo=FALSE}
+de_results_gtex <- read.table("data/4-GTEx/2-comparison/GTEx_vs_BrainSeq/BRNCTXB_v8_VoomLimma_topTable_with_sva.txt",
+                              header = TRUE)
+de_results_gtex$ensemblID <- sapply(strsplit(as.character(de_results_gtex$gene_id), "\\."), function(x){x[1]})
+print("Number of sex-DE genes:")
+dim(de_results_gtex[which(de_results_gtex$qvalue < qvalue_threshold & abs(de_results_gtex$logFC) > logFC_threshold),])[1]
+```
+
+Remove the same genes that were removed in the comparison HDBR vs GTEx.
+```{r prepare_sexDE_GTEx, echo=FALSE}
+genes2remove <- c("XIST", as.character(de_results_gtex$gene_name[which(de_results_gtex$chr == "chrY" & de_results_gtex$gene_type == "protein_coding")]))
+de_results_gtex <- de_results_gtex[which(!de_results_gtex$gene_name %in% genes2remove),]
+print("Number of sex-DE genes:")
+dim(de_results_gtex[which(de_results_gtex$qvalue < qvalue_threshold & abs(de_results_gtex$logFC) > logFC_threshold),])[1]
+```
+
+Load BrainSeq results.
+
+```{r DE_BrainSeq, echo=FALSE}
+de_results_BrainSeq <- read.table("data/4-GTEx/2-comparison/GTEx_vs_BrainSeq/BrainSeq_phase1_VoomLimma_topTable_adult_DLPFC_sva.txt",
+                                  header = TRUE)
+de_results_BrainSeq$ensemblID <- sapply(strsplit(as.character(de_results_BrainSeq$gene_id), "\\."), function(x){x[1]})
+print("Number of sex-DE genes:")
+dim(de_results_BrainSeq[which(de_results_BrainSeq$qvalue < qvalue_threshold & abs(de_results_BrainSeq$logFC) > logFC_threshold),])[1]
+```
+
+Remove the same genes that were removed in the comparison HDBR vs GTEx.
+```{r prepare_sexDE_BrainSeq, echo=FALSE}
+genes2remove <- c("XIST", as.character(de_results_BrainSeq$gene_name[which(de_results_BrainSeq$chr == "chrY" & de_results_BrainSeq$gene_type == "protein_coding")]))
+de_results_BrainSeq <- de_results_BrainSeq[which(!de_results_BrainSeq$gene_name %in% genes2remove),]
+print("Number of sex-DE genes:")
+dim(de_results_BrainSeq[which(de_results_BrainSeq$qvalue < qvalue_threshold & abs(de_results_BrainSeq$logFC) > logFC_threshold),])[1]
+```
+
+Merge the 2 sets of results.
+```{r sexDE_full_merge, echo=FALSE}
+fullMerge <- merge(de_results_gtex, de_results_BrainSeq, by = "ensemblID", suffixes = c("_gtex", "_brainseq"))
+fullMerge$GTExfemaleDE <- ifelse(fullMerge$qvalue_gtex<qvalue_threshold & fullMerge$logFC_gtex>logFC_threshold, TRUE, FALSE)
+fullMerge$GTExmaleDE <- ifelse(fullMerge$qvalue_gtex<qvalue_threshold & fullMerge$logFC_gtex<logFC_threshold, TRUE, FALSE)
+fullMerge$BrainseqfemaleDE <- ifelse(fullMerge$qvalue_brainseq<qvalue_threshold & fullMerge$logFC_brainseq>logFC_threshold, TRUE, FALSE)
+fullMerge$BrainseqmaleDE <- ifelse(fullMerge$qvalue_brainseq<qvalue_threshold & fullMerge$logFC_brainseq<logFC_threshold, TRUE, FALSE)
+names(fullMerge)[37:40] <- c("GTEx female-biased genes", "GTEx male-biased genes", "BrainSeq female-biased genes", "BrainSeq male-biased genes")
+```
+
+Prepare the autosomal genes lists.
+```{r prepare_auto, echo=FALSE}
+de_results_gtex_auto <- de_results_gtex[which(!de_results_gtex$chr %in% c("chrY", "chrX", "chrM")), ]
+de_results_BrainSeq_auto <- de_results_BrainSeq[which(!de_results_BrainSeq$chr %in% c("chrY", "chrX", "chrM")), ]
+fullMerge_auto <- fullMerge[which(!fullMerge$chr_gtex %in% c("chrX", "chrY", "chrM") & 
+                                    !fullMerge$chr_brainseq %in% c("chrX", "chrY", "chrM")), ]
+```
+
+
+
+## Functions
+
+```{r function_mean_logFC, echo=FALSE}
+meanLogFC <- function(data, qvalue_threshold = 0.01, logFC_threshold = 0){
+  data_signif <- data[which(data$qvalue < qvalue_threshold & abs(data$logFC) > logFC_threshold),]
+  meanLogFC <- mean(abs(data_signif$logFC))
+  return(meanLogFC)
+}
+```
+
+```{r prepare_data_upset_plot, echo=FALSE}
+getSignifGenes <- function(de_results, direction, qvalue_threshold = 0.01, logFC_threshold = 0){
+  if (direction == "positive"){
+    signifGenes <- de_results[which(de_results$qvalue < qvalue_threshold & de_results$logFC > logFC_threshold), ]
+  } else if (direction == "negative"){
+    signifGenes <- de_results[which(de_results$qvalue < qvalue_threshold & de_results$logFC < logFC_threshold), ]
+  }
+  return(signifGenes)
+}
+prepareDataUpsetPlot <- function(de_results1, de_results2, listNames, selectedCol = "gene_id", qvalue_threshold = 0.01, logFC_threshold = 0){
+  listInput <- list(getSignifGenes(de_results1, "positive", qvalue_threshold, logFC_threshold)[, selectedCol],
+                    getSignifGenes(de_results1, "negative", qvalue_threshold, logFC_threshold)[, selectedCol],
+                    getSignifGenes(de_results2, "positive", qvalue_threshold, logFC_threshold)[, selectedCol],
+                    getSignifGenes(de_results2, "negative", qvalue_threshold, logFC_threshold)[, selectedCol])
+  names(listInput) <- listNames
+  return(listInput)
+}
+```
+
+```{r upset_plot, echo=FALSE}
+upsetPlot <- function(listInput, fileName){
+  p <- upset(fromList(listInput), order.by = "freq", 
+             queries = list(list(query = intersects, params = list("GTEx male-biased genes", "BrainSeq male-biased genes"), color = "darkblue", active = T), 
+                            list(query = intersects, params = list("GTEx female-biased genes", "BrainSeq female-biased genes"), color = "darkred", active = T)))
+  png(file = fileName, width = 4000, height = 4000, res = 800)
+  print(p)
+  dev.off()
+  return(p)
+}
+```
+
+Test the significance of this overlap with an hypergeometric test.
+```{r hypergeometric_test_function, echo=FALSE}
+hypergeometric_test <- function(listGeneset, universe, sex=FALSE){
+  universeSize <- length(universe)
+  if (sex == TRUE){
+    listGenesetSize <- lapply(listGeneset, length)
+    listGenesetSize <- c(listGenesetSize[[1]]+listGenesetSize[[2]], listGenesetSize[[3]]+listGenesetSize[[4]])
+    overlapSize <- length(purrr::reduce(list(listGeneset[[1]], listGeneset[[3]]), intersect)) +
+      length(purrr::reduce(list(listGeneset[[2]], listGeneset[[4]]), intersect))
+    print(universeSize)
+    print(sprintf("a = %s; b = %s; c = %s; d = %s", overlapSize, listGenesetSize[1], universeSize-listGenesetSize[1], listGenesetSize[2]))
+    pval <- phyper(overlapSize, listGenesetSize[1], universeSize-listGenesetSize[1], listGenesetSize[2], 
+                   lower.tail = FALSE, log.p = FALSE)
+  } else if (sex == "male"){
+    listGeneset_male <- listGeneset[c(2,4)]
+    listGenesetSize_male <- lapply(listGeneset_male, length)
+    overlapSize_male <- length(purrr::reduce(list(listGeneset_male[[1]], listGeneset_male[[2]]), intersect))
+    print(sprintf("a = %s; b = %s; c = %s; d = %s", overlapSize_male, listGenesetSize_male[[1]], universeSize-listGenesetSize_male[[1]], listGenesetSize_male[[2]]))
+    pval <- phyper(overlapSize_male, listGenesetSize_male[[1]], universeSize-listGenesetSize_male[[1]], listGenesetSize_male[[2]], 
+                   lower.tail = FALSE, log.p = FALSE)
+  } else if (sex == "female"){
+    listGeneset_female <- listGeneset[c(1,3)]
+    listGenesetSize_female <- lapply(listGeneset_female, length)
+    overlapSize_female <- length(purrr::reduce(list(listGeneset_female[[1]], listGeneset_female[[2]]), intersect))
+    print(sprintf("a = %s; b = %s; c = %s; d = %s", overlapSize_female, listGenesetSize_female[[1]], universeSize-listGenesetSize_female[[1]], listGenesetSize_female[[2]]))
+    pval <- phyper(overlapSize_female, listGenesetSize_female[[1]], universeSize-listGenesetSize_female[[1]], listGenesetSize_female[[2]], 
+                   lower.tail = FALSE, log.p = FALSE)
+  } else{
+    listGenesetSize <- lapply(listGeneset, length)
+    overlapSize <- length(purrr::reduce(listGeneset, intersect))
+    pval <- phyper(overlapSize, listGenesetSize[[1]], universeSize-listGenesetSize[[1]], listGenesetSize[[2]], 
+                   lower.tail = FALSE, log.p = FALSE)
+  }
+  return(pval)
+}
+```
+
+Functions to compute the pi1 replication rate and the pi1 replication rate normalized by the overall pi1.
+```{r function_pi1_score, echo=FALSE}
+pi1_score <- function(data1, data2, columnMerge = "ensemblID"){
+  # compute pi1 for second dataset compared to the first dataset
+  selected_pvalue <- data2$P.Value[which(data2[, columnMerge] %in% data1[, columnMerge])]
+  if (berryFunctions::is.error(qvalue::pi0est(p = selected_pvalue, lambda = 0.5, pi0.method = "smoother")) ) {
+    pi1 <- qvalue::qvalue(p = selected_pvalue, pi0 = 1)$pi0
+  }else{
+    pi1 <- 1-qvalue::pi0est(p = selected_pvalue, lambda = 0.5, pi0.method = "smoother")$pi0
+  }
+  
+  # continue only if the pi1 value was computed
+  if (is.numeric(pi1)){
+    return(pi1)
+  } else{
+    return("No pi1 analysis!")
+  }
+}
+```
+
+```{r function_pi1_normalized, echo=FALSE}
+pi1_normalized <- function(data1, data2, columnMerge = "ensemblID", qvalue_threshold = 0.01, logFC_threshold = 0.01, verbose = TRUE){
+  # get the significant genes in the first dataset
+  data1_signif <- data1[which(data1$qvalue < qvalue_threshold & abs(data1$logFC) > logFC_threshold), ]
+  
+  # pi1 replication rate for the significant genes
+  pi1_signif <- pi1_score(data1_signif, data2, columnMerge = "ensemblID")
+  if (verbose){
+    print(sprintf("pi1 for signif genes = %s", pi1_signif))
+  }
+  # pi1 replication rate for all genes
+  pi1_all <- pi1_score(data1, data2, columnMerge = "ensemblID")
+  if (verbose){
+    print(sprintf("pi1 for all genes = %s", pi1_all))
+  }
+  
+  # return the pi1 for significant genes normalized by the pi1 for all genes
+  return(pi1_signif/pi1_all)
+}
+```
+
+
+```{r function_alluvial_plot, echo=FALSE}
+consistency_plot <- function(data1, data2, nameData1, nameData2, columnMerge = "ensemblID", 
+                             qvalueThreshold = 0.01, logFCThreshold = 0, typeComparison = "1vs2"){
+  # merge the 2 datasets
+  de_results_merged <- merge(data1, data2, by = columnMerge, suffixes = c(".data1", ".data2"))
+
+  # Depending on the type of comparison choosen, get the observed consistency 
+  de_results_merged_filtered <- data.frame()
+  if (typeComparison == "1vs2"){
+    # keep only the genes/transcripts that are significant in the first data
+    de_results_merged_filtered <- de_results_merged[which(de_results_merged$qvalue.data1 < qvalueThreshold & abs(de_results_merged$logFC.data1) > logFCThreshold), ]
+    print(sprintf("Number of genes compared = %s", dim(de_results_merged_filtered)[1]))
+  } else if (typeComparison == "intersection"){
+    # keep only the genes/transcripts that are significant in the second data
+    de_results_merged_filtered <- de_results_merged[which(de_results_merged$qvalue.data1 < qvalueThreshold & abs(de_results_merged$logFC.data1) > logFCThreshold &
+                                                            de_results_merged$qvalue.data2 < qvalueThreshold & abs(de_results_merged$logFC.data2) > logFCThreshold), ]
+    print(sprintf("Number of genes compared = %s", dim(de_results_merged_filtered)[1]))
+  } else if (typeComparison == "union"){
+    # keep only the genes/transcripts that are significant in the second data
+    de_results_merged_filtered <- de_results_merged[which((de_results_merged$qvalue.data1 < qvalueThreshold & abs(de_results_merged$logFC.data1) > logFCThreshold) |
+                                                            (de_results_merged$qvalue.data2 < qvalueThreshold & abs(de_results_merged$logFC.data2) > logFCThreshold)), ]
+    print(sprintf("Number of genes compared = %s", dim(de_results_merged_filtered)[1]))
+  }
+  
+  # prepare data for the alluvial data
+  de_results_merged_filtered$direction.data1 <- ifelse(de_results_merged_filtered$logFC.data1 < 0, "Male", "Female")
+  de_results_merged_filtered$direction.data2 <- ifelse(de_results_merged_filtered$logFC.data2 < 0, "Male", "Female")
+  de_results_merged_filtered_table <- de_results_merged_filtered %>% 
+    group_by(direction.data1, direction.data2) %>%
+    count()
+  
+  numberCat <- dim(de_results_merged_filtered_table)[1]
+  if (numberCat == 4){
+    de_results_merged_filtered_table$consistency <- c("Female", "No1", "No", "Male")
+  } else if (numberCat == 3){
+    de_results_merged_filtered_table$consistency <- c("Female", "No", "Male")
+  } else if (numberCat == 2){
+    de_results_merged_filtered_table$consistency <- c("Female", "Male")
+  } else if (numberCat == 1){
+    if (de_results_merged_filtered_table$direction.data1 == de_results_merged_filtered_table$direction.data2){
+      if  (de_results_merged_filtered_table$direction.data1 == "Female"){
+        de_results_merged_filtered_table$consistency <- "Female"
+      } else if (de_results_merged_filtered_table$direction.data1 == "Male"){
+        de_results_merged_filtered_table$consistency <- "Male"
+      }
+    }
+  }
+  
+  print(de_results_merged_filtered_table)
+  
+  ### alluvial plot
+  p <- ggplot(de_results_merged_filtered_table, aes(axis1 = direction.data2, axis2 = direction.data1, y = n))
+  p <- p + geom_alluvium(aes(fill = consistency), discern = FALSE) + geom_stratum(discern = FALSE)
+  p <- p + geom_text(stat = "stratum", discern = FALSE,  aes(label = after_stat(stratum)), size = 7)
+  p <- p + scale_x_discrete(limits = c(nameData2, nameData1), expand = c(.01, .01))
+  if (numberCat == 4){
+    p <- p + scale_fill_manual("", values = c("Female" = "#c42134", "Male" = "#074c9b", "No1" = "#787878", "No" = "#C0C0C0"), guide = "none")
+  } else if (numberCat == 3){
+    p <- p + scale_fill_manual("", values = c("Female" = "#c42134", "Male" = "#074c9b", "No" = "#C0C0C0"), guide = "none")
+  } else if (numberCat == 2){
+    p <- p + scale_fill_manual("", values = c("Female" = "#c42134", "Male" = "#074c9b"), guide = "none")
+  } else if (numberCat == 1){
+    if (de_results_merged_filtered_table$consistency == "Male"){
+      p <- p + scale_fill_manual("", values = c("Male" = "#074c9b"), guide = "none")
+    } else if (de_results_merged_filtered_table$consistency == "Female"){
+      p <- p + scale_fill_manual("", values = c("Female" = "#c42134"), guide = "none")
+    }
+  }
+  p <- p + theme_minimal() + ylab("")
+  p <- p + theme(axis.title.y = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+                 axis.text.y = element_text(size = 16))
+  p <- p + coord_flip()
+  return(p)
+}
+```
+
+```{r _function_consistency, echo=FALSE}
+consistency_test <- function(data1, data2, columnMerge = "ensemblID", binomTestP = 0.5,
+                             qvalueThreshold = 0.01, logFCThreshold = 0, typeComparison = "1vs2"){
+  # merge the 2 datasets
+  de_results_merged <- merge(data1, data2, by = columnMerge, suffixes = c(".data1", ".data2"))
+  # Depending on the type of comparison choosen, get the observed consistency 
+  de_results_merged_filtered <- data.frame()
+  nbr_consistent <- 0
+  consistency <- 0
+  if (typeComparison == "1vs2"){
+    # keep only the genes/transcripts that are significant in the first data
+    de_results_merged_filtered <- de_results_merged[which(de_results_merged$qvalue.data1 < qvalueThreshold & abs(de_results_merged$logFC.data1) > logFCThreshold), ]
+    print(sprintf("Number of genes compared = %s", dim(de_results_merged_filtered)[1]))
+    # number of consistent genes/transcripts
+    nbr_consistent <- sum(sign(de_results_merged_filtered$t.data1) == sign(de_results_merged_filtered$t.data2))
+    consistency <- nbr_consistent/length(de_results_merged_filtered[, columnMerge])
+  } else if (typeComparison == "intersection"){
+    # keep only the genes/transcripts that are significant in the second data
+    de_results_merged_filtered <- de_results_merged[which(de_results_merged$qvalue.data1 < qvalueThreshold & abs(de_results_merged$logFC.data1) > logFCThreshold &
+                                                            de_results_merged$qvalue.data2 < qvalueThreshold & abs(de_results_merged$logFC.data2) > logFCThreshold), ]
+    print(sprintf("Number of genes compared = %s", dim(de_results_merged_filtered)[1]))
+    # number of consistent genes/transcripts
+    nbr_consistent <- sum(sign(de_results_merged_filtered$t.data1) == sign(de_results_merged_filtered$t.data2))
+    consistency <- nbr_consistent/length(de_results_merged_filtered[, columnMerge])
+  } else if (typeComparison == "union"){
+    # keep only the genes/transcripts that are significant in the second data
+    de_results_merged_filtered <- de_results_merged[which((de_results_merged$qvalue.data1 < qvalueThreshold & abs(de_results_merged$logFC.data1) > logFCThreshold) |
+                                                            (de_results_merged$qvalue.data2 < qvalueThreshold & abs(de_results_merged$logFC.data2) > logFCThreshold)), ]
+    print(sprintf("Number of genes compared = %s", dim(de_results_merged_filtered)[1]))
+    # number of consistent genes/transcripts
+    nbr_consistent <- sum(sign(de_results_merged_filtered$t.data1) == sign(de_results_merged_filtered$t.data2))
+    consistency <- nbr_consistent/length(de_results_merged_filtered[, columnMerge])
+  }
+  # compare this consistency score with the consistency of list of random genes
+  cons_values <- rep(NA, 1000)
+  # to do 1000 times
+  for (i in 1:1000){
+    # randomly select the same number of genes/transcripts in the data2 to test the overlap with the data1 signif genes
+    selection <- sample(de_results_merged[, columnMerge], length(de_results_merged_filtered[, columnMerge]))
+    nbr_consistent_th <- sum(sign(de_results_merged$logFC.data2[which(de_results_merged[, columnMerge] %in% selection)]) == sign(de_results_merged$logFC.data1[which(de_results_merged[, columnMerge] %in% selection)]))
+    cons_values[i] <- nbr_consistent_th/length(de_results_merged_filtered[, columnMerge])
+  }
+  cons_values <- as.data.frame(cons_values)
+  # plot the distribution of the predited consistency and the real value
+  p <- ggplot(cons_values, aes(cons_values))
+  p <- p + geom_histogram(binwidth=0.02, boundary = 0, fill="grey", color="black")
+  p <- p + theme_bw() + xlab("consistency") + ylab("Frequency")
+  p <- p + scale_x_continuous(limits = c(0, 1))
+  p <- p + geom_vline(xintercept = consistency, color = "red")
+  print(p)
+  # test this consistency with a permutation test
+  nsmaller <- sum(cons_values >= consistency)
+  permutation_test <- round((nsmaller+1)/(1000+1), 3)
+  # test this consistency with a binomial test
+  result_test <- binom.test(nbr_consistent, length(de_results_merged_filtered[, columnMerge]), p = binomTestP)
+  # print results
+  print(sprintf("number of consistent gene = %s", nbr_consistent))
+  print(sprintf("consistency = %s", consistency))
+  print(sprintf("permutation test p-value = %s", permutation_test))
+  print(sprintf("binomial test p-value = %s", result_test$p.value))
+  return(consistency)
+}
+```
+
+Correlation of the logFC for the 3 lists of genes.
+
+```{r function_scatter_plot_logFC, echo=FALSE}
+scatter_logFC <- function(data1, data2, nameData1, nameData2, columnMerge = "ensemblID", corRes = TRUE){
+  # merge the 2 dataset
+  de_results_merged <- merge(data1, data2, by = columnMerge, suffixes = c(".data1", ".data2"))
+  # test correlation
+  res <- cor.test(de_results_merged$logFC.data1, de_results_merged$logFC.data2, 
+                  method = "pearson")
+  if (res$p.value == 0){
+    annotation_text <- sprintf("r = %.3f\nP < 2.2e-16", res$estimate)
+  } else{
+    annotation_text <- sprintf("r = %.3f\nP = %1.2e", res$estimate, res$p.value)
+  }
+  yrng <- range(de_results_merged$logFC.data2)
+  xrng <- range(de_results_merged$logFC.data1)
+  # plot
+  p <- ggplot(de_results_merged, aes(x = logFC.data1, y = logFC.data2))
+  p <- p + geom_abline(intercept = 0, slope = 1, col = "black")
+  p <- p + geom_hline(yintercept = 0, color = "grey")
+  p <- p + geom_vline(xintercept = 0, color = "grey")
+  p <- p + geom_point(alpha = 0.3)
+  p <- p + theme_bw() + labs(title = "logFC correlation")
+  p <- p + theme(panel.grid = element_blank(), 
+                 plot.title = element_text(hjust = 0.5),
+                 plot.subtitle = element_text(hjust = 0.5))
+  p <- p + xlab(paste0("logFC - ", nameData1)) + ylab(paste0("logFC - ", nameData2))
+  if (corRes){
+   p <- p + annotate("text", xrng[1], yrng[2], hjust = 0, vjust = 1, 
+                     label = annotation_text) 
+  }
+  return(p)
+}
+
+scatter_logFC_union <- function(data1, data2, nameData1, nameData2, columnMerge = "ensemblID", onlySignif = FALSE){
+  # merge the 2 dataset
+  de_results_merged <- merge(data1, data2, by = columnMerge, suffixes = c(".data1", ".data2"))
+  # union of DE genes
+  de_results_merged_filtered <- de_results_merged[which(de_results_merged$signif.data1 + de_results_merged$signif.data2 >= 1), ]
+  # test correlation
+  res <- cor.test(de_results_merged$logFC.data1, de_results_merged$logFC.data2, 
+                  method = "spearman")
+  res_union <- cor.test(de_results_merged_filtered$logFC.data1,
+                        de_results_merged_filtered$logFC.data2, method = "pearson")
+  if (res$p.value == 0){
+    annotation_text <- sprintf("r = %.3f\nP < 2.2e-16", res$estimate)
+  } else{
+    annotation_text <- sprintf("r = %.3f\nP = %1.2e", res$estimate, res$p.value)
+  }
+  yrng <- range(de_results_merged$logFC.data1)
+  xrng <- range(de_results_merged$logFC.data2)
+  # plot
+  if (onlySignif){
+    p <- ggplot(de_results_merged_filtered, aes(x = logFC.data1, y = logFC.data2, shape = as.character(signif.data1 + signif.data2),
+                                                fill = as.character(signif.data1 + signif.data2)))
+  } else{
+    p <- ggplot(de_results_merged, aes(x = logFC.data1, y = logFC.data2, shape = as.character(signif.data1 + signif.data2),
+                                       fill = as.character(signif.data1 + signif.data2)))
+  }
+  p <- p + geom_abline(intercept = 0, slope = 1, col = "grey")
+  p <- p + geom_point(alpha = 0.5)
+  p <- p + scale_shape_manual(values = c("0" = 1, "1" = 21, "2" = 23), 
+                             labels = c("0" = 'not sex-DE', "1" = 'sex-DE in one data', "2" = 'sex-DE in both data'),
+                             name = "")
+  p <- p + scale_fill_manual(values = c("0" = "grey", "1" = "grey50", "2" = "black"), 
+                             labels = c("0" = 'not sex-DE', "1" = 'sex-DE in one data', "2" = 'sex-DE in both data'),
+                             name = "")
+  p <- p + theme_bw() + labs(title = "logFC correlation")
+  p <- p + theme(plot.title = element_text(hjust = 0.5),
+                 plot.subtitle = element_text(hjust = 0.5))
+  p <- p + xlab(paste0("logFC - ", nameData1)) + ylab(paste0("logFC - ", nameData2))
+  p <- p + annotate("text", xrng[1], yrng[2], hjust = 0, vjust = 1, 
+                    label = annotation_text)
+  return(p)
+}
+```
+
+
+# Comparison including sex-chromosomes
+
+## Mean effect size
+
+Mean effect size in GTEx:
+```{r logFC_gtex, echo=FALSE}
+meanLogFC(de_results_gtex, qvalue_threshold = qvalue_threshold, logFC_threshold = logFC_threshold)
+```
+
+Mean effect size in BrainSeq:
+```{r logFC_brainseq, echo=FALSE}
+meanLogFC(de_results_BrainSeq, qvalue_threshold = qvalue_threshold, logFC_threshold = logFC_threshold)
+```
+
+## Overlap of the sex-DE genes
+
+Prepare list of genes.
+```{r prepare_listInput, echo=FALSE}
+listInput_sex <- prepareDataUpsetPlot(de_results_gtex, de_results_BrainSeq, 
+                                      listNames = c("GTEx female-biased genes", "GTEx male-biased genes", "BrainSeq female-biased genes", "BrainSeq male-biased genes"),
+                                      selectedCol = "ensemblID", qvalue_threshold = qvalue_threshold, logFC_threshold = logFC_threshold)
+```
+
+```{r upset_plot_all_sex, echo=FALSE}
+upsetPlot(listInput_sex, fileName = "images/4-GTEx/2-comparison/GTEx_vs_BrainSeq/upsetPlot_gtexVSbrainseq_sexDE_allGenes_sex.png"))
+```
+
+Same with complexUpset
+
+```{r complex_upset_plot, echo=FALSE}
+library(ComplexUpset)
+ComplexUpset::upset(fullMerge, 
+                    c("GTEx female-biased genes", "GTEx male-biased genes", "BrainSeq female-biased genes", "BrainSeq male-biased genes"), 
+                    name = "Differential expression", 
+                    width_ratio = 0.1,
+                    min_degree=1,
+                    themes=upset_default_themes(text = element_text(color='black', size = 12),
+                                                axis.text = element_text(colour = "black", size = 14)),
+                    #themes=list(default=theme_minimal()),
+                    base_annotations=list(
+                      'Intersection size'=(
+                        intersection_size()
+                        + theme(
+                          # hide grid lines
+                          panel.grid.major=element_blank(),
+                          panel.grid.minor=element_blank(),
+                          
+                        )
+                        + ylab("")
+                      )
+                    ),
+                    set_sizes=FALSE,
+                    queries=list(
+                      upset_query(intersect=c('GTEx female-biased genes'), color='gray50', fill='gray50', only_components=c('intersections_matrix', 'Intersection size')),
+                      upset_query(intersect=c('GTEx male-biased genes'), color='gray50', fill='gray50', only_components=c('intersections_matrix', 'Intersection size')),
+                      upset_query(intersect=c('BrainSeq female-biased genes'), color='gray50', fill='gray50', only_components=c('intersections_matrix', 'Intersection size')),
+                      upset_query(intersect=c('BrainSeq male-biased genes'), color='gray50', fill='gray50', only_components=c('intersections_matrix', 'Intersection size')),
+                      #upset_query(intersect=c('GTEx female-biased genes', 'BrainSeq male-biased genes'), color='gray50', fill='gray50', only_components=c('intersections_matrix', 'Intersection size')),
+                      #upset_query(intersect=c('GTEx male-biased genes', 'BrainSeq female-biased genes'), color='gray50', fill='gray50', only_components=c('intersections_matrix', 'Intersection size')),
+                      upset_query(intersect=c('GTEx female-biased genes', 'BrainSeq female-biased genes'), color='black', fill='black', only_components=c('intersections_matrix', 'Intersection size')),
+                      upset_query(intersect=c('GTEx male-biased genes', 'BrainSeq male-biased genes'), color='black', fill='black', only_components=c('intersections_matrix', 'Intersection size'))
+                    )
+)
+ggsave("/Users/benoicla/Desktop/Workspace/HDBR/sexDE_prenatal_brain/images/5-GTEx/comparisonBrainSeq/complexUpsetPlot_gtexVSbrainseq_sexDE_allGenes_sex.png",
+       width = 14, height = 10, units = "cm")
+```
+
+
+Test the overlap of male and female sex-biased genes separatly.
+```{r test_overlap_male, echo=FALSE}
+hypergeometric_test(listInput_sex, fullMerge$ensemblID, sex = "male")
+# compute some effect size for the enrichment of the common male-biased genes between the 2 life stages
+sprintf("Enrichmnent effect size = %s", (16*15096)/(1225*18))
+```
+
+```{r test_overlap_female, echo=FALSE}
+hypergeometric_test(listInput_sex, fullMerge$ensemblID, sex = "female")
+# compute some effect size for the enrichment of the common female-biased genes between the 2 life stages
+sprintf("Enrichmnent effect size = %s", (23*15096)/(434*30))
+```
+
+
+## Replication rate
+
+Compute the pi1 replication rates of significant sex-DE genes between GTEx and BrainSeq sex-DE analysis.
+```{r compute_pi1, echo=FALSE}
+print("Replication of GTEx results in BrainSeq analysis:")
+pi1_normalized(de_results_gtex, de_results_BrainSeq, qvalue_threshold = qvalue_threshold, logFC_threshold = logFC_threshold)
+print("Replication of BrainSeq results in GTEx analysis:")
+pi1_normalized(de_results_BrainSeq, de_results_gtex, qvalue_threshold = qvalue_threshold, logFC_threshold = logFC_threshold)
+```
+
+Compute the replication rates for the union of sex-DE genes between prenatal and adult sex-DE analysis.
+```{r compute_pi1_union, echo=FALSE}
+# compute the union of sex-DE genes in both datasets
+print("Replication in BrainSeq analysis:")
+union <- fullMerge[which(fullMerge$qvalue_gtex < qvalue_threshold | fullMerge$qvalue_brainseq < qvalue_threshold),]
+union_gtex <- de_results_gtex[which(de_results_gtex$ensemblID %in% union$ensemblID),]
+pi1_union_gtex <- pi1_score(union_gtex, de_results_BrainSeq, columnMerge = "ensemblID")
+sprintf("pi1 for union genes = %s", pi1_union_gtex)
+print("Replication in GTEx analysis:")
+union_BrainSeq <- de_results_BrainSeq[which(de_results_BrainSeq$ensemblID %in% union$ensemblID),]
+pi1_union_BrainSeq <- pi1_score(union_BrainSeq, de_results_gtex, columnMerge = "ensemblID")
+sprintf("pi1 for union genes = %s", pi1_union_BrainSeq)
+```
+
+
+
+## Consistency score and plot
+
+```{r create_alluvial_plot_GTExVSBrainSeq_all, echo=FALSE}
+p <- consistency_plot(de_results_gtex, de_results_BrainSeq, "GTEx", "BrainSeq", qvalueThreshold = qvalue_threshold, logFCThreshold = logFC_threshold, typeComparison = "1vs2")
+p
+# save plot
+namePlot <- paste0(outputDir, "alluvialPlot_GTExVSBrainSeq.png")
+ggsave(namePlot, plot = p, width = 18, height = 10, units = "cm")
+```
+
+```{r create_alluvial_plot_BrainSeqVSGTEx_all, echo=FALSE}
+p <- consistency_plot(de_results_BrainSeq, de_results_gtex, "BrainSeq", "GTEx", qvalueThreshold = qvalue_threshold, logFCThreshold = logFC_threshold, typeComparison = "1vs2")
+p
+# save plot
+namePlot <- paste0(outputDir, "alluvialPlot_BrainSeqVSGTEx.png")
+ggsave(namePlot, plot = p, width = 18, height = 10, units = "cm")
+```
+
+```{r consistency_score_GTExVSBrainSeq, echo=FALSE}
+print("Consistency of the GTEx sexDE genes in BrainSeq:")
+consistency_all <- consistency_test(de_results_gtex, de_results_BrainSeq, qvalueThreshold = qvalue_threshold, logFCThreshold = logFC_threshold)
+```
+
+```{r consistency_score_BrainSeqVSGTEx, echo=FALSE}
+print("Consistency of the BrainSeq sexDE genes in the GTEx:")
+consistency_test(de_results_BrainSeq, de_results_gtex, qvalueThreshold = qvalue_threshold, logFCThreshold = logFC_threshold)
+```
+
+```{r consistency_score_union, echo=FALSE}
+print("Consistency of the union of the sexDE genes betweeen BrainSeq and GTEx forebrain:")
+consistency_test(de_results_gtex, de_results_BrainSeq, qvalueThreshold = qvalue_threshold, logFCThreshold = logFC_threshold, typeComparison = "union")
+print("Consistency of the union of the sexDE genes between GTEx and BrainSeq forebrain:")
+consistency_test(de_results_BrainSeq, de_results_gtex, qvalueThreshold = qvalue_threshold, logFCThreshold = logFC_threshold, typeComparison = "union")
+```
+
+
+## Correlation of logFC
+
+```{r scatter_plot_union_sexDE, echo=FALSE}
+# prepare data
+de_results_gtex$signif <- ifelse(de_results_gtex$qvalue < qvalue_threshold & abs(de_results_gtex$logFC) > logFC_threshold, 1, 0)
+de_results_BrainSeq$signif <- ifelse(de_results_BrainSeq$qvalue < qvalue_threshold & abs(de_results_BrainSeq$logFC) > logFC_threshold, 1, 0)
+# scatter plot
+p <- scatter_logFC_union(de_results_gtex, de_results_BrainSeq, "GTEx", "BrainSeq", onlySignif = TRUE)
+p
+```
+
+```{r scatter_plot_gtex_sexDE, echo=FALSE}
+p <- scatter_logFC(de_results_gtex[which(de_results_gtex$signif == 1), ], de_results_BrainSeq, "GTEx", "BrainSeq")
+p
+# save
+ggsave("
+       correlation_plot_GTExSign.png", 
+       path = '/Users/benoicla/Desktop/Workspace/HDBR/sexDE_prenatal_brain/images/5-GTEx/comparisonBrainSeq/', 
+       plot = p, width = 8, height = 8, units = "cm")
+```
+
+```{r scatter_plot_BrainSeq_sexDE, echo=FALSE}
+p <- scatter_logFC(de_results_BrainSeq[which(de_results_BrainSeq$signif == 1), ], de_results_gtex, "BrainSeq", "GTEx")
+p
+```
+
+
+# Comparison excluding sex-chromosomes
+
+## Mean effect size
+
+Mean effect size in GTEx:
+```{r logFC_gtex_auto, echo=FALSE}
+meanLogFC(de_results_gtex_auto, qvalue_threshold = qvalue_threshold, logFC_threshold = logFC_threshold)
+```
+
+Mean effect size in BrainSeq:
+```{r logFC_brainseq_auto, echo=FALSE}
+meanLogFC(de_results_BrainSeq_auto, qvalue_threshold = qvalue_threshold, logFC_threshold = logFC_threshold)
+```
+
+## Overlap of the sex-DE genes
+
+Prepare list of genes.
+```{r prepare_listInput_auto, echo=FALSE}
+listInput_auto <- prepareDataUpsetPlot(de_results_gtex_auto, de_results_BrainSeq_auto, 
+                                      listNames = c("GTEx female-biased genes", "GTEx male-biased genes", "BrainSeq female-biased genes", "BrainSeq male-biased genes"),
+                                      selectedCol = "ensemblID", qvalue_threshold = qvalue_threshold, logFC_threshold = logFC_threshold)
+```
+
+```{r upset_plot_sex_auto, echo=FALSE}
+upsetPlot(listInput_auto, fileName = paste0(outputDir, "upsetPlot_gtexVSbrainseq_sexDE_auto_sex.png"))
+```
+
+Test the overlap of male and female sex-biased genes separatly.
+```{r test_overlap_male_auto, echo=FALSE}
+hypergeometric_test(listInput_auto, fullMerge_auto$ensemblID, sex = "male")
+# compute some effect size for the enrichment of the common male-biased genes between the 2 life stages
+sprintf("Enrichmnent effect size = %s", (3*14543)/(1225*5))
+```
+
+```{r test_overlap_female, echo=FALSE}
+hypergeometric_test(listInput_auto, fullMerge_auto$ensemblID, sex = "female")
+# compute some effect size for the enrichment of the common female-biased genes between the 2 life stages
+sprintf("Enrichmnent effect size = %s", (4*14543)/(434*10))
+```
+
+
+## Replication rate
+
+Compute the pi1 replication rates of significant sex-DE genes between GTEx and BrainSeq sex-DE analysis.
+```{r compute_pi1_auto, echo=FALSE}
+print("Replication of GTEx results in BrainSeq analysis:")
+pi1_normalized(de_results_gtex_auto, de_results_BrainSeq_auto, qvalue_threshold = qvalue_threshold, logFC_threshold = logFC_threshold)
+print("Replication of BrainSeq results in GTEx analysis:")
+pi1_normalized(de_results_BrainSeq_auto, de_results_gtex_auto, qvalue_threshold = qvalue_threshold, logFC_threshold = logFC_threshold)
+```
+
+Compute the replication rates for the union of sex-DE genes between prenatal and adult sex-DE analysis.
+```{r compute_pi1_union, echo=FALSE}
+# compute the union of sex-DE genes in both datasets
+print("Replication in BrainSeq analysis:")
+union_auto <- fullMerge_auto[which(fullMerge_auto$qvalue_gtex < qvalue_threshold | fullMerge_auto$qvalue_brainseq < qvalue_threshold),]
+union_auto_gtex <- de_results_gtex_auto[which(de_results_gtex_auto$ensemblID %in% union_auto$ensemblID),]
+pi1_union_auto_gtex <- pi1_score(union_auto_gtex, de_results_BrainSeq_auto, columnMerge = "ensemblID")
+sprintf("pi1 for union genes = %s", pi1_union_auto_gtex)
+print("Replication in GTEx analysis:")
+union_auto_BrainSeq <- de_results_BrainSeq_auto[which(de_results_BrainSeq_auto$ensemblID %in% union_auto$ensemblID),]
+pi1_union_auto_BrainSeq <- pi1_score(union_auto_BrainSeq, de_results_gtex_auto, columnMerge = "ensemblID")
+sprintf("pi1 for union genes = %s", pi1_union_auto_BrainSeq)
+```
+
+## Consistency score and plot
+
+```{r create_alluvial_plot_GTExVSBrainSeq_auto, echo=FALSE}
+p <- consistency_plot(de_results_gtex_auto, de_results_BrainSeq_auto, "GTEx", "BrainSeq", qvalueThreshold = qvalue_threshold, logFCThreshold = logFC_threshold, typeComparison = "1vs2")
+p
+# save plot
+namePlot <- paste0(outputDir, "alluvialPlot_GTExVSBrainSeq_auto.png")
+ggsave(namePlot, plot = p, width = 18, height = 10, units = "cm")
+```
+
+```{r create_alluvial_plot_BrainSeqVSGTEx_auto, echo=FALSE}
+p <- consistency_plot(de_results_BrainSeq_auto, de_results_gtex_auto, "BrainSeq", "GTEx", qvalueThreshold = qvalue_threshold, logFCThreshold = logFC_threshold, typeComparison = "1vs2")
+p
+# save plot
+namePlot <- paste0(outputDir, "alluvialPlot_BrainSeqVSGTEx_auto.png")
+ggsave(namePlot, plot = p, width = 18, height = 10, units = "cm")
+```
+
+```{r consistency_score_GTExVSBrainSeq_auto, echo=FALSE}
+print("Consistency of the GTEx sexDE genes in BrainSeq:")
+consistency_auto <- consistency_test(de_results_gtex_auto, de_results_BrainSeq_auto, qvalueThreshold = qvalue_threshold, logFCThreshold = logFC_threshold)
+```
+
+```{r consistency_score_BrainSeqVSGTEx_auto, echo=FALSE}
+print("Consistency of the BrainSeq sexDE genes in the GTEx:")
+consistency_test(de_results_BrainSeq_auto, de_results_gtex_auto, qvalueThreshold = qvalue_threshold, logFCThreshold = logFC_threshold)
+```
+
+```{r consistency_score_union_auto, echo=FALSE}
+print("Consistency of the union of the sexDE genes betweeen BrainSeq and GTEx forebrain:")
+consistency_test(de_results_gtex_auto, de_results_BrainSeq_auto, qvalueThreshold = qvalue_threshold, logFCThreshold = logFC_threshold, typeComparison = "union")
+print("Consistency of the union of the sexDE genes between GTEx and BrainSeq forebrain:")
+consistency_test(de_results_BrainSeq_auto, de_results_gtex_auto, qvalueThreshold = qvalue_threshold, logFCThreshold = logFC_threshold, typeComparison = "union")
+```
+
+## Correlation of logFC
+
+```{r scatter_plot_union_sexDE_auto, echo=FALSE}
+# prepare data
+de_results_gtex_auto$signif <- ifelse(de_results_gtex_auto$qvalue < qvalue_threshold & abs(de_results_gtex_auto$logFC) > logFC_threshold, 1, 0)
+de_results_BrainSeq_auto$signif <- ifelse(de_results_BrainSeq_auto$qvalue < qvalue_threshold & abs(de_results_BrainSeq_auto$logFC) > logFC_threshold, 1, 0)
+# scatter plot
+scatter_logFC_union(de_results_gtex_auto, de_results_BrainSeq_auto, "GTEx", "BrainSeq", onlySignif = TRUE)
+```
+
+```{r scatter_plot_gtex_sexDE_auto, echo=FALSE}
+p <- scatter_logFC(de_results_gtex_auto[which(de_results_gtex_auto$signif == 1), ], de_results_BrainSeq_auto, "GTEx", "BrainSeq")
+p
+```
+
+```{r scatter_plot_BrainSeq_sexDE_auto, echo=FALSE}
+p <- scatter_logFC(de_results_BrainSeq_auto[which(de_results_BrainSeq_auto$signif == 1), ], de_results_gtex_auto, "BrainSeq", "GTEx")
+p
+```
+
+# Explore results from the linomodel
+
+## Load and format data
+
+```{r load_bayes, echo=FALSE}
+load("/Users/benoicla/Desktop/Workspace/brainSeq/data/phase1/bayes_analysis/bayes_6models_results_brainseq.RData")
+```
+
+List of GTEx tissues.
+
+```{r list_gtex_tissues, echo=FALSE}
+tfiles <- list.files('/Users/benoicla/Desktop/Workspace/GTEx/Data/de_results/v8/',pattern='_v8_VoomLimma_topTable_with_sva.txt')
+tissues <- c()
+for(i in 1:length(tfiles)){
+  tissues[i] <- unlist(strsplit(tfiles[i],'_'))[1]
+}
+```
+
+```{r functions_format, echo=FALSE}
+# function to fill-out values from bottom half of the matrix using the top half
+fillout_matrix <- function(mat, fillingMat){
+  mat[lower.tri(mat)] <- t(fillingMat)[lower.tri(fillingMat)]
+  return(mat)
+}
+# function to convert to long format the matrices
+transform_matrix2longdf <- function(mat, nameValue, len = length(tissues)){
+  df <- as.data.frame(mat)
+  df$tissue1 <- rownames(df)
+  longdf <- pivot_longer(df, 1, names_to = "brainseq", values_to = nameValue)
+  return(longdf)
+}
+# function to format the matrices and merge them in a single data frame
+format_mat <- function(mean_eff1, mean_eff2, mean_shared05, mean_shared1, mean_shared2, mean_opposite, sd_eff1, sd_eff2, sd_shared05, sd_shared1, sd_shared2, sd_opposite, 
+                       len = length(tissues)){
+  # fill out matrices to make them symetrical
+  mean_specific1 <- fillout_matrix(mean_eff1, mean_eff2)
+  mean_specific2 <- fillout_matrix(mean_eff2, mean_eff1)
+  mean_shared05 <- fillout_matrix(mean_shared05, mean_shared05)
+  mean_shared1 <- fillout_matrix(mean_shared1, mean_shared1)
+  mean_shared2 <- fillout_matrix(mean_shared2, mean_shared2)
+  mean_shared <- mean_shared05 + mean_shared1 + mean_shared2
+  mean_opposite <- fillout_matrix(mean_opposite, mean_opposite)
+  sd_specific1 <- fillout_matrix(sd_eff1, sd_eff2)
+  sd_specific2 <- fillout_matrix(sd_eff2, sd_eff1)
+  sd_shared05 <- fillout_matrix(sd_shared05, sd_shared05)
+  sd_shared1 <- fillout_matrix(sd_shared1, sd_shared1)
+  sd_shared2 <- fillout_matrix(sd_shared2, sd_shared2)
+  sd_opposite <- fillout_matrix(sd_opposite, sd_opposite)
+  # convert matrices to long format data frames
+  df_mean_specific1 <- transform_matrix2longdf(mean_specific1, nameValue = "mean_specific1", len = len)
+  df_mean_specific2 <- transform_matrix2longdf(mean_specific2, nameValue = "mean_specific2", len = len)
+  df_mean_shared <- transform_matrix2longdf(mean_shared, nameValue = "mean_shared", len = len)
+  df_mean_shared05 <- transform_matrix2longdf(mean_shared05, nameValue = "mean_shared05", len = len)
+  df_mean_shared1 <- transform_matrix2longdf(mean_shared1, nameValue = "mean_shared1", len = len)
+  df_mean_shared2 <- transform_matrix2longdf(mean_shared2, nameValue = "mean_shared2", len = len)
+  df_mean_opposite <- transform_matrix2longdf(mean_opposite, nameValue = "mean_opposite", len = len)
+  df_sd_specific1 <- transform_matrix2longdf(sd_specific1, nameValue = "sd_specific1", len = len)
+  df_sd_specific2 <- transform_matrix2longdf(sd_specific2, nameValue = "sd_specific2", len = len)
+  df_sd_shared05 <- transform_matrix2longdf(sd_shared05, nameValue = "sd_shared05", len = len)
+  df_sd_shared1 <- transform_matrix2longdf(sd_shared1, nameValue = "sd_shared1", len = len)
+  df_sd_shared2 <- transform_matrix2longdf(sd_shared2, nameValue = "sd_shared2", len = len)
+  df_sd_opposite <- transform_matrix2longdf(sd_opposite, nameValue = "sd_opposite", len = len)
+  # merge all data in a single data frame
+  bayes_full_res <- cbind(df_mean_specific1, df_mean_specific2[3], df_mean_shared[3], df_mean_shared05[3],
+                          df_mean_shared1[3], df_mean_shared2[3], df_mean_opposite[3],
+                          df_sd_specific1[3], df_sd_specific2[3], df_sd_shared05[3], df_sd_shared1[3],
+                          df_sd_shared2[3], df_sd_opposite[3])
+  return(bayes_full_res)
+}
+```
+
+```{r format, echo=FALSE}
+list_mat_brainseq <- list(mat_mean_eff1, mat_mean_eff2, mat_mean_shared0.5, mat_mean_shared1, mat_mean_shared2, mat_mean_opposite,
+                      mat_sd_eff1, mat_sd_eff2, mat_sd_shared0.5, mat_sd_shared1, mat_sd_shared2, mat_sd_opposite)
+bayes_brainseq_res <- format_mat(mat_mean_eff1, mat_mean_eff2, mat_mean_shared0.5, mat_mean_shared1, mat_mean_shared2,
+                             mat_mean_opposite, mat_sd_eff1, mat_sd_eff2, mat_sd_shared0.5, mat_sd_shared1, 
+                             mat_sd_shared2, mat_sd_opposite)
+```
+
+Extract comparison with GTEx brain cortex (BRNCTXB).
+```{r comp_cortex, echo=FALSE}
+comparison_bayes_cortex <- bayes_brainseq_res[which(bayes_brainseq_res$tissue1 == "BRNCTXB"),]
+comparison_bayes_cortex
+```
+
+## Plots
+
+Barplot of proportions of genes assigned to each model.
+
+```{r barplot_proportions, echo=FALSE}
+proportions <- comparison_bayes_cortex[, c(3,4,6:15)] %>% pivot_longer(1:12, names_to = c("measure", "model"), names_sep = "_", values_to = "values") %>% pivot_wider(names_from = "measure", values_from = "values")
+proportions$data <- factor(proportions$model, levels = c("specific1", "shared05", "shared1", "shared2", "opposite", "specific2"),
+                             labels = c("GTEX", "SHARED0.5", "SHARED1", "SHARED2", "OPPOSITE", "BRAINSEQ"))
+p <- ggplot(proportions, aes(x = data, y = mean, fill = data))
+p <- p + geom_col()
+p <- p + geom_errorbar(aes(ymin =  mean-sd, ymax = mean+sd), width = 0.2)
+p <- p + scale_fill_manual(values = c("GTEX" = "#9729d6", "BRAINSEQ" = "#2bd494", "SHARED0.5" = "#6b4b15", "SHARED1" = "#d5952a", 
+                                       "SHARED2" = "#eaca95", "OPPOSITE" = "#Fbfd8e"),
+                            guide = "none")
+p <- p + theme_minimal() + ylab("Proportion estimates") + xlab("")
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p
+# save plot
+ggsave("proportions_barplot.png", 
+       path = '/Users/benoicla/Desktop/Workspace/HDBR/sexDE_prenatal_brain/images/5-GTEx/comparisonBrainSeq/', 
+       plot = p, width = 7, height = 10, units = "cm")
+```
+
