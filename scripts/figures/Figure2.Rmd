@@ -501,13 +501,14 @@ Bottom plot = PP for linemodel
 Prepare data for example genes plots.
 
 ```{r prepare_data_examples, echo=FALSE}
-dataToPlot$specificity <- factor(dataToPlot$specificity , levels = c('Prenatal', 'Shared', 'Opposite', 'Adult', 'Unclassified'))
+dataToPlot$specificity <- factor(dataToPlot$specificity , levels = c('Prenatal', 'Shared', 'Adult', 'Opposite', 'Unclassified'),
+                                 labels = c('Prenatal', 'Shared', 'Adult', 'Opp.', 'Unclassified'))
 ```
 
 
 Prepare list of autosomal gene of interest:
 ```{r prepare_example_geneLost, echo=FALSE}
-example_geneList <- c("CTXN3", "NPY", "DNAI1", "LINC01597", "SPESP1", "POMC", "IQGAP3", "NOX5")
+example_geneList <- c("CTXN3", "NPY", "DNAI1", "LINC01597", "SPESP1", "POMC", "IQGAP3", "NOX5", "KCNB1")
 ```
 
 ## Functions
@@ -597,9 +598,9 @@ Arrange 2 plots together.
 final_plot <- plot_grid(example_logFC, example_PP, legend_logFC, ncol = 1, align = "v", axis = "rl", rel_heights = c(1, 1, .1))
 final_plot
 save_plot("images/figures/2E_example_auto_genes.svg", plot = final_plot, 
-          base_width = 9, base_height = 10, units = "cm")
+          base_width = 10, base_height = 10, units = "cm")
 save_plot("images/figures/2E_example_auto_genes.png", plot = final_plot, 
-          base_width = 9, base_height = 10, units = "cm")
+          base_width = 10, base_height = 10, units = "cm")
 ```
 
 
