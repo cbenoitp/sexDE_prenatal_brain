@@ -1,0 +1,37 @@
+---
+title: "Explore Wen et al., 2024 samples"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r load_library, echo=FALSE}
+suppressPackageStartupMessages( library(tidyverse) )
+suppressPackageStartupMessages( library(readxl))
+```
+
+```{r, setup, include=FALSE, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+# Load metadata
+
+```{r load_metadata, echo=FALSE}
+metadata <- read_excel("data/5-postprocessing/9-Replication/datasets/Wen2024_table_s1.xlsx", sheet = 2)
+```
+
+
+# Statistics
+
+Show some table with number of samples per datasets, per sex and per trimester.
+
+```{r stats, echo=FALSE}
+table(metadata$study, metadata$inferSex, metadata$trimester)
+```
+
+
+# Session info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```

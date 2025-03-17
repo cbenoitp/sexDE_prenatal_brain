@@ -1,0 +1,643 @@
+---
+title: "Replication of results with other datasets"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r load_library, echo=FALSE}
+suppressPackageStartupMessages( library(edgeR) )
+suppressPackageStartupMessages( library(limma) )
+suppressPackageStartupMessages( library(qvalue) )
+suppressPackageStartupMessages( library(tidyverse) )
+suppressPackageStartupMessages( library(readxl))
+```
+
+```{r, setup, include=FALSE, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+```{r parameters, echo=FALSE}
+qvalue_threshold <- 0.01
+logFC_threshold <- 0
+```
+
+# Load data
+
+## Our own data
+
+Load HDBR sex-DE data.
+
+```{r load_data_HDBR_sexDE, echo=FALSE}
+hdbr_results <- read.table("data/3-DE/VoomDream_topTable_forebrain_pseudotime_sva_ind_interaction.txt",
+                           header = TRUE, check.names=FALSE)
+# format
+hdbr_results$ensemblID <- sapply(strsplit(as.character(hdbr_results$gene_id), "\\."), function(x){x[1]})
+# autosomal genes
+sexChr <- c("chrY", "chrX")
+hdbr_results_auto <- hdbr_results[which(!hdbr_results$chr %in% sexChr), ]
+```
+
+## O'Brien 2018 data
+
+Load the data.
+
+```{r load_Obrien_data, echo=FALSE}
+OBrien_results <- read.table("data/5-postprocessing/9-Replication/datasets/OBrien2018_SEXdiffs.txt",
+                          header = TRUE)
+# rename some columns to match our naming system
+OBrien_results$ensemblID <- OBrien_results$Id
+OBrien_results$qvalue <- OBrien_results$padj
+OBrien_results$P.Value <- OBrien_results$pvalue
+OBrien_results$logFC <- OBrien_results$log2FoldDiff
+# the logFC in the O'Brien data is in the opposite direction than in our data
+# modify it to make it match our data 
+OBrien_results$logFC <- -OBrien_results$logFC
+# autosomal genes
+chrToRemove <- c("chrY", "chrX", "chrMT")
+OBrien_results_auto <- OBrien_results[which(!OBrien_results$Chr %in% chrToRemove), ]
+```
+
+## Kissel 2024 data
+
+Load the data.
+
+```{r load_Kissel_data, echo=FALSE}
+Kissel_results <- read_excel("data/5-postprocessing/9-Replication/datasets/Kissel2024_SuppTable4_MainModel_DifferentialExpression_andMetaAnalysis.xlsx",
+                              sheet = 2)
+# separate the UCLA and BV data
+Kissel_UCLA_results <- Kissel_results[, c(1:20)]
+Kissel_BV_results <- Kissel_results[, c(1:5, 21:35)]
+# rename some columns to match our naming system
+Kissel_UCLA_results$logFC <- Kissel_UCLA_results$logFC_UCLA
+Kissel_UCLA_results$qvalue <- Kissel_UCLA_results$adj.P.Val_UCLA
+Kissel_UCLA_results$P.Value <- Kissel_UCLA_results$P.Value_UCLA
+Kissel_UCLA_results$ensemblID <- Kissel_UCLA_results$EnsemblID
+Kissel_BV_results$logFC <- Kissel_BV_results$logFC_BV
+Kissel_BV_results$qvalue <- Kissel_BV_results$adj.P.Val_BV
+Kissel_BV_results$P.Value <- Kissel_BV_results$P.Value_BV
+Kissel_BV_results$ensemblID <- Kissel_BV_results$EnsemblID
+# the logFC in the Kissel data is in the opposite direction than in our data
+# modify it to make it match our data 
+Kissel_UCLA_results$logFC <- -Kissel_UCLA_results$logFC
+Kissel_BV_results$logFC <- -Kissel_BV_results$logFC
+# autosomal genes
+chrToRemove <- c("chrY", "chrX", "chrM")
+Kissel_UCLA_results_auto <- Kissel_UCLA_results[which(!Kissel_UCLA_results$Chr %in% chrToRemove), ]
+Kissel_BV_results_auto <- Kissel_BV_results[which(!Kissel_BV_results$Chr %in% chrToRemove), ]
+```
+
+
+
+# Compare results
+
+For each dataset, we compare our data using several different metrics:
+- percentage of significant genes from the dataset that overlap our significant genes
+- replication rate of our significant sex-DE genes in the dataset (pi1 signif)
+- effect size (logFC) correlation for our autosomal significant sex-DE genes
+- effect size (logFC) consistency of our significant sex-DE genes in the dataset
+
+
+## HDBR vs O'Brien data
+
+The O'Brien et al., 2018 preprint analyze 120 samples (from 50 female individuals and 70 male individuals) from the second trimester of pregnancy (12-19 post-conception weeks).
+From the manuscript, the authors found 1468 male-biased and 1288 female-biased genes (with FDR < 0.1).
+
+### Data summary
+
+Get the number of sex-DE genes with adjusted p-value < 0.01 (same threshold we used in our analysis).
+
+```{r get_stats_OBrien, echo=FALSE}
+nbr_signif <- sum(OBrien_results$qvalue < qvalue_threshold)
+nbr_signif
+```
+
+### Overlap
+
+Get the number of significant genes overlapping between the 2 datasets.
+
+```{r permut_test_overlap_function, echo=FALSE}
+overlap_signif <- function(data1, data2, columnMerge = "ensemblID", qvalueThreshold = 0.01, nbrRandom = 1000){
+  # merge the 2 datasets
+  de_results_merged <- merge(data1, data2, by = columnMerge, suffixes = c(".data1", ".data2"))
+  # get the number of significant genes in each data
+  nbr_signif_data1 <- length(de_results_merged[which(de_results_merged$qvalue.data1 < qvalueThreshold), columnMerge])
+  nbr_signif_data2 <- length(de_results_merged[which(de_results_merged$qvalue.data2 < qvalueThreshold), columnMerge])
+  print(sprintf("Number of genes significant in data1 = %s", nbr_signif_data1))
+  print(sprintf("Number of genes significant in data2 = %s", nbr_signif_data2))
+  # keep only the genes/transcripts that are significant in the 2 datasets
+  de_results_merged_filtered <- de_results_merged[which(de_results_merged$qvalue.data1 < qvalueThreshold & de_results_merged$qvalue.data2 < qvalueThreshold), ]
+  nbr_common_signif <- dim(de_results_merged_filtered)[1]
+  print(sprintf("Number of genes significant in both dataset = %s", nbr_common_signif))
+  print(sprintf("Percentage of significant genes from data1 also significant in data2 = %s", nbr_common_signif/nbr_signif_data1*100))
+  # Compare this number to the number of overlaping genes if we take randomly 2 lists of the same size (nbr_sgnif_data1 & nbr_sgnif_data2)
+  nbr_signif_values <- c()
+  # to do nbrRandom times
+  for (i in 1:nbrRandom){
+    # randomly select "nbr_sgnif_data1" genes/transcripts in the data1
+    selection_data1 <- sample(de_results_merged[, columnMerge], nbr_signif_data1)
+    # randomly select "nbr_sgnif_data2" genes/transcripts in the data2
+    selection_data2 <- sample(de_results_merged[, columnMerge], nbr_signif_data2)
+    nbr_signif_th <- sum(selection_data1 %in% selection_data2)
+    nbr_signif_values[i] <- nbr_signif_th
+  }
+  nbr_signif_values <- as.data.frame(nbr_signif_values)
+  # plot the distribution of the number of overlaping genes obtained and the real value
+  p <- ggplot(nbr_signif_values, aes(nbr_signif_values))
+  p <- p + geom_histogram(binwidth=1, boundary = 0, fill="grey", color="black")
+  p <- p + theme_bw() + xlab("Number of overlaping genes") + ylab("Frequency")
+  p <- p + geom_vline(xintercept = nbr_common_signif, color = "red")
+  return(p)
+}
+```
+
+```{r permut_test_overlap_OBrien, echo=FALSE}
+p <- overlap_signif(OBrien_results, hdbr_results, qvalueThreshold = qvalue_threshold)
+p
+```
+
+### Replication rate
+
+We compute the replication rate (pi1).
+
+```{r function_pi1_score, echo=FALSE}
+pi1_score <- function(data1, data2, columnMerge = "ensemblID"){
+  # compute pi1 for second dataset compared to the first dataset
+  selected_pvalue <- data2$P.Value[which(pull(data2, columnMerge) %in% pull(data1, columnMerge))]
+  if (berryFunctions::is.error(qvalue::pi0est(p = selected_pvalue, lambda = 0.5, pi0.method = "smoother")) ) {
+    pi1 <- qvalue::qvalue(p = selected_pvalue, pi0 = 1)$pi0
+  }else{
+    pi1 <- 1-qvalue::pi0est(p = selected_pvalue, lambda = 0.5, pi0.method = "smoother")$pi0
+  }
+  
+  # continue only if the pi1 value was computed
+  if (is.numeric(pi1)){
+    return(pi1)
+  } else{
+    return("No pi1 analysis!")
+  }
+}
+```
+
+```{r function_pi1_normalized, echo=FALSE}
+pi1_normalized <- function(data1, data2, columnMerge = "ensemblID", qvalue_threshold = 0.01, logFC_threshold = 0, verbose = TRUE){
+  # get the significant genes in the first dataset
+  data1_signif <- data1[which(data1$qvalue < qvalue_threshold & abs(data1$logFC) > logFC_threshold), ]
+  
+  # pi1 replication rate for the significant genes
+  pi1_signif <- pi1_score(data1_signif, data2, columnMerge = "ensemblID")
+  if (verbose){
+    print(sprintf("pi1 for signif genes = %s", pi1_signif))
+  }
+  # pi1 replication rate for all genes
+  pi1_all <- pi1_score(data1, data2, columnMerge = "ensemblID")
+  if (verbose){
+    print(sprintf("pi1 for all genes = %s", pi1_all))
+  }
+  
+  # return the pi1 for significant genes normalized by the pi1 for all genes
+  return(pi1_signif/pi1_all)
+}
+```
+
+```{r pi1_score_OBrien, echo=FALSE}
+print("Replication of HDBR sex-DE results in O'Brien sex-DE analysis:")
+pi1_normalized(hdbr_results, OBrien_results, qvalue_threshold = qvalue_threshold)
+print("Replication of O'Brien sex-DE results in HDBR sex-DE analysis:")
+pi1_normalized(OBrien_results, hdbr_results, qvalue_threshold = qvalue_threshold)
+```
+
+### Effect size correlation
+
+Scatter plot of the logFC between the 2 analyses with information about the correlation (r and p-value of cor.test).
+
+```{r function_scatter_plot_logFC, echo=FALSE}
+scatter_logFC <- function(data1, data2, nameData1, nameData2, pointColor, columnMerge = "ensemblID"){
+  # merge the 2 dataset
+  de_results_merged <- merge(data1, data2, by = columnMerge, suffixes = c(".data1", ".data2"))
+  # test correlation
+  res <- cor.test(de_results_merged$logFC.data1, de_results_merged$logFC.data2)
+  if (res$p.value == 0){
+    annotation_text <- sprintf("r = %.3f\nP < 2.2e-16", res$estimate)
+  } else{
+    annotation_text <- sprintf("r = %.3f\nP = %1.2e", res$estimate, res$p.value)
+  }
+  yrng <- range(de_results_merged$logFC.data1)
+  xrng <- range(de_results_merged$logFC.data2)
+  # plot
+  p <- ggplot(de_results_merged, aes(x = logFC.data1, y = logFC.data2))
+  p <- p + geom_abline(intercept = 0, slope = 1, col = "black")
+  p <- p + geom_hline(yintercept = 0, color = "grey")
+  p <- p + geom_vline(xintercept = 0, color = "grey")
+  p <- p + geom_point(color=pointColor, alpha = 0.3)
+  p <- p + theme_bw() + labs(title = "")
+  p <- p + theme(panel.grid = element_blank(), 
+                 plot.title = element_text(hjust = 0.5),
+                 plot.subtitle = element_text(hjust = 0.5))
+  p <- p + xlab(paste0("logFC (", nameData1, ")")) + ylab(paste0("logFC (", nameData2, ")"))
+  p <- p + annotate("text", xrng[1], yrng[2], hjust = 0, vjust = 1, 
+                    label = annotation_text)
+  return(p)
+}
+```
+
+Correlation plot only of HDBR sex-DE genes.
+
+```{r corr_pseudo_sexDE_OBrien, echo=FALSE}
+p <- scatter_logFC(hdbr_results[which(hdbr_results$qvalue < qvalue_threshold),], OBrien_results, "HDBR", "OBrien", 
+                   pointColor = "black")
+p
+```
+
+Correlation plot only of autosomal HDBR sex-DE genes.
+
+```{r corr_pseudo_sexDE_auto_OBrien, echo=FALSE}
+p <- scatter_logFC(hdbr_results_auto[which(hdbr_results_auto$qvalue < qvalue_threshold),], OBrien_results, "HDBR", "OBrien", 
+                   pointColor = "black")
+p
+```
+
+Correlation plot only for O'Brien sex-DE genes.
+
+```{r corr_OBrien_sexDE_pseudo, echo=FALSE}
+p <- scatter_logFC(OBrien_results[which(OBrien_results$qvalue < qvalue_threshold),], hdbr_results, "OBrien", "HDBR", 
+                   pointColor = "black")
+p
+```
+
+Correlation plot only for O'Brien autosomal sex-DE genes.
+
+```{r corr_OBrien_sexDE_pseudo_auto, echo=FALSE}
+p <- scatter_logFC(OBrien_results_auto[which(OBrien_results_auto$qvalue < qvalue_threshold),], hdbr_results, "OBrien", "HDBR", 
+                   pointColor = "black")
+p
+```
+
+
+
+### Effect size consistency
+
+Compute the consistency of log fold change.
+
+```{r function_consistency, echo=FALSE}
+consistency_test <- function(data1, data2, columnMerge = "ensemblID", qvalueThreshold = 0.01){
+  # merge the 2 datasets
+  de_results_merged <- merge(data1, data2, by = columnMerge, suffixes = c(".data1", ".data2"))
+  # keep only the genes/transcripts that are significant in the first data
+  de_results_merged_filtered <- de_results_merged[which(de_results_merged$qvalue.data1 < qvalueThreshold), ]
+  print(sprintf("Number of genes compared = %s", dim(de_results_merged_filtered)[1]))
+  # number of consistent genes/transcripts
+  nbr_consistent <- sum(sign(de_results_merged_filtered$logFC.data1) == sign(de_results_merged_filtered$logFC.data2))
+  consistency <- nbr_consistent/length(de_results_merged_filtered[, columnMerge])
+  # compare this consistency score with the consistency of list of random genes
+  cons_values <- rep(NA, 1000)
+  # to do 1000 times
+  for (i in 1:1000){
+    # randomly select the same number of genes/transcripts in the data2 to test the overlap with the data1 signif genes
+    selection <- sample(de_results_merged[, columnMerge], length(de_results_merged_filtered[, columnMerge]))
+    nbr_consistent_th <- sum(sign(de_results_merged$logFC.data2[which(de_results_merged[, columnMerge] %in% selection)]) == sign(de_results_merged$logFC.data1[which(de_results_merged[, columnMerge] %in% selection)]))
+    cons_values[i] <- nbr_consistent_th/length(de_results_merged_filtered[, columnMerge])
+  }
+  cons_values <- as.data.frame(cons_values)
+  # plot the distribution of the consistency obtained and the real value
+  p <- ggplot(cons_values, aes(cons_values))
+  p <- p + geom_histogram(binwidth=0.02, boundary = 0, fill="grey", color="black")
+  p <- p + theme_bw() + xlab("consistency") + ylab("Frequency")
+  p <- p + scale_x_continuous(limits = c(0, 1))
+  p <- p + geom_vline(xintercept = consistency, color = "red")
+  print(p)
+  # test this consistency with a permutation test
+  nsmaller <- sum(cons_values >= consistency)
+  permutation_test <- round((nsmaller+1)/(1000+1), 3)
+  # test this consistency with a binomial test
+  result_test <- binom.test(nbr_consistent, length(de_results_merged_filtered[, columnMerge]), p = 0.5)
+  # print results
+  print(sprintf("number of consistent gene = %s", nbr_consistent))
+  print(sprintf("consistency = %s", consistency))
+  print(sprintf("permutation test p-value = %s", permutation_test))
+  print(sprintf("binomial test p-value = %s", result_test$p.value))
+  return(consistency)
+}
+```
+
+```{r consistency_score_OBrien_vs_HDBR, echo=FALSE}
+print("Consistency of OBrien analysis compared to the results of HDBR analysis:")
+consistency_test(hdbr_results, OBrien_results, qvalueThreshold = 0.01)
+```
+
+
+
+
+## HDBR vs Kissel BrainVar data
+
+The Kissel et al., 2014 BrainVar data contains 87 samples (41 males, 46 females) from 14 to 21 PCW from DLPFC.
+For the sex-DE analysis, the age was used as a covariate.
+
+### Data summary
+
+Get the number of sex-DE genes with adjusted p-value < 0.01 (same threshold we used in our analysis).
+
+```{r get_stats_BV, echo=FALSE}
+nbr_signif_BV <- sum(Kissel_BV_results$qvalue < qvalue_threshold)
+nbr_signif_BV
+```
+
+
+### Overlap
+
+Get the number of significant genes overlapping between the 2 datasets.
+
+```{r permut_test_overlap_BV, echo=FALSE}
+p <- overlap_signif(Kissel_BV_results, hdbr_results, qvalueThreshold = qvalue_threshold)
+p
+```
+
+### Replication rate
+
+We compute the replication rate (pi1).
+
+```{r pi1_score_BV, echo=FALSE}
+print("Replication of HDBR sex-DE results in Kissel BrainVar sex-DE analysis:")
+pi1_normalized(hdbr_results, Kissel_BV_results, qvalue_threshold = qvalue_threshold)
+print("Replication of Kissel BrainVar sex-DE results in HDBR sex-DE analysis:")
+pi1_normalized(Kissel_BV_results, hdbr_results, qvalue_threshold = qvalue_threshold)
+```
+
+
+### Effect size correlation
+
+Correlation plot only of HDBR sex-DE genes.
+
+```{r corr_pseudo_sexDE_BV, echo=FALSE}
+p <- scatter_logFC(hdbr_results[which(hdbr_results$qvalue < qvalue_threshold),], Kissel_BV_results, "HDBR", "Kissel_BV", 
+                   pointColor = "black")
+p
+```
+
+Correlation plot only of autosomal HDBR sex-DE genes.
+
+```{r corr_pseudo_sexDE_auto_BV, echo=FALSE}
+p <- scatter_logFC(hdbr_results_auto[which(hdbr_results_auto$qvalue < qvalue_threshold),], Kissel_BV_results, "HDBR", "Kissel_BV", 
+                   pointColor = "black")
+p
+```
+
+
+### Effect size consistency
+
+Compute the consistency of log fold change.
+
+```{r consistency_score_Kissel_BV_vs_HDBR, echo=FALSE}
+print("Consistency of Kissel BrainVar analysis compared to the results of HDBR analysis:")
+consistency_test(hdbr_results, Kissel_BV_results, qvalueThreshold = 0.01)
+```
+
+
+
+
+## HDBR vs Kissel UCLA data
+
+The Kissel et al., 2014 UCLA data contains 186 samples (101 males, 85 females) from 14 to 21 PCW from the whole cortex.
+For the sex-DE analysis, the age was used as a covariate.
+
+### Data summary
+
+Get the number of sex-DE genes with adjusted p-value < 0.01 (same threshold we used in our analysis).
+
+```{r get_stats_UCLA, echo=FALSE}
+nbr_signif_UCLA <- sum(Kissel_UCLA_results$qvalue < qvalue_threshold)
+nbr_signif_UCLA
+```
+
+### Overlap
+
+Get the number of significant genes overlapping between the 2 datasets.
+
+```{r permut_test_overlap_UCLA, echo=FALSE}
+p <- overlap_signif(Kissel_UCLA_results, hdbr_results, qvalueThreshold = qvalue_threshold)
+p
+```
+
+### Replication rate
+
+We compute the replication rate (pi1).
+
+```{r pi1_score_UCLA, echo=FALSE}
+print("Replication of HDBR sex-DE results in Kissel UCLA sex-DE analysis:")
+pi1_normalized(hdbr_results, Kissel_UCLA_results, qvalue_threshold = qvalue_threshold)
+print("Replication of Kissel UCLA sex-DE results in HDBR sex-DE analysis:")
+pi1_normalized(Kissel_UCLA_results, hdbr_results, qvalue_threshold = qvalue_threshold)
+```
+
+### Effect size correlation
+
+Correlation plot only of HDBR sex-DE genes.
+
+```{r corr_pseudo_sexDE_UCLA, echo=FALSE}
+p <- scatter_logFC(hdbr_results[which(hdbr_results$qvalue < qvalue_threshold),], Kissel_UCLA_results, "HDBR", "Kissel_UCLA", 
+                   pointColor = "black")
+p
+```
+
+Correlation plot only of autosomal HDBR sex-DE genes.
+
+```{r corr_pseudo_sexDE_auto_UCLA, echo=FALSE}
+p <- scatter_logFC(hdbr_results_auto[which(hdbr_results_auto$qvalue < qvalue_threshold),], Kissel_UCLA_results, "HDBR", "Kissel_UCLA", 
+                   pointColor = "black")
+p
+```
+
+### Effect size consistency
+
+Compute the consistency of log fold change.
+
+```{r consistency_score_Kissel_UCLA_vs_HDBR, echo=FALSE}
+print("Consistency of Kissel UCLA analysis compared to the results of HDBR analysis:")
+consistency_test(hdbr_results, Kissel_UCLA_results, qvalueThreshold = 0.01)
+```
+
+
+
+
+## O'Brien vs Kissel BV data
+
+The O'Brien and Kissel BV data both contain samples from the second trimester of pregnancy and use the age as a covariate.
+
+
+### Overlap
+
+Get the number of significant genes overlapping between the 2 datasets.
+
+```{r permut_test_overlap_OBrien_BV, echo=FALSE}
+p <- overlap_signif(Kissel_BV_results, OBrien_results, qvalueThreshold = qvalue_threshold)
+p
+p <- overlap_signif(OBrien_results, Kissel_BV_results, qvalueThreshold = qvalue_threshold)
+p
+```
+
+
+### Replication rate
+
+We compute the replication rate (pi1).
+
+```{r pi1_score_OBrien_BV, echo=FALSE}
+print("Replication of O'Brien sex-DE results in Kissel BV sex-DE analysis:")
+pi1_normalized(OBrien_results, Kissel_BV_results, qvalue_threshold = qvalue_threshold)
+print("Replication of Kissel BV sex-DE results in O'Brien sex-DE analysis:")
+pi1_normalized(Kissel_BV_results, OBrien_results, qvalue_threshold = qvalue_threshold)
+```
+
+
+### Effect size correlation
+
+Correlation plot only of O'Brien sex-DE genes.
+
+```{r corr_OBrien_sexDE_BV, echo=FALSE}
+p <- scatter_logFC(OBrien_results[which(OBrien_results$qvalue < qvalue_threshold),], Kissel_BV_results, "OBrien", "Kissel_BV", 
+                   pointColor = "black")
+p
+```
+
+Correlation plot only of autosomal O'Brien sex-DE genes.
+
+```{r corr_OBrien_sexDE_auto_BV, echo=FALSE}
+p <- scatter_logFC(OBrien_results_auto[which(OBrien_results_auto$qvalue < qvalue_threshold),], Kissel_BV_results, "OBrien", "Kissel_BV", 
+                   pointColor = "black")
+p
+```
+
+
+### Effect size consistency
+
+Compute the consistency of log fold change.
+
+```{r consistency_score_BV_vs_OBrien, echo=FALSE}
+print("Consistency of Kissel BV analysis compared to the results of O'Brien analysis:")
+consistency_test(OBrien_results, Kissel_BV_results, qvalueThreshold = 0.01)
+```
+
+
+
+
+## O'Brien vs Kissel UCLA data
+
+The O'Brien and Kissel UCLA data both contain samples from the second trimester of pregnancy and use the age as a covariate.
+
+### Overlap
+
+Get the number of significant genes overlapping between the 2 datasets.
+
+```{r permut_test_overlap_OBrien_UCLA, echo=FALSE}
+p <- overlap_signif(Kissel_UCLA_results, OBrien_results, qvalueThreshold = qvalue_threshold)
+p
+p <- overlap_signif(OBrien_results, Kissel_UCLA_results, qvalueThreshold = qvalue_threshold)
+p
+```
+
+
+### Replication rate
+
+We compute the replication rate (pi1).
+
+```{r pi1_score_OBrien_UCLA, echo=FALSE}
+print("Replication of O'Brien sex-DE results in Kissel UCLA sex-DE analysis:")
+pi1_normalized(OBrien_results, Kissel_UCLA_results, qvalue_threshold = qvalue_threshold)
+print("Replication of Kissel UCLA sex-DE results in O'Brien sex-DE analysis:")
+pi1_normalized(Kissel_UCLA_results, OBrien_results, qvalue_threshold = qvalue_threshold)
+```
+
+
+### Effect size correlation
+
+Correlation plot only of O'Brien sex-DE genes.
+
+```{r corr_OBrien_sexDE_UCLA, echo=FALSE}
+p <- scatter_logFC(OBrien_results[which(OBrien_results$qvalue < qvalue_threshold),], Kissel_UCLA_results, "OBrien", "Kissel_UCLA", 
+                   pointColor = "black")
+p
+```
+
+Correlation plot only of autosomal O'Brien sex-DE genes.
+
+```{r corr_OBrien_sexDE_auto_UCLA, echo=FALSE}
+p <- scatter_logFC(OBrien_results_auto[which(OBrien_results_auto$qvalue < qvalue_threshold),], Kissel_UCLA_results, "OBrien", "Kissel_UCLA", 
+                   pointColor = "black")
+p
+```
+
+
+### Effect size consistency
+
+Compute the consistency of log fold change.
+
+```{r consistency_score_UCLA_vs_OBrien, echo=FALSE}
+print("Consistency of Kissel UCLA analysis compared to the results of O'Brien analysis:")
+consistency_test(OBrien_results, Kissel_UCLA_results, qvalueThreshold = 0.01)
+```
+
+
+
+
+## Kissel BV vs Kissel UCLA data
+
+The Kissel BV and Kissel UCLA data both contain samples from the second trimester of pregnancy and use the age as a covariate. Also they come from the same paper, so the methods used are exactly the same.
+They should be the most similar results...
+
+### Overlap
+
+Get the number of significant genes overlapping between the 2 datasets.
+
+```{r permut_test_overlap_BV_UCLA, echo=FALSE}
+p <- overlap_signif(Kissel_UCLA_results, Kissel_BV_results, qvalueThreshold = qvalue_threshold)
+p
+p <- overlap_signif(Kissel_BV_results, Kissel_UCLA_results, qvalueThreshold = qvalue_threshold)
+p
+```
+
+
+### Replication rate
+
+We compute the replication rate (pi1).
+
+```{r pi1_score_BV_UCLA, echo=FALSE}
+print("Replication of Kissel BV sex-DE results in Kissel UCLA sex-DE analysis:")
+pi1_normalized(Kissel_BV_results, Kissel_UCLA_results, qvalue_threshold = qvalue_threshold)
+print("Replication of Kissel UCLA sex-DE results in Kissel BV sex-DE analysis:")
+pi1_normalized(Kissel_UCLA_results, Kissel_BV_results, qvalue_threshold = qvalue_threshold)
+```
+
+
+### Effect size correlation
+
+Correlation plot only of Kissel UCLA sex-DE genes.
+
+```{r corr_UCLA_sexDE_BV, echo=FALSE}
+p <- scatter_logFC(Kissel_UCLA_results[which(Kissel_UCLA_results$qvalue < qvalue_threshold),], Kissel_BV_results, "Kissel_UCLA", "Kissel_BV", 
+                   pointColor = "black")
+p
+```
+
+Correlation plot only of autosomal Kissel UCLA sex-DE genes.
+
+```{r corr_UCLA_sexDE_auto_BV, echo=FALSE}
+p <- scatter_logFC(Kissel_UCLA_results_auto[which(Kissel_UCLA_results_auto$qvalue < qvalue_threshold),], Kissel_BV_results, "Kissel_UCLA", "Kissel_BV", 
+                   pointColor = "black")
+p
+```
+
+
+### Effect size consistency
+
+Compute the consistency of log fold change.
+
+```{r consistency_score_UCLA_vs_BV, echo=FALSE}
+print("Consistency of Kissel UCLA analysis compared to the results of Kissel BV analysis:")
+consistency_test(Kissel_BV_results, Kissel_UCLA_results, qvalueThreshold = 0.01)
+```
+
+
+# Session info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```
