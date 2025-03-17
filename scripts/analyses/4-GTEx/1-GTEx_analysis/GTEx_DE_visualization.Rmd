@@ -514,7 +514,7 @@ load("data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_dream_counts_voom_phenotype
 Compute variance attributable to each variable
 
 ```{r varpart, echo=FALSE}
-form <- reformulate(c("SEX", "PSEUDOTIME", "SEX:PSEUDOTIME", "(1 | SUBJID)", paste0("X", 1:sva.obj$n.sv)))
+form <- reformulate(c("SEX", "PSEUDOTIME", "SEX:PSEUDOTIME", "DTHHRDY", "(1|TISSUE)", "(1 | SUBJID)", paste0("X", 1:sva.obj$n.sv)))
 varPart <- fitExtractVarPartModel(y, form, metadata)
 # sort variables (i.e. columns) by median fraction of variance explained
 vp <- sortCols( varPart )
@@ -533,7 +533,7 @@ p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
 p
 ggsave("violinPlot_variancePartition.png", p,
        path = "images/4-GTEx/1-GTEx_analysis/variancePartition/",
-       width = 20, height = 12, units = "cm", create.dir = TRUE)
+       width = 22, height = 12, units = "cm", create.dir = TRUE)
 ```
 
 
