@@ -1,0 +1,259 @@
+---
+title: "Pseudotime analysis with RIN as a covariate"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r library, echo=FALSE}
+suppressPackageStartupMessages(library(GenomicFeatures))
+suppressPackageStartupMessages(library(edgeR))
+suppressPackageStartupMessages(library(limma))
+suppressPackageStartupMessages(library(SummarizedExperiment))
+suppressPackageStartupMessages(library(phenopath))
+suppressPackageStartupMessages(library(ade4))
+suppressPackageStartupMessages(library(factoextra))
+suppressPackageStartupMessages(library(ggplot2))
+```
+
+```{r setup, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+# Load and prepare data
+
+## Load the counts and the phenotype data
+
+```{r load_data, echo=FALSE}
+load("data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_dream_counts_phenotypes.RData")
+```
+
+```{r load_phenotype, echo=FALSE}
+phenotype_full <- read.table("data/4-GTEx/1-GTEx_analysis/GTEx_Analysis_v8_Annotations_SampleAttributesDS.txt", 
+                            sep = "\t", header = TRUE, quote = NULL)
+# keep only RNA-seq brain samples
+brain_region <- c("Brain - Amygdala", "Brain - Anterior cingulate cortex (BA24)", "Brain - Caudate (basal ganglia)", "Brain - Frontal Cortex (BA9)", "Brain - Hippocampus", "Brain - Hypothalamus", "Brain - Nucleus accumbens (basal ganglia)", "Brain - Putamen (basal ganglia)")
+phenotype_brain <- phenotype_full[which(phenotype_full$SMTS == "Brain" & phenotype_full$SMAFRZE == "RNASEQ" & phenotype_full$SMTSD %in% brain_region), ]
+```
+
+Format it keeping keeping the following information:
+* Sample id (SAMPID)
+* Brain region (SMTSD)
+* Sequencing center (SMCENTER)
+* RIN (SMRIN)
+* Ischemic time (SMTSISCH)
+* Batch (SMNABTCH)
+
+```{r format_phenotype, echo=FALSE}
+selected_variable <- c("SAMPID", "SMTSD", "SMRIN", "SMTSISCH", "SMCENTER", "SMNABTCH")
+phenotype_brain <- phenotype_brain[which(colnames(phenotype_brain) %in% selected_variable)]
+names(phenotype_brain) <- c("Sample_id", "Center", "RIN", "BrainRegion", "IschemicTime", "Batch")
+phenotype_brain$Sample_id <- gsub("-", ".", phenotype_brain$Sample_id)
+```
+
+Merge the RIN information in the metadata.
+
+```{r merge_RIN, echo=FALSE}
+metadata <- merge(metadata, phenotype_brain[, c(1,3)], by.x = 0, by.y = "Sample_id", all.x = TRUE)
+```
+
+
+
+## Convert counts in TPM values
+
+Load the annotation file.
+
+```{r load_annotation, echo=FALSE}
+# First, import the GTF-file that you have also used as input for htseq-count
+txdb <- makeTxDbFromGFF("data/0-input/gencode.v26.annotation.gff3",format="gff")
+
+# then collect the exons per gene id
+exons.list.per.gene <- exonsBy(txdb,by="gene")
+
+# then for each gene, reduce all the exons to a set of non overlapping exons, calculate their lengths (widths) and sum them
+exonic.gene.sizes <-  sum(width(reduce(exons.list.per.gene)))
+names(exonic.gene.sizes) <- names(exonic.gene.sizes)
+
+gtf.gene.length_df <- cbind(data.frame(names(exonic.gene.sizes)),as.numeric(exonic.gene.sizes))
+names(gtf.gene.length_df) <- c("gene_id","size")
+gtf.gene.length_df <- unique(gtf.gene.length_df)
+
+# Merge gene size with gene metadata
+gene_metadata <- merge(x$genes, gtf.gene.length_df)
+x$genes <- gene_metadata
+```
+
+Transform the counts data in log(TPM+1).
+
+```{r transform_counts, echo=FALSE}
+counts2tpm <- function(x){
+  counts <- x$counts
+  # RPK = count/geneLength(kb)
+  counts <- counts/(x$genes$size*1e-3)
+  # Sum of RPK for each sample
+  library_depth <- colSums(counts)
+  # TPM = RPK/(sum(RPK)/1e6)
+  counts <- sweep(counts, 2, library_depth/1e6,`/`)
+  return(counts)
+}
+tpm <- counts2tpm(x)
+logTpm <- log2(tpm+1)
+rownames(logTpm) <- x$genes$gene_name
+```
+
+## Format data in a SummarizedExperiment object
+
+Select the genes to use in the phenopath analysis.
+
+```{r select_genes, echo=FALSE}
+# select higly variable genes
+variance <- rowVars(logTpm)
+ntop <- min(2000, dim(logTpm)[1])
+selectntop <- order(variance, decreasing=TRUE)[seq_len(ntop)]
+selectedCounts <- logTpm[selectntop,]
+```
+
+Create the SummarizedExperiment object
+
+```{r summarizedExperiment_obj, echo=FALSE}
+# initialize sce object
+sce <- SummarizedExperiment(assays = list(exprs = selectedCounts), 
+                            colData = metadata)
+sce
+```
+
+# Phenopath analysis
+
+```{r fit_phenopath_model, echo=FALSE}
+x_mat <- model.matrix(~ metadata$SEX + metadata$RIN)
+fit <- phenopath(sce, x_mat, elbo_tol = 1e-6, thin = 20)
+```
+
+Elbo plot
+
+```{r elbo_plot, echo=FALSE}
+p <- plot_elbo(fit)
+p
+# save plot
+ggsave("images/4-GTEx/1-GTEx_analysis/pseudotime_analysis_withRIN/Elbo_plot.png",
+       plot = p, width = 12, height = 10, units = "cm")
+```
+
+
+Add pseudotime to metadata.
+
+```{r infered_pseudotime, echo=FALSE}
+metadata$pseudotime <- -trajectory(fit)
+```
+
+Save this metadata.
+
+```{r save_metadata, echo=FALSE}
+save(metadata,
+     file = "data/4-GTEx/1-GTEx_analysis/GTEx_v8_forebrain_metadata_pseudotime_withRIN.RData")
+```
+
+
+# Save the pseudotime results in a RData
+
+```{r save_pseudotime_res, echo=FALSE}
+save(fit, sce, x_mat, selectedCounts, metadata, file = "data/4-GTEx/1-GTEx_analysis/GTEx_v8_forebrain_pseudotime_withRIN_analysis.RData")
+```
+
+
+# Compare this pseudotime with the one from the main analysis
+
+We compare this new pseudotime with the one used in the main analysis (without RIN as a covariate).
+
+## Load and format pseudotime main analysis
+
+Load the original pseudotime values.
+
+```{r load_metadata_mainAnalysis, echo=FALSE}
+loadRData <- function(fileName){
+  #loads an RData file, and returns it
+  load(fileName)
+  get(ls()[ls() != "fileName"])
+}
+metadata_main <- loadRData("data/4-GTEx/1-GTEx_analysis/GTEx_v8_forebrain_metadata_pseudotime.RData")
+```
+
+Merge the original pseudotime with the new one.
+
+```{r filter_samples_pseudotime_original, echo=FALSE}
+metadata_merge <- merge(metadata, metadata_main[, c(3,5)], by.x = c(1, 4), by.y = c(0, 1), all.x = TRUE, suffixes = c("_new", "_original"))
+```
+
+## Check correlation between the 2 pseudotimes
+
+Compute the correlation between this new pseudotime and the original pseudotime variables.
+
+```{r corr_pseudotimes, echo=FALSE}
+cor.test(metadata_merge$pseudotime_original, metadata_merge$pseudotime_new)
+```
+
+Do a scatter plot of the 2 pseudotime.
+
+```{r scatter_plot_pseudotime, echo=FALSE}
+# plot
+p <- ggplot(metadata_merge, aes(x = pseudotime_original, y = pseudotime_new))
+p <- p + geom_point()
+p <- p + theme_minimal()
+p
+# save plot
+ggsave("correlation_withOriginalPseudotime.png",
+       path = "images/4-GTEx/1-GTEx_analysis/pseudotime_analysis_withRIN/",
+       plot = p, width = 12, height = 10, units = "cm")
+```
+
+## Check correlation of the new pseudotime with age
+
+Load the age of the individuals.
+
+```{r load_age, echo=FALSE}
+phenoAge <- read.table("data/4-GTEx/1-GTEx_analysis/GTEx_Analysis_v8_Annotations_SubjectPhenotypesDS.txt",
+                       sep = "\t", header = TRUE)
+```
+
+And then merge the age information in the phenotype data frame.
+
+```{r merge_pheno, echo=FALSE}
+metadata_merge2 <- merge(metadata_merge, phenoAge[, c(1,3)], by = "SUBJID", all.x = TRUE)
+metadata_merge2$AGE <- as.factor(metadata_merge2$AGE)
+```
+
+Convert the age to a continuous variable.
+
+```{r convert2continuous, echo=FALSE}
+metadata_merge2$AgeCont <- as.integer(metadata_merge2$AGE)
+```
+
+Compute Kendall correlation between the pseudotime and the new continuous developmental stage.
+
+```{r correlation_kendall, echo=FALSE}
+corTestRes_Kendall <- cor.test(metadata_merge2$AgeCont, metadata_merge2$pseudotime_new, method = "kendall")
+corTestRes_Kendall
+```
+
+And also do a boxplot + scatter plot of the pseudotime and the continuous developmental stage.
+
+```{r scatter_plot, echo=FALSE}
+p <- ggplot(metadata_merge2, aes(AGE, pseudotime_new))
+p <- p + geom_boxplot(fill = "#DCDCDC", outlier.shape = NA)
+p <- p + theme_minimal() + xlab("Age bins")
+p <- p + geom_jitter(aes(color = SEX), position=position_jitter(0.2), show.legend = FALSE)
+p <- p + annotate("text", x = 1.5, y = 1.1, label = sprintf("tau = %.2f\n p-value = %.2e", corTestRes_Kendall$estimate, corTestRes_Kendall$p.value))
+p <- p + scale_color_manual(values = c("1" = "darkblue", "2" = "darkred"))
+p
+# save plot
+ggsave("boxplot_ageBins_vs_pseudotime.png", 
+       path = "images/4-GTEx/1-GTEx_analysis/pseudotime_analysis_withRIN/",
+       plot = p, width = 15, height = 10, units = "cm")
+```
+
+
+# Session Info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```

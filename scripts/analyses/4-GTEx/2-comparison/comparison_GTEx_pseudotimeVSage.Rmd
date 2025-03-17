@@ -1,0 +1,316 @@
+---
+title: "Compare GTEx sex-DE results with pseudotime or age as covariate"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r load_library, echo=FALSE}
+suppressPackageStartupMessages( library(tidyverse) )
+suppressPackageStartupMessages( library(edgeR) )
+suppressPackageStartupMessages( library(limma) )
+suppressPackageStartupMessages( library(qvalue) )
+suppressPackageStartupMessages( library(ggalluvial) )
+suppressPackageStartupMessages( library(gridExtra) )
+suppressPackageStartupMessages( library(fmsb) )
+suppressPackageStartupMessages( library(ComplexHeatmap))
+suppressPackageStartupMessages( library(ggpubr) )
+```
+
+```{r, setup, include=FALSE, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+set.seed(1234)
+```
+
+Thresholds:
+```{r thresholds, echo=FALSE}
+qvalue_threshold <- 0.01
+```
+
+# Load data and functions
+
+## Load and prepare sex-DE genes with pseudotime covariate
+
+```{r load_sexDE_pseudo, echo=FALSE}
+results_pseudo <- read.table("data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_VoomDream_topTable_with_sva_ind_pseudotime_interaction.txt",
+                           header = TRUE)
+```
+
+Prepare the data by removing the genes used to define the sex of the samples.
+```{r prepare_sexDE_pseudo, echo=FALSE}
+genes2remove <- c("XIST", as.character(results_pseudo$gene_name[which(results_pseudo$chr == "chrY" & results_pseudo$gene_type == "protein_coding")]))
+results_pseudo <- results_pseudo[which(!results_pseudo$gene_name %in% genes2remove),]
+results_pseudo_auto <- results_pseudo[which(!results_pseudo$chr %in% c("chrY", "chrX", "chrM")), ]
+```
+
+
+## Load and prepare sex-DE genes with age covariate
+
+```{r load_sexDE_age, echo=FALSE}
+results_age <- read.table("data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_VoomDream_topTable_with_sva_ind_age_interaction.txt",
+                          header = TRUE)
+```
+
+Prepare the data by removing the genes used to define the sex of the samples.
+```{r prepare_sexDE_age, echo=FALSE}
+genes2remove <- c("XIST", as.character(results_age$gene_name[which(results_age$chr == "chrY" & results_age$gene_type == "protein_coding")]))
+results_age <- results_age[which(!results_age$gene_name %in% genes2remove),]
+results_age_auto <- results_age[which(!results_age$chr %in% c("chrY", "chrX", "chrM")), ]
+```
+
+
+# Comparison of the sex-DE genes
+
+We compare the sex-DE genes obtained in the GTEx data with either the pseudotime as a covariate or the age instead.
+
+## Summary
+
+We get the number of sex-DE genes in each analysis.
+
+```{r get_stats_pseudo, echo=FALSE}
+nbr_signif_pseudo <- sum(results_pseudo$qvalue < qvalue_threshold)
+nbr_signif_pseudo
+```
+
+```{r get_stats_age, echo=FALSE}
+nbr_signif_age <- sum(results_age$qvalue < qvalue_threshold)
+nbr_signif_age
+```
+
+
+## Overlap
+
+Get the number of significant genes overlapping between the 2 datasets.
+
+```{r permut_test_overlap_function, echo=FALSE}
+overlap_signif <- function(data1, data2, columnMerge = "ensemblID", qvalueThreshold = 0.01, nbrRandom = 1000){
+  # merge the 2 datasets
+  de_results_merged <- merge(data1, data2, by = columnMerge, suffixes = c(".data1", ".data2"))
+  # get the number of significant genes in each data
+  nbr_signif_data1 <- length(de_results_merged[which(de_results_merged$qvalue.data1 < qvalueThreshold), columnMerge])
+  nbr_signif_data2 <- length(de_results_merged[which(de_results_merged$qvalue.data2 < qvalueThreshold), columnMerge])
+  print(sprintf("Number of genes significant in data1 = %s", nbr_signif_data1))
+  print(sprintf("Number of genes significant in data2 = %s", nbr_signif_data2))
+  # keep only the genes/transcripts that are significant in the 2 datasets
+  de_results_merged_filtered <- de_results_merged[which(de_results_merged$qvalue.data1 < qvalueThreshold & de_results_merged$qvalue.data2 < qvalueThreshold), ]
+  nbr_common_signif <- dim(de_results_merged_filtered)[1]
+  print(sprintf("Number of genes significant in both dataset = %s", nbr_common_signif))
+  print(sprintf("Percentage of significant genes from data1 also significant in data2 = %s", nbr_common_signif/nbr_signif_data1*100))
+  # Compare this number to the number of overlaping genes if we take randomly 2 lists of the same size (nbr_sgnif_data1 & nbr_sgnif_data2)
+  nbr_signif_values <- c()
+  # to do nbrRandom times
+  for (i in 1:nbrRandom){
+    # randomly select "nbr_sgnif_data1" genes/transcripts in the data1
+    selection_data1 <- sample(de_results_merged[, columnMerge], nbr_signif_data1)
+    # randomly select "nbr_sgnif_data2" genes/transcripts in the data2
+    selection_data2 <- sample(de_results_merged[, columnMerge], nbr_signif_data2)
+    nbr_signif_th <- sum(selection_data1 %in% selection_data2)
+    nbr_signif_values[i] <- nbr_signif_th
+  }
+  nbr_signif_values <- as.data.frame(nbr_signif_values)
+  # plot the distribution of the number of overlaping genes obtained and the real value
+  p <- ggplot(nbr_signif_values, aes(nbr_signif_values))
+  p <- p + geom_histogram(binwidth=1, boundary = 0, fill="grey", color="black")
+  p <- p + theme_bw() + xlab("Number of overlaping genes") + ylab("Frequency")
+  p <- p + geom_vline(xintercept = nbr_common_signif, color = "red")
+  return(p)
+}
+```
+
+```{r permut_test_overlap_age, echo=FALSE}
+p <- overlap_signif(results_age, results_pseudo, qvalueThreshold = qvalue_threshold, columnMerge = "gene_id")
+p
+```
+
+
+## Replication rate
+
+We compute the replication rate (pi1).
+
+```{r function_pi1_score, echo=FALSE}
+pi1_score <- function(data1, data2, columnMerge = "ensemblID"){
+  # compute pi1 for second dataset compared to the first dataset
+  selected_pvalue <- data2$P.Value[which(pull(data2, columnMerge) %in% pull(data1, columnMerge))]
+  if (berryFunctions::is.error(qvalue::pi0est(p = selected_pvalue, lambda = 0.5, pi0.method = "smoother")) ) {
+    pi1 <- qvalue::qvalue(p = selected_pvalue, pi0 = 1)$pi0
+  }else{
+    pi1 <- 1-qvalue::pi0est(p = selected_pvalue, lambda = 0.5, pi0.method = "smoother")$pi0
+  }
+  
+  # continue only if the pi1 value was computed
+  if (is.numeric(pi1)){
+    return(pi1)
+  } else{
+    return("No pi1 analysis!")
+  }
+}
+```
+
+```{r function_pi1_normalized, echo=FALSE}
+pi1_normalized <- function(data1, data2, columnMerge = "ensemblID", qvalue_threshold = 0.01, logFC_threshold = 0, verbose = TRUE){
+  # get the significant genes in the first dataset
+  data1_signif <- data1[which(data1$qvalue < qvalue_threshold & abs(data1$logFC) > logFC_threshold), ]
+  
+  # pi1 replication rate for the significant genes
+  pi1_signif <- pi1_score(data1_signif, data2, columnMerge = columnMerge)
+  if (verbose){
+    print(sprintf("pi1 for signif genes = %s", pi1_signif))
+  }
+  # pi1 replication rate for all genes
+  pi1_all <- pi1_score(data1, data2, columnMerge = columnMerge)
+  if (verbose){
+    print(sprintf("pi1 for all genes = %s", pi1_all))
+  }
+  
+  # return the pi1 for significant genes normalized by the pi1 for all genes
+  return(pi1_signif/pi1_all)
+}
+```
+
+```{r pi1_score, echo=FALSE}
+print("Replication of GTEx pseudotime sex-DE results in GTEx age sex-DE analysis:")
+pi1_normalized(results_pseudo, results_age, qvalue_threshold = qvalue_threshold, columnMerge = "gene_id")
+print("Replication of GTEx age sex-DE results in results_pseudo sex-DE analysis:")
+pi1_normalized(results_age, results_pseudo, qvalue_threshold = qvalue_threshold, columnMerge = "gene_id")
+```
+
+
+## Effect size correlation 
+
+Scatter plot of the logFC between the 2 analyses with information about the correlation (r and p-value of cor.test).
+
+```{r function_scatter_plot_logFC, echo=FALSE}
+scatter_logFC <- function(data1, data2, nameData1, nameData2, pointColor, columnMerge = "ensemblID"){
+  # merge the 2 dataset
+  de_results_merged <- merge(data1, data2, by = columnMerge, suffixes = c(".data1", ".data2"))
+  # test correlation
+  res <- cor.test(de_results_merged$logFC.data1, de_results_merged$logFC.data2)
+  if (res$p.value == 0){
+    annotation_text <- sprintf("r = %.3f\nP < 2.2e-16", res$estimate)
+  } else{
+    annotation_text <- sprintf("r = %.3f\nP = %1.2e", res$estimate, res$p.value)
+  }
+  yrng <- range(de_results_merged$logFC.data1)
+  xrng <- range(de_results_merged$logFC.data2)
+  # plot
+  p <- ggplot(de_results_merged, aes(x = logFC.data1, y = logFC.data2))
+  p <- p + geom_abline(intercept = 0, slope = 1, col = "black")
+  p <- p + geom_hline(yintercept = 0, color = "grey")
+  p <- p + geom_vline(xintercept = 0, color = "grey")
+  p <- p + geom_point(color=pointColor, alpha = 0.3)
+  p <- p + theme_bw() + labs(title = "")
+  p <- p + theme(panel.grid = element_blank(), 
+                 plot.title = element_text(hjust = 0.5),
+                 plot.subtitle = element_text(hjust = 0.5))
+  p <- p + xlab(paste0("logFC (", nameData1, ")")) + ylab(paste0("logFC (", nameData2, ")"))
+  p <- p + annotate("text", xrng[1], yrng[2], hjust = 0, vjust = 1, 
+                    label = annotation_text)
+  return(p)
+}
+```
+
+Correlation plot only of GTEx pseudo sex-DE genes.
+
+```{r corr_pseudo_sexDE_age, echo=FALSE}
+p <- scatter_logFC(results_pseudo[which(results_pseudo$qvalue < qvalue_threshold),], results_age, 
+                   "GTEx pseudotime", "GTEx age", 
+                   pointColor = "black", columnMerge = "gene_id")
+p
+```
+
+Correlation plot only of autosomal GTEx pseudo sex-DE genes.
+
+```{r corr_pseudo_sexDE_auto_age, echo=FALSE}
+p <- scatter_logFC(results_pseudo_auto[which(results_pseudo_auto$qvalue < qvalue_threshold),], results_age, 
+                   "GTEx pseudotime", "GTEx age", 
+                   pointColor = "black", columnMerge = "gene_id")
+p
+```
+
+Correlation plot only for GTEx age sex-DE genes.
+
+```{r corr_age_sexDE_pseudo, echo=FALSE}
+p <- scatter_logFC(results_age[which(results_age$qvalue < qvalue_threshold),], results_pseudo, 
+                   "GTEx age", "GTEx pseudotime", 
+                   pointColor = "black", columnMerge = "gene_id")
+p
+```
+
+Correlation plot only for O'Brien autosomal sex-DE genes.
+
+```{r corr_age_sexDE_pseudo_auto, echo=FALSE}
+p <- scatter_logFC(results_age_auto[which(results_age_auto$qvalue < qvalue_threshold),], results_pseudo, "GTEx age", "GTEx pseudotime", 
+                   pointColor = "black", columnMerge = "gene_id")
+p
+```
+
+
+
+## Effect size consistency
+
+Compute the consistency of log fold change.
+
+```{r function_consistency, echo=FALSE}
+consistency_test <- function(data1, data2, columnMerge = "ensemblID", qvalueThreshold = 0.01){
+  # merge the 2 datasets
+  de_results_merged <- merge(data1, data2, by = columnMerge, suffixes = c(".data1", ".data2"))
+  # keep only the genes/transcripts that are significant in the first data
+  de_results_merged_filtered <- de_results_merged[which(de_results_merged$qvalue.data1 < qvalueThreshold), ]
+  print(sprintf("Number of genes compared = %s", dim(de_results_merged_filtered)[1]))
+  # number of consistent genes/transcripts
+  nbr_consistent <- sum(sign(de_results_merged_filtered$logFC.data1) == sign(de_results_merged_filtered$logFC.data2))
+  consistency <- nbr_consistent/length(de_results_merged_filtered[, columnMerge])
+  # compare this consistency score with the consistency of list of random genes
+  cons_values <- rep(NA, 1000)
+  # to do 1000 times
+  for (i in 1:1000){
+    # randomly select the same number of genes/transcripts in the data2 to test the overlap with the data1 signif genes
+    selection <- sample(de_results_merged[, columnMerge], length(de_results_merged_filtered[, columnMerge]))
+    nbr_consistent_th <- sum(sign(de_results_merged$logFC.data2[which(de_results_merged[, columnMerge] %in% selection)]) == sign(de_results_merged$logFC.data1[which(de_results_merged[, columnMerge] %in% selection)]))
+    cons_values[i] <- nbr_consistent_th/length(de_results_merged_filtered[, columnMerge])
+  }
+  cons_values <- as.data.frame(cons_values)
+  # plot the distribution of the consistency obtained and the real value
+  p <- ggplot(cons_values, aes(cons_values))
+  p <- p + geom_histogram(binwidth=0.02, boundary = 0, fill="grey", color="black")
+  p <- p + theme_bw() + xlab("consistency") + ylab("Frequency")
+  p <- p + scale_x_continuous(limits = c(0, 1))
+  p <- p + geom_vline(xintercept = consistency, color = "red")
+  print(p)
+  # test this consistency with a permutation test
+  nsmaller <- sum(cons_values >= consistency)
+  permutation_test <- round((nsmaller+1)/(1000+1), 3)
+  # test this consistency with a binomial test
+  result_test <- binom.test(nbr_consistent, length(de_results_merged_filtered[, columnMerge]), p = 0.5)
+  # print results
+  print(sprintf("number of consistent gene = %s", nbr_consistent))
+  print(sprintf("consistency = %s", consistency))
+  print(sprintf("permutation test p-value = %s", permutation_test))
+  print(sprintf("binomial test p-value = %s", result_test$p.value))
+  return(consistency)
+}
+```
+
+```{r consistency_score_pseudo_vs_age, echo=FALSE}
+print("Consistency of GTEx pseudotime analysis in the results of GTEx age analysis:")
+consistency_test(results_age, results_pseudo, qvalueThreshold = 0.01, columnMerge = "gene_id")
+```
+
+```{r consistency_score_age_vs_pseudo, echo=FALSE}
+print("Consistency of GTEx age analysis in the results of GTEx pseudotime analysis:")
+consistency_test(results_pseudo, results_age, qvalueThreshold = 0.01, columnMerge = "gene_id")
+```
+
+
+
+# Session info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```
+
+
+
+
+
+

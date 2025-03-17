@@ -1,0 +1,183 @@
+---
+title: "Study factors that could correlate with pseudotime in GTEx data"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r library, echo=FALSE}
+suppressPackageStartupMessages(library(edgeR))
+suppressPackageStartupMessages(library(limma))
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(SummarizedExperiment))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(tibble))
+suppressPackageStartupMessages(library(ggpubr))
+suppressPackageStartupMessages(library(readxl))
+suppressPackageStartupMessages(library(naniar))
+```
+
+```{r setup, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+# Load data
+
+## Load pseudotime from original analysis
+
+Load the pseudotime 
+
+```{r load_pseudotime, echo=FALSE}
+load("data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_dream_counts_voom_phenotypes_pseudotime_interaction.RData")
+```
+
+## Load full phenotype file
+
+Load full phenotype file
+
+```{r load_phenotype, echo=FALSE}
+phenotype_full <- read.table("data/4-GTEx/1-GTEx_analysis/GTEx_Analysis_v8_Annotations_SampleAttributesDS.txt", 
+                            sep = "\t", header = TRUE, quote = NULL)
+# keep only RNA-seq brain samples
+brain_region <- c("Brain - Amygdala", "Brain - Anterior cingulate cortex (BA24)", "Brain - Caudate (basal ganglia)", "Brain - Frontal Cortex (BA9)", "Brain - Hippocampus", "Brain - Hypothalamus", "Brain - Nucleus accumbens (basal ganglia)", "Brain - Putamen (basal ganglia)")
+phenotype_brain <- phenotype_full[which(phenotype_full$SMTS == "Brain" & phenotype_full$SMAFRZE == "RNASEQ" & phenotype_full$SMTSD %in% brain_region), ]
+```
+
+Format it keeping keeping the following information:
+* Sample id (SAMPID)
+* Brain region (SMTSD)
+* Sequencing center (SMCENTER)
+* RIN (SMRIN)
+* Ischemic time (SMTSISCH)
+* Batch (SMNABTCH)
+
+```{r format_phenotype, echo=FALSE}
+selected_variable <- c("SAMPID", "SMTSD", "SMRIN", "SMTSISCH", "SMCENTER", "SMNABTCH")
+phenotype_brain <- phenotype_brain[which(colnames(phenotype_brain) %in% selected_variable)]
+names(phenotype_brain) <- c("Sample_id", "Center", "RIN", "BrainRegion", "IschemicTime", "Batch")
+phenotype_brain$Sample_id <- gsub("-", ".", phenotype_brain$Sample_id)
+```
+
+
+## Merge pseudotime with phenotype
+
+```{r merge, echo=FALSE}
+metadata_phenotype <- merge(metadata, phenotype_brain, by.x = "SAMPLE", by.y = "Sample_id")
+```
+
+
+# Correlation between pseudotime and technical factors
+
+## For original pseudotime
+
+### Pseudotime vs brain region
+
+Boxplot of the pseudotime per brain region.
+
+```{r boxplot_brainRegion_pseudotime, echo=FALSE}
+metadata_phenotype$BrainRegion <- as.factor(metadata_phenotype$BrainRegion)
+p <- ggplot(metadata_phenotype, aes(x = BrainRegion, y = PSEUDOTIME))
+p <- p + geom_boxplot()
+p <- p + theme_minimal()
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p <- p + xlab("Forebrain region") + ylab("Pseudotime")
+p
+# save the plot
+ggsave("correlation_pseudotimeVSbrainregion.png",
+       path = "images/4-GTEx/1-GTEx_analysis/pseudotime_analysis/",
+       plot = p, width = 10, height = 10, units = "cm")
+```
+Test difference in mean between each group.
+
+```{r test_brainRegion_pseudotime, echo=FALSE}
+# test all brain region against all brain region without accounting for paired samples
+compare_means(PSEUDOTIME~BrainRegion, data = metadata_phenotype, method = "wilcox.test", paired = FALSE)
+# test frontal cortex against hyppocampus accounting for paired samples
+metadata_phenotype_paired <- metadata_phenotype[which(metadata_phenotype$BrainRegion %in% c("Brain - Frontal Cortex (BA9)", "Brain - Hippocampus")), ]
+nbr_samplesPerSubjid <- metadata_phenotype_paired %>% group_by(SUBJID) %>% summarise(number_samples = n())
+subjid2keep <- nbr_samplesPerSubjid$SUBJID[which(nbr_samplesPerSubjid$number_samples == 2)]
+metadata_phenotype_paired <- metadata_phenotype_paired[which(metadata_phenotype_paired$SUBJID %in% subjid2keep), ]
+compare_means(PSEUDOTIME~BrainRegion, data = metadata_phenotype_paired, method = "wilcox.test", paired = TRUE)
+# linear model
+lmRes <- lm(PSEUDOTIME~BrainRegion, metadata_phenotype)
+summary(lmRes)
+```
+
+
+
+### Pseudotime vs RIN
+
+Look at the correlation between the pseudotime and the RIN.
+
+```{r cor_RIN_pseudotime, echo=FALSE}
+cor.test(metadata_phenotype$PSEUDOTIME, metadata_phenotype$RIN)
+```
+
+Also check how the RIN correlates with other variables such as sex, ischemic time, batch or svas.
+
+Correlation with sex:
+```{r cor_RIN_sex, echo=FALSE}
+cor.test(metadata_phenotype$SEX, metadata_phenotype$RIN)
+```
+ 
+Correlation with ischemic time:
+```{r cor_RIN_ischemicTime, echo=FALSE}
+cor.test(metadata_phenotype$IschemicTime, metadata_phenotype$RIN)
+```
+ 
+Correlation with svas:
+```{r cor_RIN_sva, echo=FALSE}
+for (i in 1:sva.obj$n.sv){
+  curSva <- paste0("X", i)
+  print(sprintf("SVA: %s", curSva))
+  resTest <- cor.test(metadata_phenotype[, curSva], metadata_phenotype$RIN)
+  print(resTest)
+}
+```
+
+
+
+### Pseudotime vs Ischemic Time
+
+Look at the correlation between the pseudotime and ischemic time.
+
+```{r cor_ischemicTime_pseudotime, echo=FALSE}
+cor.test(metadata_phenotype$PSEUDOTIME, as.numeric(metadata_phenotype$IschemicTime))
+```
+
+### Pseudotime vs Batch
+
+Look at the correlation between the pseudotime and the batch.
+
+```{r corPlot_batch_pseudotime, echo=FALSE}
+metadata_phenotype$Batch <- as.factor(metadata_phenotype$Batch)
+p <- ggplot(metadata_phenotype, aes(x = Batch, y = PSEUDOTIME))
+p <- p + geom_boxplot()
+p <- p + theme_minimal()
+p <- p + xlab("Batch") + ylab("Pseudotime")
+p
+```
+
+
+### Pseudotime vs svas
+
+Look at the correlation of the pseudotime with each svas.
+
+```{r cor_pseudotime_sva, echo=FALSE}
+for (i in 1:sva.obj$n.sv){
+  curSva <- paste0("X", i)
+  print(sprintf("SVA: %s", curSva))
+  resTest <- cor.test(metadata_phenotype[, curSva], metadata_phenotype$PSEUDOTIME)
+  print(resTest)
+}
+```
+
+
+
+# Session Info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```
+

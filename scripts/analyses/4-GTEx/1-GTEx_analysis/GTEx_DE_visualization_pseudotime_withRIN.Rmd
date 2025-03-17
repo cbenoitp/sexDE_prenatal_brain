@@ -1,0 +1,245 @@
+---
+title: "Visualize GTEx DE results using the pseudotime with RIN as covariate"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+---
+
+```{r load_libraries, echo=FALSE}
+suppressPackageStartupMessages( library(edgeR) )
+suppressPackageStartupMessages( library(limma) )
+suppressPackageStartupMessages( library(SummarizedExperiment) )
+suppressPackageStartupMessages( library(EnhancedVolcano) )
+suppressPackageStartupMessages( library(tidyverse) )
+suppressPackageStartupMessages( library(ggpubr) )
+suppressPackageStartupMessages( library(matrixStats) )
+suppressPackageStartupMessages( library(ComplexHeatmap) )
+suppressPackageStartupMessages( library(variancePartition) )
+```
+
+```{r setup, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+Parameters
+```{r thresholds, echo=FALSE}
+threshold_qvalue <- 0.01
+```
+
+
+# Load and prepare DE results
+
+## Load DE results
+
+```{r load_sexDE_results, echo=FALSE}
+de_results <- read.table("data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_VoomDream_topTable_with_sva_ind_pseudotime_withRIN_interaction.txt",
+                         header = TRUE)
+```
+
+## Filter DE results
+
+From the full list of sex-DE genes, remove XIST and the protein-coding genes on the Y-chromosome.
+
+```{r remove_training_genes, echo=FALSE}
+genes2remove <- c("XIST", as.character(de_results$gene_name[which(de_results$chr == "chrY" & de_results$gene_type == "protein_coding")]))
+de_results_filtered <- de_results[which(!de_results$gene_name %in% genes2remove),]
+```
+
+Create a data frame containing only the results for the autosomes.
+
+```{r autosomes, echo=FALSE}
+chrNonAuto <- c("chrY", "chrX", "chrM")
+de_results_autosomes <- de_results_filtered[which(!de_results_filtered$chr %in% chrNonAuto),]
+```
+
+# Statistics
+
+## Number of DE genes
+
+Number of sex-DE significant genes:
+
+```{r nbr_sexDE, echo=FALSE}
+nbr_sexDE_signif <- sum(de_results_filtered$qvalue < threshold_qvalue & abs(de_results_filtered$logFC) > 0)
+percent_sexDE_signif <- nbr_sexDE_signif/length(de_results_filtered$gene_name)*100
+print(sprintf("Number of sex-DE genes = %s (representing %.3f %% of the genes)", nbr_sexDE_signif, percent_sexDE_signif))
+# male-biased genes
+nbr_maleBiased_signif <- length(de_results_filtered$gene_name[which(de_results_filtered$logFC < 0 & de_results_filtered$qvalue < threshold_qvalue)])
+percent_maleBiased_signif <- nbr_maleBiased_signif/nbr_sexDE_signif*100
+print(sprintf("Number of male-biased genes = %s (%.3f %% of sex-DE genes)", nbr_maleBiased_signif, percent_maleBiased_signif))
+# female_biased genes
+nbr_femaleBiased_signif <- length(de_results_filtered$gene_name[which(de_results_filtered$logFC > 0 & de_results_filtered$qvalue < threshold_qvalue)])
+percent_femaleBiased_signif <- nbr_femaleBiased_signif/nbr_sexDE_signif*100
+print(sprintf("Number of female-biased genes = %s (%.3f %% of sex-DE genes)", nbr_femaleBiased_signif, percent_femaleBiased_signif))
+```
+
+```{r nbr_sexDE_auto, echo=FALSE}
+nbr_sexDE_auto_signif <- sum(de_results_autosomes$qvalue < threshold_qvalue & abs(de_results_autosomes$logFC) > 0)
+percent_sexDE_auto_signif <- nbr_sexDE_auto_signif/length(de_results_autosomes$gene_name)*100
+print(sprintf("Number of autosomal sex-DE genes = %s (representing %.3f %% of the genes)", nbr_sexDE_auto_signif, percent_sexDE_auto_signif))
+# male-biased genes
+nbr_maleBiased_auto_signif <- length(de_results_autosomes$gene_name[which(de_results_autosomes$logFC < 0 & de_results_autosomes$qvalue < threshold_qvalue)])
+percent_maleBiased_auto_signif <- nbr_maleBiased_auto_signif/nbr_sexDE_auto_signif*100
+print(sprintf("Number of autosomal male-biased genes = %s (%.3f %% of sex-DE genes)", nbr_maleBiased_auto_signif, percent_maleBiased_auto_signif))
+# female_biased genes
+nbr_femaleBiased_auto_signif <- length(de_results_autosomes$gene_name[which(de_results_autosomes$logFC > 0 & de_results_autosomes$qvalue < threshold_qvalue)])
+percent_femaleBiased_auto_signif <- nbr_femaleBiased_auto_signif/nbr_sexDE_auto_signif*100
+print(sprintf("Number of autosomal female-biased genes = %s (%.3f %% of sex-DE genes)", nbr_femaleBiased_auto_signif, percent_femaleBiased_auto_signif))
+```
+
+## Comparison with original sex-DE genes using pseudotime as covariate
+
+Load sex-DE genes from original analysis.
+
+```{r load_sexDE_original, echo=FALSE}
+de_results_original <- read.table("data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_VoomDream_topTable_with_sva_ind_pseudotime_interaction.txt",
+                                  header = TRUE)
+# filter results
+genes2remove <- c("XIST", as.character(de_results_original$gene_name[which(de_results_original$chr == "chrY" & de_results_original$gene_type == "protein_coding")]))
+de_results_original_filtered <- de_results_original[which(!de_results_original$gene_name %in% genes2remove),]
+```
+
+Check how many sex-DE genes from this new analysis were also found sex-DE in the original one.
+
+```{r overlap_original_sexDE, echo=FALSE}
+overlap_genes <- de_results_filtered[which(de_results_filtered$gene_id[which(de_results_filtered$qvalue < threshold_qvalue)] %in% de_results_original_filtered$gene_id[which(de_results_original_filtered$qvalue < threshold_qvalue)]), ]
+length(overlap_genes$gene_id)
+```
+
+Only 491/586 (84.8%) are also found in the analysis using the age bins.
+
+# Plots
+
+## Barplot representing the number of DE genes
+
+Create a barplot of each of the 3 analysis representing the number of DE genes (up and down regulated separatly).
+
+```{r function_barplot, echo=FALSE}
+barplot <- function(data, legend = TRUE, nrowLegend = 4, myTitle = "Nbr sex-DE genes",
+                    colors = c("Male-other" = "#053061", "Male-sex" = "#99b3ff", 
+                               "Female-other" = "#B2182B", "Female-sex" = "#f3a5ae"),
+                    labels = c("Female-other" = "Female autosomal genes", "Female-sex" = "Female sex chr. genes",
+                               "Male-other" = "Male autosomal genes", "Male-sex" = "Male sex chr. genes")){
+  p <- ggplot(data, aes(x = variable, y = nbr_genes, fill = coloring))
+  p <- p + geom_bar(stat = "identity")
+  p <- p + scale_fill_manual(values = colors, labels = labels)
+  p <- p + theme_bw() + labs(x = "", y = "")
+  p <- p + ggtitle(myTitle)
+  p <- p + theme(legend.position="bottom", legend.title = element_blank()) 
+  p <- p + guides(fill = guide_legend(nrow=nrowLegend, byrow=TRUE))
+  if (!legend){
+    p <- p +  guides(fill = "none")
+  }
+  return(p)
+}
+```
+
+Sex-DE genes
+
+```{r barplot_sexDE, echo=FALSE}
+# prepare data
+sexChr <- c("chrY", "chrX")
+barplot_data_sexDE <- data.frame(variable = c("Female", "Female", "Male", "Male"), 
+                           chr = c("other", "sex", "other", "sex"), 
+                           nbr_genes = c(length(de_results_autosomes$gene_name[which(de_results_autosomes$qvalue < threshold_qvalue & de_results_autosomes$logFC > 0)]),
+                                         length(de_results_filtered$gene_name[which((de_results_filtered$chr %in% sexChr) & de_results_filtered$qvalue < threshold_qvalue & de_results_filtered$logFC > 0)]),
+                                         length(de_results_autosomes$gene_name[which(de_results_autosomes$qvalue < threshold_qvalue & de_results_autosomes$logFC < -0)]),
+                                         length(de_results_filtered$gene_name[which((de_results_filtered$chr %in% sexChr) & de_results_filtered$qvalue < threshold_qvalue & de_results_filtered$logFC < 0)]))
+)
+
+barplot_data_sexDE$coloring <- paste(barplot_data_sexDE$variable, barplot_data_sexDE$chr, sep = "-")
+barplot_data_sexDE <- barplot_data_sexDE[order(barplot_data_sexDE$nbr_genes, decreasing = TRUE),] # order data
+barplot_data_sexDE$coloring <- factor(barplot_data_sexDE$coloring, levels = c("Male-sex", "Female-sex", "Male-other" , "Female-other"))
+barplot_data_sexDE$variable <- factor(barplot_data_sexDE$variable, levels = c("Male", "Female"))
+
+# barplot
+p <- barplot(barplot_data_sexDE)
+p
+# save plot
+namePlot <- "barplot_nbr_sexDE_genes.png"
+ggsave(plot = p, namePlot, path = "images/4-GTEx/1-GTEx_analysis/pseudotime_analysis_withRIN/barplot/",
+       width = 8, height = 17, units = "cm", create.dir = TRUE)
+```
+
+
+## Volcanoplot
+
+Sex-DE genes.
+
+```{r volcanoplot_sexDE_auto, echo=FALSE}
+keyvals <- rep('grey75', nrow(de_results_autosomes))
+names(keyvals) <- rep('NS', nrow(de_results_autosomes))
+
+keyvals[which(de_results_autosomes$logFC < 0 & de_results_autosomes$qvalue < threshold_qvalue)] <- 'darkblue'
+names(keyvals)[which(de_results_autosomes$logFC  < 0 & de_results_autosomes$qvalue < threshold_qvalue)] <- 'Signif. males'
+
+keyvals[which(de_results_autosomes$logFC > 0 & de_results_autosomes$qvalue < threshold_qvalue)] <- 'darkred'
+names(keyvals)[which(de_results_autosomes$logFC > 0 & de_results_autosomes$qvalue < threshold_qvalue)] <- 'Signif. females'
+
+unique(keyvals)
+unique(names(keyvals))
+
+p <- EnhancedVolcano(de_results_autosomes,
+                     lab = as.character(de_results_autosomes$gene_name),
+                     x = 'logFC',
+                     y = 'qvalue',
+                     xlim = c(-1.5,1.5),
+                     FCcutoff = 2,
+                     pCutoff = 10E-15,
+                     cutoffLineType = 'blank',
+                     colCustom = keyvals,
+                     legendPosition = "none",
+                     ylab = expression('-Log'[10]*' q-value'),
+                     subtitle = "sex-DE analysis in GTEx",
+                     caption = "autosomal genes")
+p
+
+# save plot
+namePlot <- 'volcanoplot_colored_HDBR_dream_forebrain_pseudotime_sva_ind_interaction_sexDE_auto.png'
+ggsave(namePlot, path = "images/4-GTEx/1-GTEx_analysis/pseudotime_analysis_withRIN/volcanoplot/",
+       width = 12, height = 15, units = "cm", create.dir = TRUE)
+```
+
+
+## Variance partition plot
+
+
+Load voom normalized counts and phenotypes.
+
+```{r load_data, echo=FALSE}
+load("data/4-GTEx/1-GTEx_analysis/brain_forebrain_v8_dream_counts_voom_phenotypes_pseudotime_withRIN_interaction.RData")
+```
+
+Compute variance attributable to each variable
+
+```{r varpart, echo=FALSE}
+form <- reformulate(c("(1|SEX)", "PSEUDOTIME", "RIN", "SEX:PSEUDOTIME", "(1|SUBJID)", paste0("X", 1:sva.obj$n.sv)))
+varPart <- fitExtractVarPartModel(y, form, metadata)
+# sort variables (i.e. columns) by median fraction of variance explained
+vp <- sortCols( varPart )
+```
+
+```{r mean_varexplained, echo=FALSE}
+colMeans(vp)
+```
+
+
+Violin plot of contribution of each variable to total variance
+
+```{r violin_plot, echo=FALSE}
+p <- plotVarPart( vp )
+p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+p
+ggsave("violinPlot_variancePartition.png", p,
+       path = "images/4-GTEx/1-GTEx_analysis/pseudotime_analysis_withRIN/variancePartition/",
+       width = 20, height = 12, units = "cm", create.dir = TRUE)
+```
+
+
+# Session Info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```
