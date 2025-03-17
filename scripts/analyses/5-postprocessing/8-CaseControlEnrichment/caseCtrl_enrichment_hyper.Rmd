@@ -445,6 +445,109 @@ ggsave("enrichment_plot_sexDE_bayes_ctrlExpr.png",
       units = "cm", width = 15, height = 16)
 ```
 
+## Plot for the review
+
+We plot the results for ASD and SCZ phenotypes with both direction (male/female) in the prenatal-specific and shared sex-DE genes.
+
+First, we format a bit more the data. The chosen threshold to consider a result as significant is 0.05/2 datasets * 2 directions * 4 phenotypes (~12 analyses) = 0.002.
+
+```{r format4plot_bayes_ctrlExpr_forReview_ASD, echo=FALSE}
+enrichRes_formated_bayes_ctrlExpr <- enrichRes[which(enrichRes$analysis %in% c("prenatal_specific", "shared") & enrichRes$direction != "both" & enrichRes$ctrlExpr & enrichRes$geneList %in% c("asdUp", "asdDown", "asdM12", "asdM16")), ]
+# add * for signif enrichment only (with a threshold of 0.05/12=0.003)
+enrichRes_formated_bayes_ctrlExpr$signif <- ifelse(enrichRes_formated_bayes_ctrlExpr$relative_enrich > 1, 
+                                                   ifelse(enrichRes_formated_bayes_ctrlExpr$pval_enrich<0.003 & enrichRes_formated_bayes_ctrlExpr$permut_pval < 0.003, "*", ""),
+                                                   "")
+# order the different direction of effect
+enrichRes_formated_bayes_ctrlExpr$direction <- factor(enrichRes_formated_bayes_ctrlExpr$direction,
+                                                      levels = c("female", "male"))
+# order the different phenotype
+enrichRes_formated_bayes_ctrlExpr$geneList <- factor(enrichRes_formated_bayes_ctrlExpr$geneList,
+                                                     levels = c("asdDown", "asdUp", "asdM12", "asdM16"),
+                                                     labels = c("Autism \ndownregulated genes", "Autism \nupregulated genes",
+                                                                "Autism \nco-expression M12 ", "Autism \nco-expression M16"))
+# rename the 4 analyses
+enrichRes_formated_bayes_ctrlExpr$analysis <- factor(enrichRes_formated_bayes_ctrlExpr$analysis,
+                                                     levels = c("prenatal_specific", "shared"),
+                                                     labels = c("Prenatal\nspecific", "Shared"))
+
+# extract and transform the results for the random set of genes
+enrichRes_random_formated_bayes_ctrlExpr <- enrichRes_formated_bayes_ctrlExpr[, c("geneList", "analysis", "direction", "pval_enrich_random", "pval_deple_random", "relative_enrich_random")] %>% separate_longer_delim(cols = c(pval_enrich_random, pval_deple_random, relative_enrich_random), delim = ";")
+enrichRes_random_formated_bayes_ctrlExpr$pval_enrich_random <- as.numeric(enrichRes_random_formated_bayes_ctrlExpr$pval_enrich_random)
+enrichRes_random_formated_bayes_ctrlExpr$pval_deple_random <- as.numeric(enrichRes_random_formated_bayes_ctrlExpr$pval_deple_random)
+enrichRes_random_formated_bayes_ctrlExpr$relative_enrich_random <- as.numeric(enrichRes_random_formated_bayes_ctrlExpr$relative_enrich_random)
+```
+
+```{r plot_bayes_ctrlExpr_forReview_ASD, echo=FALSE}
+p <- ggplot(enrichRes_random_formated_bayes_ctrlExpr, aes(y = geneList, x = relative_enrich_random, fill = direction, alpha = 0.4))
+p <- p + geom_violin(linewidth = 0.1)
+p <- p + geom_vline(xintercept = 1)
+p <- p + scale_fill_manual(values = c("female" = "darkred", "male" = "darkblue"))
+p <- p + geom_point(data = enrichRes_formated_bayes_ctrlExpr, aes(y = geneList, x = relative_enrich, color = direction), 
+                    position = position_dodge(0.9), size = 2, alpha = 1)
+p <- p + geom_text(data = enrichRes_formated_bayes_ctrlExpr, aes(y = geneList, x = ifelse(relative_enrich>1, relative_enrich + 0.3, relative_enrich - 0.3), label = signif),
+                   position = position_dodge(0.9), size = 4, alpha = 1)
+p <- p + scale_color_manual(values = c("female" = "darkred", "male" = "darkblue"))
+p <- p + facet_grid(cols = vars(analysis), scales = "free", space = "free")
+p <- p + theme_minimal()
+p <- p + ylab("") + xlab("Relative enrichent")
+p <- p + guides(alpha="none")
+p <- p + coord_cartesian(xlim = c(0,4))
+p <- p + scale_y_discrete(limits = rev(levels(enrichRes_random_formated_bayes_ctrlExpr$geneList))) # reverse order of phenotype
+p
+# save plot
+ggsave("enrichment_plot_sexDE_bayes_ctrlExpr_forReview_ASD.png",
+      path = "images/5-postprocessing/8-CaseControlEnrichment/hyper/",
+      units = "cm", width = 12, height = 10)
+```
+
+```{r format4plot_bayes_ctrlExpr_forReview_SCZ, echo=FALSE}
+enrichRes_formated_bayes_ctrlExpr <- enrichRes[which(enrichRes$analysis %in% c("prenatal_specific", "shared") & enrichRes$direction != "both" & enrichRes$ctrlExpr & enrichRes$geneList %in% c("sczDown", "sczUp")), ]
+# add * for signif enrichment only (with a threshold of 0.05/24=0.002)
+enrichRes_formated_bayes_ctrlExpr$signif <- ifelse(enrichRes_formated_bayes_ctrlExpr$relative_enrich > 1, 
+                                                   ifelse(enrichRes_formated_bayes_ctrlExpr$pval_enrich<0.002 & enrichRes_formated_bayes_ctrlExpr$permut_pval < 0.002, "*", ""),
+                                                   "")
+# order the different direction of effect
+enrichRes_formated_bayes_ctrlExpr$direction <- factor(enrichRes_formated_bayes_ctrlExpr$direction,
+                                                      levels = c("female", "male"))
+# order the different phenotype
+enrichRes_formated_bayes_ctrlExpr$geneList <- factor(enrichRes_formated_bayes_ctrlExpr$geneList,
+                                                     levels = c("sczDown", "sczUp"),
+                                                     labels = c("Schizophrenia \ndown", "Schizophrenia \nup"))
+# rename the 4 analyses
+enrichRes_formated_bayes_ctrlExpr$analysis <- factor(enrichRes_formated_bayes_ctrlExpr$analysis,
+                                                     levels = c("prenatal_specific", "shared"),
+                                                     labels = c("Prenatal\nspecific", "Shared"))
+
+# extract and transform the results for the random set of genes
+enrichRes_random_formated_bayes_ctrlExpr <- enrichRes_formated_bayes_ctrlExpr[, c("geneList", "analysis", "direction", "pval_enrich_random", "pval_deple_random", "relative_enrich_random")] %>% separate_longer_delim(cols = c(pval_enrich_random, pval_deple_random, relative_enrich_random), delim = ";")
+enrichRes_random_formated_bayes_ctrlExpr$pval_enrich_random <- as.numeric(enrichRes_random_formated_bayes_ctrlExpr$pval_enrich_random)
+enrichRes_random_formated_bayes_ctrlExpr$pval_deple_random <- as.numeric(enrichRes_random_formated_bayes_ctrlExpr$pval_deple_random)
+enrichRes_random_formated_bayes_ctrlExpr$relative_enrich_random <- as.numeric(enrichRes_random_formated_bayes_ctrlExpr$relative_enrich_random)
+```
+
+```{r plot_bayes_ctrlExpr_forReview_SCZ, echo=FALSE}
+p <- ggplot(enrichRes_random_formated_bayes_ctrlExpr, aes(y = geneList, x = relative_enrich_random, fill = direction, alpha = 0.4))
+p <- p + geom_violin(linewidth = 0.1)
+p <- p + geom_vline(xintercept = 1)
+p <- p + scale_fill_manual(values = c("female" = "darkred", "male" = "darkblue"))
+p <- p + geom_point(data = enrichRes_formated_bayes_ctrlExpr, aes(y = geneList, x = relative_enrich, color = direction), 
+                    position = position_dodge(0.9), size = 2, alpha = 1)
+p <- p + geom_text(data = enrichRes_formated_bayes_ctrlExpr, aes(y = geneList, x = ifelse(relative_enrich>1, relative_enrich + 0.3, relative_enrich - 0.3), label = signif),
+                   position = position_dodge(0.9), size = 4, alpha = 1)
+p <- p + scale_color_manual(values = c("female" = "darkred", "male" = "darkblue"))
+p <- p + facet_grid(cols = vars(analysis), scales = "free", space = "free")
+p <- p + theme_minimal()
+p <- p + ylab("") + xlab("Relative enrichent")
+p <- p + guides(alpha="none")
+p <- p + coord_cartesian(xlim = c(0,4))
+p <- p + scale_y_discrete(limits = rev(levels(enrichRes_random_formated_bayes_ctrlExpr$geneList))) # reverse order of phenotype
+p
+# save plot
+ggsave("enrichment_plot_sexDE_bayes_ctrlExpr_forReview_SCZ.png",
+      path = "images/5-postprocessing/8-CaseControlEnrichment/hyper/",
+      units = "cm", width = 12, height = 6)
+```
+
 
 # Session info
 
