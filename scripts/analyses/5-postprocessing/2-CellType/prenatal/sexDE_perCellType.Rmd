@@ -1,0 +1,397 @@
+---
+title: "Sex-DE genes per cell type"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r load_libraries, echo=FALSE}
+suppressPackageStartupMessages( library(edgeR) )
+suppressPackageStartupMessages( library(limma) )
+suppressPackageStartupMessages( library(tidyverse) )
+suppressPackageStartupMessages( library(CARseq) )
+suppressPackageStartupMessages( library(TOAST) )
+suppressPackageStartupMessages( library(SummarizedExperiment) )
+suppressPackageStartupMessages( library(rtracklayer) )
+suppressPackageStartupMessages( library(readxl) )
+```
+
+```{r, setup, include=FALSE, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+# Load data
+
+
+## Load count and phenotypes data
+
+```{r load_count_data, echo=FALSE}
+load("data/1-preprocessing/counts_forebrain_phenotypes.RData")
+```
+
+```{r load_phenotypes_data, echo=FALSE}
+# load metadata
+load("data/3-DE/normCounts_dream_pseudotime_sva_ind_interaction_phenotypes.RData")
+```
+
+
+## Load cell type proportions
+
+```{r load_cibersortx_result, echo=FALSE}
+cell_prop <- read.table("data/5-postprocessing/2-CellType/CIBERSORTx/prenatal/results/CIBERSORTx_Adjusted.txt",
+                        header = TRUE, sep = "\t")
+rownames(cell_prop) <- cell_prop$Mixture
+cell_prop <- cell_prop[, -c(1,11,12,13)]
+```
+
+
+
+# Analysis with TOAST
+
+```{r run_TOAST, echo=FALSE}
+# format count matrix
+counts <- x$counts
+rownames(counts) <- x$genes$gene_id
+# make model design
+design <- makeDesign(metadata[, -c(3:25)], cell_prop)
+# fit linear model
+fitted_model <- fitModel(design, counts)
+# test sex in all cell types
+res_table <- csTest(fitted_model, coef = "Sex")
+```
+
+Check results.
+
+```{r TOAST_res, echo=FALSE}
+# get number of sex-DE genes with fdr<0.05
+lapply(res_table, function(a){sum(a$fdr < 0.05)})
+```
+
+Add genes name to the TOAST results.
+
+```{r add_gene_name, echo=FALSE}
+# load annotation
+gencode28_annot <- readGFF("data/0-input/gencode.v28.annotation.gtf.gz")
+gencode28_annot <- gencode28_annot[which(gencode28_annot$type == "gene"), ]
+gencode28_annot$ensemblID <- sapply(strsplit(gencode28_annot$gene_id, "\\."), function(x){x[1]})
+# add gene name to the results
+for (cell in names(res_table)){
+  res_table[[cell]] <- merge(res_table[[cell]], gencode28_annot[, c(9, 11, 1, 10)], by.x = "row.names", by.y = "gene_id", all.x = TRUE)
+}
+```
+
+Count the number of sex-chromosome and autosomal sex-DE genes for each cell type.
+
+```{r stats_sexDE_TOAST, echo=FALSE}
+for (cell in names(res_table)){
+  print(sprintf(">>> cell type: %s", cell))
+  res_cell <- res_table[[cell]]
+  # autosomal
+  nbr_sexDE_auto <- length(res_cell$gene_name[which(!res_cell$seqid %in% c("chrX", "chrY", "chrM") & res_cell$fdr < 0.05)])
+  print(sprintf("auto = %i", nbr_sexDE_auto))
+  # sex-chr
+  nbr_sexDE_sexchr <- length(res_cell$gene_name[which(res_cell$seqid %in% c("chrX", "chrY") & res_cell$fdr < 0.05)])
+  print(sprintf("sex-chr = %i", nbr_sexDE_sexchr))
+}
+```
+
+## Permutation analysis
+
+As recommended by the authors of the R package, we perform a permutation analysis to control for the inflated type I errors and identified with more confident the "real" cell type specific sex-DE.
+For this, we run the same TOAST analysis 100 times permuting the sex of the samples.
+
+```{r permutation_analysis, echo=FALSE}
+merge_permutation_res <- function(merged_data, new_res, iteration){
+  if (length(merged_data) == 0){
+    merged_data <- new_res
+    # for each cell type, only keep the fdr
+    for (j in 1:length(merged_data)){
+      merged_data[[j]]["gene"] <- rownames(merged_data[[j]])
+      merged_data[[j]] <- merged_data[[j]][, c("gene", "f_statistics")]
+    }
+  } else{
+    # for each cell type, merge the results
+    for (j in 1:length(merged_data)){
+      #browser()
+      new_res[[j]]["gene"] <- rownames(new_res[[j]])
+      merged_data[[j]] <- merge(merged_data[[j]], new_res[[j]][, c("gene", "f_statistics")], by = "gene", suffixes = c("", paste(".",iteration)))
+    }
+  }
+  return(merged_data)
+}
+metadata_permutation <- metadata
+res_table_permutation_merged <- list()
+for (i in 1:1000){
+  print(sprintf(">>>Iteration %i", i))
+  # permute the sex of the samples
+  metadata_permutation$Sex <- sample(metadata_permutation$Sex, replace=FALSE) 
+  # make model design
+  design_permutation <- makeDesign(metadata_permutation[, -c(3:25)], cell_prop)
+  # fit linear model
+  fitted_model_permutation <- fitModel(design_permutation, counts)
+  # test sex in all cell types
+  res_table_permutation <- csTest(fitted_model_permutation, coef = "Sex")
+  # number of sex-DE genes per cell type
+  lapply(res_table_permutation, function(a){sum(a$fdr < 0.05)})
+  # merge permutation results
+  res_table_permutation_merged <- merge_permutation_res(res_table_permutation_merged, res_table_permutation, i)
+}
+# compute permutation pvalue
+compute_permutation_pval <- function(res, merged_permutation){
+  final_res_permutation <- as.list(rep(NA, length(names(res))))
+  names(final_res_permutation) <- names(res)
+  # for each cell type, initialize the data frame
+  for (i in 1:length(res)){
+    final_res_permutation[[i]] <- data.frame("gene" = merged_permutation[[i]][, c("gene")], "nbrFstat_tot" = 0, "nbrFstat_larger" = 0, "pvalue_permut" = NA)
+  }
+  #browser()
+  # for each cell type compute the permutation pvalue
+  for (i in 1:length(res)){
+    res_fstat <- res[[i]][, "f_statistics"]
+    final_res_permutation[[i]][, "nbrFstat_tot"] <- rep(dim(merged_permutation[[i]])[2] - 1, length(res_fstat))
+    final_res_permutation[[i]][, "nbrFstat_larger"] <- rowSums(merged_permutation[[i]][, -c(1)] > res_fstat)
+    final_res_permutation[[i]][, "pvalue_permut"] <- (final_res_permutation[[i]][, "nbrFstat_larger"] + 1) / (final_res_permutation[[i]][, "nbrFstat_tot"] + 1)
+  }
+  return(final_res_permutation)
+}
+permutation_pval <- compute_permutation_pval(res_table, res_table_permutation_merged)
+```
+
+For each cell type, get the genes that are sex-DE using the 2 following threshold:
+- fdr < 0.05
+- permutation pvalue < 0.05
+
+```{r nbr_sexDE_perCellType_permutation, echo=FALSE}
+# add the permutation pvalue to the TOAST results
+for (i in names(res_table)){
+  res_table[[i]]$permut_pval <- permutation_pval[[i]][, c("pvalue_permut")]
+}
+# get number of sex-DE genes with fdr<0.05
+lapply(res_table, function(a){sum(a$fdr < 0.05 & a$permut_pval < 0.05)})
+```
+
+Save the results.
+
+```{r save_res, echo=FALSE}
+save(res_table, file = "data/5-postprocessing/2-CellType/TOAST/prenatal_results_1000permut.RData")
+```
+
+Remove the genes used to define the sex of the samples in the cell-type sex-DE genes.
+
+```{r remove_XIST_chrY_genes, echo=FALSE}
+res_table_filtered <- res_table
+for (cell in names(res_table)){
+  print(sprintf(">>> %s",cell))
+  genes2remove <- c("XIST", as.character(res_table[[cell]]$gene_name[which(res_table[[cell]]$seqid == "chrY" & res_table[[cell]]$gene_type == "protein_coding")]))
+res_table_filtered[[cell]] <- res_table[[cell]][which(!res_table[[cell]]$gene_name %in% genes2remove),]
+}
+# get number of sex-DE genes with fdr<0.05
+lapply(res_table_filtered, function(a){sum(a$fdr < 0.05 & a$permut_pval < 0.05)})
+```
+
+Save the results after filtering.
+
+```{r save_res, echo=FALSE}
+save(res_table_filtered, file = "data/5-postprocessing/2-CellType/TOAST/prenatal_results_filtered_1000permut.RData")
+```
+
+## Overlap with bulk sex-DE data
+
+Load prenatal sex-DE data and bayes results.
+
+```{r load_bulk_sexDE, echo=FALSE}
+# load prenatal sex-DE
+de_results_sex <- read.table("data/3-DE/VoomDream_topTable_forebrain_pseudotime_sva_ind_interaction.txt",
+                             header = TRUE, check.names=FALSE)
+# filter the genes used to define the sex of samples
+genes2remove <- c("XIST", as.character(de_results_sex$gene_name[which(de_results_sex$chr == "chrY" & de_results_sex$gene_type == "protein_coding")]))
+de_results_sex <- de_results_sex[which(!de_results_sex$gene_name %in% genes2remove),]
+
+# load bayes results
+bayesRes <- read.table("data/4-GTEx/2-comparison/lineModel/lineModel_prenatalVSadult_6models_withAnnotation.txt", 
+                       header = TRUE, sep = "\t")
+```
+
+Check the overlap of the bulk sex-DE results with the cell type specific data.
+
+```{r overlap_bulkRes, echo=FALSE}
+sexDE_bulk <- de_results_sex$gene_id[which(de_results_sex$qvalue < 0.01)]
+nbr_sexDE_bulk <- length(sexDE_bulk)
+for (cell in names(res_table_filtered)){
+  print(sprintf(">>> %s",cell))
+  sexDE_cellType <- res_table_filtered[[cell]]$Row.names[which(res_table_filtered[[cell]]$fdr < 0.05 & res_table_filtered[[cell]]$permut_pval < 0.05)]
+  nbr_sexDE_cellType <- length(sexDE_cellType)
+  nbr_sexDE_overlap <- length(intersect(sexDE_bulk, sexDE_cellType))
+  percent_bulk_sexDE_overlap <- nbr_sexDE_overlap/nbr_sexDE_bulk*100
+  percent_cellType_sexDE_overlap <- nbr_sexDE_overlap/nbr_sexDE_cellType*100
+  print(sprintf("Number of overlapping genes %i (%.2f %% of bulk sex-DE and %.2f %% of cell type specific sex-DE)", 
+                nbr_sexDE_overlap, percent_bulk_sexDE_overlap, percent_cellType_sexDE_overlap))
+  
+}
+```
+
+Check the overlap of the bayesian sex-DE results with the cell type specific data.
+
+```{r overlap_bayesRes, echo=FALSE}
+# Prenatal specific sex-DE
+print(">>>>> Prenatal-specific <<<<<")
+prenatalSpe_sexDE <- bayesRes$ensemblID[which(bayesRes$specificity == "Prenatal")]
+nbr_prenatalSpe_sexDE <- length(prenatalSpe_sexDE)
+for (cell in names(res_table)){
+  print(sprintf(">>> %s",cell))
+  sexDE_cellType <- res_table[[cell]]$Row.names[which(res_table[[cell]]$fdr < 0.05 & res_table[[cell]]$permut_pval < 0.05)]
+  sexDE_cellType <- sapply(strsplit(as.character(sexDE_cellType), "\\."), function(x){x[1]})
+  nbr_sexDE_cellType <- length(sexDE_cellType)
+  nbr_sexDE_overlap <- length(intersect(prenatalSpe_sexDE, sexDE_cellType))
+  percent_prenatalSpe_sexDE_overlap <- nbr_sexDE_overlap/nbr_prenatalSpe_sexDE*100
+  percent_cellType_sexDE_overlap <- nbr_sexDE_overlap/nbr_sexDE_cellType*100
+  print(sprintf("Number of overlapping genes %i (%.2f %% of prenatal-specific sex-DE and %.2f %% of cell type specific sex-DE)", 
+                nbr_sexDE_overlap, percent_prenatalSpe_sexDE_overlap, percent_cellType_sexDE_overlap))
+}
+# Shared sex-DE
+print(">>>>> Shared <<<<<")
+shared_sexDE <- bayesRes$ensemblID[which(bayesRes$specificity == "Shared")]
+nbr_shared_sexDE <- length(shared_sexDE)
+for (cell in names(res_table)){
+  print(sprintf(">>> %s",cell))
+  sexDE_cellType <- res_table[[cell]]$Row.names[which(res_table[[cell]]$fdr < 0.05 & res_table[[cell]]$permut_pval < 0.05)]
+  sexDE_cellType <- sapply(strsplit(as.character(sexDE_cellType), "\\."), function(x){x[1]})
+  nbr_sexDE_cellType <- length(sexDE_cellType)
+  nbr_sexDE_overlap <- length(intersect(shared_sexDE, sexDE_cellType))
+  percent_shared_sexDE_overlap <- nbr_sexDE_overlap/nbr_shared_sexDE*100
+  percent_cellType_sexDE_overlap <- nbr_sexDE_overlap/nbr_sexDE_cellType*100
+  print(sprintf("Number of overlapping genes %i (%.2f %% of shared sex-DE and %.2f %% of cell type specific sex-DE)", 
+                nbr_sexDE_overlap, percent_shared_sexDE_overlap, percent_cellType_sexDE_overlap))
+  
+}
+# Opposite sex-DE
+print(">>>>> Opposite <<<<<")
+opposite_sexDE <- bayesRes$ensemblID[which(bayesRes$specificity == "Opposite")]
+nbr_opposite_sexDE <- length(opposite_sexDE)
+for (cell in names(res_table)){
+  print(sprintf(">>> %s",cell))
+  sexDE_cellType <- res_table[[cell]]$Row.names[which(res_table[[cell]]$fdr < 0.05 & res_table[[cell]]$permut_pval < 0.05)]
+  sexDE_cellType <- sapply(strsplit(as.character(sexDE_cellType), "\\."), function(x){x[1]})
+  nbr_sexDE_cellType <- length(sexDE_cellType)
+  nbr_sexDE_overlap <- length(intersect(opposite_sexDE, sexDE_cellType))
+  percent_opposite_sexDE_overlap <- nbr_sexDE_overlap/nbr_opposite_sexDE*100
+  percent_cellType_sexDE_overlap <- nbr_sexDE_overlap/nbr_sexDE_cellType*100
+  print(sprintf("Number of overlapping genes %i (%.2f %% of opposite sex-DE and %.2f %% of cell type specific sex-DE)", 
+                nbr_sexDE_overlap, percent_shared_sexDE_overlap, percent_cellType_sexDE_overlap))
+  
+}
+```
+
+## Exploring which cell types could explain some of our findings
+
+Load XCI information and merge it with 
+
+```{r loadNmerge_XCI_data, echo=FALSE}
+# load XCI info form tukiainen 2017
+XCI_genes <- read.table("data/0-input/Tukiainen_2017_Nature_Suppl_Table_13.csv", sep = ";", header = TRUE, nrows = 683)
+XCI_genes <- XCI_genes[, c("Gene.name", "Gene.ID", "Region", "Reported.XCI.status", "Start")]
+XCI_genes$ensemblID <- sapply(strsplit(as.character(XCI_genes$Gene.ID), "\\."), function(x){x[1]})
+# merge XCI data
+res_table_filtered_XCI <- res_table_filtered
+for (cell in names(res_table_filtered)){
+  print(sprintf(">>> %s",cell))
+  res_table_filtered_XCI[[cell]]$ensemblID <- sapply(strsplit(as.character(res_table_filtered_XCI[[cell]]$Row.names), "\\."), function(x){x[1]})
+  res_table_filtered_XCI[[cell]] <- merge(res_table_filtered_XCI[[cell]], XCI_genes[, c(3,4,6)], all.x = TRUE)
+}
+```
+
+
+Overlap of the cell-type specific sex-DE and the XCI escape genes.
+
+```{r overlap_XCI, echo=FALSE}
+# get number of sex-DE genes with fdr<0.05 and permut_pval<0.05
+lapply(res_table_filtered_XCI, function(a){sum(a$fdr < 0.05 & a$permut_pval < 0.05)})
+# count total number of Escape genes
+lapply(res_table_filtered_XCI, function(a){sum(a$Reported.XCI.status == "Escape", na.rm = TRUE)})
+# count number of Escape genes with fdr<0.05 and permut_pval<0.05
+lapply(res_table_filtered_XCI, function(a){sum(a$Reported.XCI.status == "Escape" & a$fdr < 0.05 & a$permut_pval < 0.05, na.rm = TRUE)})
+# enrichment with hypergeometric test
+# for NPC
+phyper(16-1, 69, 17601 - 69, 2697, lower.tail = FALSE)
+# for ExN
+phyper(2-1, 69, 17601 - 69, 330, lower.tail = FALSE)
+```
+We don't observe an enrichment in a specific cell type of significant XCI escape genes.
+
+Load and merge the genes regulated by androgen treatment (either DHT 10nM or Testosteron 100nM).
+
+```{r add_ensemblID, echo=FALSE}
+# add ensemblID without the version number
+for (cell in names(res_table_filtered)){
+  print(sprintf(">>> %s",cell))
+  res_table_filtered[[cell]]$ensemblID <- sapply(strsplit(as.character(res_table_filtered[[cell]]$Row.names), "\\."), function(x){x[1]})
+}
+```
+
+
+```{r load_androRes, echo=FALSE}
+DHTres <- read_excel("data/5-postprocessing/7-TFBS/Quartier_2018_Androgen/TableSupp.xlsx", sheet = 2)
+DHTres <- DHTres[, c(1,24,26)]
+names(DHTres) <- c("gene_name", "DHT100nMall_logFC", "DHT100nMall_padj")
+AndroRes <- read_excel("data/5-postprocessing/7-TFBS/Quartier_2018_Androgen/TableSupp.xlsx", sheet = 1)
+AndroRes <- AndroRes[, c(1,2,27,29,30,32,33,35,36,38,39,41,42,44)]
+names(AndroRes) <- c("gene_id", "gene_name", "RA1microM_logFC", "RA1microM_padj", "DHT100nM_logFC", "DHT100nM_padj", 
+                     "DHT10nM_logFC", "DHT10nM_padj", "Testo100nM_logFC", "Testo100nM_padj", 
+                     "Testo10nM_logFC", "Testo10nM_padj", "R18811nM_logFC", "R18811nM_padj")
+# filter AR results
+AndroRes_filtered <- AndroRes[which(AndroRes$gene_id %in% res_table_filtered[["Olig"]]$ensemblID), c(1,7,8,9,10)]
+```
+
+Check if the genes regulated by DHT or Testo are enriched in some cell-type specific sex-DE genes.
+
+```{r enrichment_AR, echo=FALSE}
+# merge the AR results with the cell-type specific sex-DE results
+res_table_filtered_AR <- res_table_filtered
+for (cell in names(res_table_filtered)){
+  print(sprintf(">>> %s",cell))
+  res_table_filtered_AR[[cell]] <- merge(res_table_filtered_AR[[cell]], AndroRes_filtered, by.x = "ensemblID", by.y = "gene_id")
+}
+
+# get number of sex-DE genes with fdr<0.05 and permut_pval<0.05
+lapply(res_table_filtered_AR, function(a){sum(a$fdr < 0.05 & a$permut_pval < 0.05)})
+# count total number of genes regulated by DHT
+lapply(res_table_filtered_AR, function(a){sum(a$DHT10nM_padj < 0.05)})
+# count number of DHT regulated genes with fdr<0.05 and permut_pval<0.05
+lapply(res_table_filtered_AR, function(a){sum(a$DHT10nM_padj < 0.05 & a$fdr < 0.05 & a$permut_pval < 0.05)})
+# count total number of genes regulated by Testo
+lapply(res_table_filtered_AR, function(a){sum(a$Testo100nM_padj < 0.05)})
+# count number of Testo regulated genes with fdr<0.05 and permut_pval<0.05
+lapply(res_table_filtered_AR, function(a){sum(a$Testo100nM_padj < 0.05 & a$fdr < 0.05 & a$permut_pval < 0.05)})
+# enrichment with hypergeometric test
+# for DHT in NPC
+phyper(352-1, 429, 1998 - 429, 1599, lower.tail = FALSE)
+# for DHT in ExN
+phyper(11-1, 19, 1998 - 19, 1599, lower.tail = FALSE)
+# for Testo in NPC
+phyper(210-1, 429, 1998 - 429, 926, lower.tail = FALSE)
+# for Testo in ExN
+phyper(14-1, 19, 1998 - 19, 926, lower.tail = FALSE)
+```
+
+
+
+# Analysis with ceDAR
+
+```{r ceDAR_analysis, echo=FALSE}
+res_cedar <- cedar(Y_raw = counts, prop = cell_prop, design.1 = metadata[, -c(3:25)],
+                   factor.to.test = 'Sex', cutoff.tree = c('pval', 0.1),
+                   cutoff.prior.prob = c('pval', 0.1))
+```
+
+```{r view_ceDAR_results, echo=FALSE}
+head(res_cedar$tree_res$full$pp)
+res_cedar$tree_res$full$tree_structure
+```
+
+
+# Session info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```
+

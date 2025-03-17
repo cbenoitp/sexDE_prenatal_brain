@@ -237,6 +237,10 @@ cell_prop_test_mean_sex <- cell_prop_plot %>% group_by(cell_type, Sex) %>% summa
                                                                                      N = length(proportion), se = std / sqrt(N))
 ```
 
+```{r mean_prop_devstage_brainRegion_tests, echo=FALSE}
+cell_prop_test_mean_brainRegion_devstage <- cell_prop_plot %>% group_by(cell_type, DevStage, ForebrainRegion) %>% summarise(mean = mean(proportion), std = sd(proportion), 
+                                                                                                                            N = length(proportion), se = std / sqrt(N))
+```
 
 ## Statistical tests
 
@@ -365,6 +369,33 @@ p
 ggsave("Cibersortx_Song_forebrain_devStages_sex_points_9cellTypes.png",
        path = "images/5-postprocessing/2-CellType/prenatal/",
        width = 30, height = 10, units = "cm")
+```
+
+### Plot for each cell type the proportion at each developmental stages for each forebrain region
+
+Plot proportion by developmental stages and sexes for the 6 cell types.
+
+```{r by_devStage_brainRegion_9ct, echo=FALSE}
+# Plot
+pd <- position_dodge(0.5)
+p <- ggplot(cell_prop_test_mean_brainRegion_devstage, aes(x = DevStage, y = mean))
+p <- p + geom_rect(data = cell_prop_test_mean_brainRegion_devstage, aes(fill = cell_type), xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf, alpha = 0.05)
+p <- p + scale_fill_manual(name = "Cell type", guide = "none",
+                           values = c("NPC" = "#f4ccd8", "ExN" = "#cce3c1", "InN" = "#f6c9a6",
+                                      "Micro" = "#b2b2ae", "Astro" = "#c2b29d", "OPC" = "#c9c6d9",
+                                      "Endo" = "#eed9c4", "Olig" = "#ccdff4", "Perc" = "#e4d5b7"))
+p <- p + geom_point(position = pd, aes(color = ForebrainRegion))
+p <- p + geom_errorbar(aes(ymin = mean-std, ymax = mean+std, color = ForebrainRegion), width = .1, position = pd)
+p <- p + facet_grid(.~cell_prop_test_mean_brainRegion_devstage$cell_type)
+p <- p + scale_color_manual(name = "Forebrain Region", values = c("telencephalon" = "darkgreen", "diencephalon" = "brown4", "forebrain fragment" = "black"))
+p <- p + theme_bw() + xlab("") + ylab("Proportion")
+p <- p + theme(axis.text.x = element_text(angle = 45, hjust = 1),
+               strip.background = element_blank(),
+               legend.position = "bottom") 
+p
+ggsave("Cibersortx_Song_forebrain_devStages_forebrainRegion_points_9cellTypes.png",
+       path = "images/5-postprocessing/2-CellType/prenatal/",
+       width = 20, height = 12, units = "cm")
 ```
 
 
