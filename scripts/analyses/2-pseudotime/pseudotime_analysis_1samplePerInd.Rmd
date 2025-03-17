@@ -1,0 +1,369 @@
+---
+title: "Pseudotime analysis in prenatal forebrain using only 1 sample per individual"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+---
+
+```{r library, echo=FALSE}
+suppressPackageStartupMessages(library(GenomicFeatures))
+suppressPackageStartupMessages(library(edgeR))
+suppressPackageStartupMessages(library(limma))
+suppressPackageStartupMessages(library(SummarizedExperiment))
+suppressPackageStartupMessages(library(phenopath))
+suppressPackageStartupMessages(library(ade4))
+suppressPackageStartupMessages(library(factoextra))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(dplyr))
+```
+
+```{r setup, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+set.seed(1234)
+```
+
+# Load and prepare data
+
+## Load the counts and the phenotype data
+
+```{r load_data, echo=FALSE}
+load("data/1-preprocessing/counts_forebrain_phenotypes.RData")
+```
+
+
+## Prepare metadata
+
+```{r prepare_metadata, echo=FALSE}
+Sex <- as.factor(phenotypes$assigned_sex)
+DevStage <- phenotypes$newDevStage
+Individual <- as.factor(phenotypes$ind)
+ForebrainRegion <- phenotypes$newBrainRegion
+Batch <- phenotypes$batch
+# metadata
+metadata <- data.frame(Sex = Sex, DevStage = DevStage, Individual = Individual, ForebrainRegion = ForebrainRegion, Batch = Batch)
+rownames(metadata) <- phenotypes$experiment_name
+```
+
+
+## Select one sample per individual randomly
+
+We keep only 1 sample per individual. First, choose telencephalon samples, then diencephalon and then lastly forebrain fragment.
+
+```{r select_1samplePerInd, echo=FALSE}
+ind_id <- unique(Individual)
+samples_selected <- c()
+# for each individual
+for (i in ind_id){
+  # get all samples from this individual
+  samplesInd <- metadata[which(metadata$Individual == i), ]
+  # if there is only 1 sample for this individual, keep it, and go to the next individual
+  if (dim(samplesInd)[1] == 1){
+    samples_selected <- c(samples_selected, rownames(samplesInd)[1])
+    next
+  }
+  # get all samples from the telencephalon
+  samplesIndTel <- samplesInd[which(samplesInd$ForebrainRegion == "telencephalon"), ]
+  # if there is at least 1 sample from the telencephalon for this individual, select one randomly and go to the next individual
+  if (dim(samplesIndTel)[1] >= 1){
+    samples_selected <- c(samples_selected, rownames(samplesIndTel)[sample(1:dim(samplesIndTel)[1], 1)])
+    next
+    # otherwise, there is no sample from the telencephalon
+  } else{
+    # get all samples from the diencephalon
+    samplesIndDi <- samplesInd[which(samplesInd$ForebrainRegion == "diencephalon"), ]
+    # if there is at least 1 sample from the diencephalon for this individual, select one randomly and go to the next individual
+    if (dim(samplesIndDi)[1] >= 1){
+      samples_selected <- c(samples_selected, rownames(samplesIndDi)[sample(1:dim(samplesIndDi)[1], 1)])
+      next
+      # otherwise, there is no sample from the diencephalon
+    } else{
+      # select one sample from all of the sample available (brain fragment) and go to the next individual
+      samples_selected <- c(samples_selected, rownames(samplesInd)[sample(1:dim(samplesInd)[1], 1)])
+      next
+    }
+  }
+}
+# check that we have the same number of samples selected than the number of individual
+length(samples_selected) == length(ind_id)
+```
+
+
+Filter the counts data and the metadata to include only these samples.
+
+```{r counts_1samplePerInd, echo=FALSE}
+x.subset <- x[, which(rownames(x$samples) %in% samples_selected)]
+```
+
+```{r metadata_1samplePErInd, echo=FALSE}
+metadata_subset <- metadata[match(rownames(x.subset$samples), rownames(metadata)), ]
+```
+
+
+
+
+## Convert counts in TPM values
+
+Load the annotation file.
+
+```{r load_annotation, echo=FALSE}
+# First, import the GTF-file that you have also used as input for htseq-count
+txdb <- txdbmaker::makeTxDbFromGFF("data/0-input/gencode.v28.annotation.gff3",format="gff")
+
+# then collect the exons per gene id
+exons.list.per.gene <- exonsBy(txdb,by="gene")
+
+# then for each gene, reduce all the exons to a set of non overlapping exons, calculate their lengths (widths) and sum them
+exonic.gene.sizes <-  sum(width(GenomicRanges::reduce(exons.list.per.gene)))
+#names(exonic.gene.sizes)=matrix(unlist(strsplit(as.character(names(exonic.gene.sizes)),"\\.")),ncol=2,byrow=T)[,1]
+names(exonic.gene.sizes) <- names(exonic.gene.sizes)
+
+gtf.gene.length_df <- cbind(data.frame(names(exonic.gene.sizes)),as.numeric(exonic.gene.sizes))
+names(gtf.gene.length_df) <- c("gene_id","size")
+gtf.gene.length_df <- unique(gtf.gene.length_df)
+
+# Merge gene size with gene metadata
+gene_metadata <- merge(x$genes, gtf.gene.length_df)
+x$genes <- gene_metadata
+```
+
+Transform the counts data in log(TPM+1).
+
+```{r transform_counts, echo=FALSE}
+counts2tpm <- function(counts, genes){
+  # RPK = count/geneLength(kb)
+  counts <- counts/(genes$size*1e-3)
+  # Sum of RPK for each sample
+  library_depth <- colSums(counts)
+  # TPM = RPK/(sum(RPK)/1e6)
+  counts <- sweep(counts, 2, library_depth/1e6,`/`)
+  return(counts)
+}
+# add size to the genes object of the x.subset DGEList object
+x.subset$genes$size <- x$genes$size[match(x.subset$gene$gene_id, x$genes$gene_id)]
+# compute TPM
+tpm <- counts2tpm(x.subset$counts, x.subset$genes)
+logTpm <- log2(tpm+1)
+rownames(logTpm) <- x.subset$genes$gene_name
+```
+
+
+
+## Format data in a SummarizedExperiment object
+
+Select the genes to use in the phenopath analysis.
+
+```{r select_genes, echo=FALSE}
+# select higly variable genes
+variance <- rowVars(logTpm)
+ntop <- min(2000, dim(logTpm)[1])
+selectntop <- order(variance, decreasing=TRUE)[seq_len(ntop)]
+selectedCounts <- logTpm[selectntop,]
+```
+
+Create the SummarizedExperiment object
+
+```{r summarizedExperiment_obj, echo=FALSE}
+# initialize sce object
+sce <- SummarizedExperiment(assays = list(exprs = selectedCounts), 
+                            colData = metadata_subset)
+sce
+```
+
+# Phenopath analysis
+
+## With Sex only
+
+```{r fit_phenopath_model, echo=FALSE}
+x_mat <- model.matrix(~ Sex, metadata_subset)
+fit <- phenopath(sce, x_mat, elbo_tol = 1e-6, thin = 20)
+```
+
+Elbo plot
+
+```{r elbo_plot, echo=FALSE}
+p <- plot_elbo(fit)
+p
+# save plot
+ggsave("Elbo_plot.png",
+       path = "images/2-pseudotime/analysis_1samplePerInd/",
+       plot = p, width = 12, height = 10, units = "cm")
+```
+
+Summary of the pseudotime.
+
+```{r summary_pseudotime, echo=FALSE}
+summary(trajectory(fit))
+```
+
+
+
+Add pseudotime to metadata.
+
+```{r infered_pseudotime, echo=FALSE}
+metadata_subset$pseudotime <- trajectory(fit)
+```
+
+## Save the pseudotime results in a RData
+
+```{r save_pseudotime_res, echo=FALSE}
+save(fit, sce, x_mat, selectedCounts, metadata_subset, file = "data/2-pseudotime/analysis_1samplePerInd/forebrain_pseudotime_analysis.RData")
+```
+
+```{r save_metadata, echo=FALSE}
+save(metadata_subset, file = "data/2-pseudotime/analysis_1samplePerInd/forebrain_metadata_pseudotime.RData")
+```
+
+
+# Compare this pseudotime with the one from the main analysis
+
+We compare this new pseudotime with the one used in the main analysis (without developmental stages as a covariate).
+
+## Load and format pseudotime main analysis
+
+Load the original pseudotime values.
+
+```{r load_metadata_mainAnalysis, echo=FALSE}
+loadRData <- function(fileName){
+  #loads an RData file, and returns it
+  load(fileName)
+  get(ls()[ls() != "fileName"])
+}
+metadata_main <- loadRData("data/2-pseudotime/forebrain_metadata_pseudotime.RData")
+metadata_main$Sample <- rownames(metadata_main)
+```
+
+Compute the mean pseudotime per individual.
+
+```{r mean_pseudotime_original}
+metadata_main_mean_pseudotime <- metadata_main %>% group_by(Individual) %>% summarise(mean_pseudotime = mean(pseudotime))
+```
+
+Merge the original pseudotime with the new one, keeping only the same samples that were used in this new pseudotime analysis and adding the mean pseudotime to the data.
+
+```{r filter_samples_pseudotime_original, echo=FALSE}
+metadata_merge <- merge(metadata_subset, metadata_main[, c(3,6)], by.x = c(0, 3), by.y = c(0, 1), all.x = TRUE, suffixes = c("_new", "_original"))
+metadata_merge$meanPseudotime <- metadata_main_mean_pseudotime$mean_pseudotime[match(metadata_merge$Individual, metadata_main_mean_pseudotime$Individual)]
+```
+
+Merge the original pseudotime with the new one, keeping all samples and adding the mean pseudotime to the data.
+
+```{r filter_samples_pseudotime_original, echo=FALSE}
+metadata_merge_all <- merge(metadata_subset[, c(3,6)], metadata_main, by.x = c(1), by.y = c(3), all.y = TRUE, suffixes = c("_new", "_original"))
+metadata_merge_all$meanPseudotime <- metadata_main_mean_pseudotime$mean_pseudotime[match(metadata_merge_all$Individual, metadata_main_mean_pseudotime$Individual)]
+```
+
+
+
+
+## Check correlation between the 2 pseudotimes
+
+Compute the correlation between this new pseudotime and the original pseudotime variables.
+
+```{r corr_pseudotimes, echo=FALSE}
+cor.test(metadata_merge_all$pseudotime_original, metadata_merge_all$pseudotime_new)
+```
+
+Do a scatter plot of the 2 pseudotime.
+
+```{r scatter_plot_pseudotime, echo=FALSE}
+# plot
+p <- ggplot(metadata_merge_all, aes(x = pseudotime_original, y = pseudotime_new))
+p <- p + geom_point()
+p <- p + theme_minimal()
+p
+# save plot
+ggsave("correlation_withOriginalPseudotime.png",
+       path = "images/2-pseudotime/analysis_1samplePerInd/",
+       plot = p, width = 12, height = 10, units = "cm")
+```
+
+
+## Check correlation of the new pseudotime with developmental stages
+
+Convert the developmental stages to a continuous variable.
+
+```{r convert2continuous, echo=FALSE}
+metadata_merge_all$DevStageCont <- as.integer(metadata_merge_all$DevStage)
+```
+
+Compute Kendall correlation between the pseudotime and the new continuous developmental stage.
+
+```{r correlation_kendall, echo=FALSE}
+corTestRes_Kendall <- cor.test(metadata_merge_all$DevStageCont, metadata_merge_all$pseudotime_new, method = "kendall")
+corTestRes_Kendall
+```
+
+And also do a boxplot + scatter plot of the pseudotime and the continuous developmental stage.
+
+```{r scatter_plot, echo=FALSE}
+p <- ggplot(metadata_merge_all, aes(DevStage, pseudotime_new))
+p <- p + geom_boxplot(fill = "#DCDCDC", outlier.shape = NA)
+p <- p + theme_minimal() + xlab("Developmental stages")
+p <- p + geom_jitter(aes(color = Sex), position=position_jitter(0.2), show.legend = FALSE)
+p <- p + annotate("text", x = 1.5, y = 1.1, label = sprintf("tau = %.2f\n p-value = %.2e", corTestRes_Kendall$estimate, corTestRes_Kendall$p.value))
+p <- p + scale_color_manual(values = c("1" = "darkblue", "2" = "darkred"))
+p
+# save plot
+ggsave("boxplot_devStages_vs_pseudotime.png", 
+       path = "images/2-pseudotime/analysis_1samplePerInd/",
+       plot = p, width = 15, height = 10, units = "cm")
+```
+
+## Check correlation between the new pseudotime and the mean pseudotime of the original analysis
+
+Compute the correlation between this new pseudotime and the original mean pseudotime variables.
+
+```{r corr_pseudotime_meanPseudotime, echo=FALSE}
+cor.test(metadata_merge_all$meanPseudotime, metadata_merge_all$pseudotime_new)
+```
+
+Do a scatter plot of the 2 pseudotime.
+
+```{r scatter_plot_pseudotime_meanPseudotime, echo=FALSE}
+# plot
+p <- ggplot(metadata_merge_all, aes(x = meanPseudotime, y = pseudotime_new))
+p <- p + geom_point()
+p <- p + theme_minimal()
+p
+ggsave("correlation_meanOriginalPseudotime_VS_newPseudotime.png",
+       path = "images/2-pseudotime/analysis_1samplePerInd/",
+       plot = p, width = 12, height = 10, units = "cm")
+```
+
+## Check correlation between the original pseudotime and the mean pseudotime of the original analysis
+
+Compute the correlation between this original pseudotime and the original mean pseudotime variables.
+
+```{r corr_originalPseudotime_meanPseudotime, echo=FALSE}
+cor.test(metadata_merge_all$meanPseudotime, metadata_merge_all$pseudotime_original)
+```
+
+Do a scatter plot of the 2 pseudotime.
+
+```{r scatter_plot_originalPseudotime_meanPseudotime, echo=FALSE}
+# plot
+p <- ggplot(metadata_merge_all, aes(x = meanPseudotime, y = pseudotime_original))
+p <- p + geom_point()
+p <- p + theme_minimal()
+p
+ggsave("correlation_meanOriginalPseudotime_VS_originalPseudotime.png",
+       path = "images/2-pseudotime/analysis_1samplePerInd/",
+       plot = p, width = 12, height = 10, units = "cm")
+```
+
+## Save this new metadata with all pseudotime
+
+```{r save_metadata_allPseudo, echo=FALSE}
+save(metadata_merge_all, file = "data/2-pseudotime/analysis_1samplePerInd/forebrain_metadata_pseudotime_mergeAll.RData")
+```
+
+
+
+# Session Info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```

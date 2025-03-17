@@ -1,0 +1,608 @@
+---
+title: "Comparison of DE analysis with pseudotime, developmental stages or pseudotime bins"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+---
+
+```{r load_libraries, echo=FALSE}
+suppressPackageStartupMessages( library(edgeR) )
+suppressPackageStartupMessages( library(limma) )
+suppressPackageStartupMessages( library(tidyverse) )
+suppressPackageStartupMessages( library(EnhancedVolcano) )
+suppressPackageStartupMessages( library(ComplexHeatmap) )
+suppressPackageStartupMessages( library(purrr) )
+suppressPackageStartupMessages( library(qvalue) )
+```
+
+```{r setup, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+workDir <- '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/'
+```
+
+```{r parameters, echo=FALSE}
+qvalue_threshold <- 0.01
+logFC_threshold <- 0
+```
+
+
+
+# Load data and functions
+
+## Load sex-DE results
+
+### With pseudotime
+
+```{r load_pseudotime, echo=FALSE}
+results_pseudo <- read.table("data/3-DE/VoomDream_topTable_forebrain_pseudotime_sva_ind_interaction.txt",
+                           header = TRUE)
+results_pseudo$ensemblID <- sapply(strsplit(as.character(results_pseudo$gene_id), "\\."), function(x){x[1]})
+```
+
+Prepare the data:
+- remove the genes used to define the sex of the samples.
+```{r prepare_pseudotime, echo=FALSE}
+genes2remove <- c("XIST", as.character(results_pseudo$gene_name[which(results_pseudo$chr == "chrY" & results_pseudo$gene_type == "protein_coding")]))
+results_pseudo <- results_pseudo[which(!results_pseudo$gene_name %in% genes2remove),]
+```
+
+Get sexDE results for autosomal genes only.
+```{r prepare_pseudo_auto, echo=FALSE}
+sexChr <- c("chrY", "chrX")
+results_pseudo_auto <- results_pseudo[which(!results_pseudo$chr %in% sexChr),]
+```
+
+### With developmental stages
+
+```{r load_devStage, echo=FALSE}
+results_devStage <- read.table("data/3-DE/analysis_devStage/VoomDream_topTable_forebrain_dev_sva_ind.txt",
+                               header = TRUE)
+results_devStage$ensemblID <- sapply(strsplit(as.character(results_devStage$gene_id), "\\."), function(x){x[1]})
+```
+
+Prepare the data by removing the genes used to define the sex of the samples.
+```{r prepare_devStage, echo=FALSE}
+genes2remove <- c("XIST", as.character(results_devStage$gene_name[which(results_devStage$chr == "chrY" & results_devStage$gene_type == "protein_coding")]))
+results_devStage <- results_devStage[which(!results_devStage$gene_name %in% genes2remove),]
+```
+
+Get sexDE results for autosomal genes only.
+```{r prepare_devStage_auto, echo=FALSE}
+sexChr <- c("chrY", "chrX")
+results_devStage_auto <- results_devStage[which(!results_devStage$chr %in% sexChr),]
+```
+
+### With pseudotimeBins
+
+```{r load_pseudoBins, echo=FALSE}
+results_pseudoBins <- read.table("data/3-DE/analysis_pseudotimeBins/VoomDream_topTable_forebrain_pseudotimeBins_sva_ind_interaction.txt",
+                               header = TRUE)
+results_pseudoBins$ensemblID <- sapply(strsplit(as.character(results_pseudoBins$gene_id), "\\."), function(x){x[1]})
+```
+
+Prepare the data by removing the genes used to define the sex of the samples.
+```{r prepare_pseudoBins, echo=FALSE}
+genes2remove <- c("XIST", as.character(results_pseudoBins$gene_name[which(results_pseudoBins$chr == "chrY" & results_pseudoBins$gene_type == "protein_coding")]))
+results_pseudoBins <- results_pseudoBins[which(!results_pseudoBins$gene_name %in% genes2remove),]
+```
+
+Get sexDE results for autosomal genes only.
+```{r prepare_pseudoBins_auto, echo=FALSE}
+sexChr <- c("chrY", "chrX")
+results_pseudoBins_auto <- results_pseudoBins[which(!results_pseudoBins$chr %in% sexChr),]
+```
+
+
+# Statistics of sex-DE results with pseudotime bins as covariates
+
+Number of sex-DE significant genes:
+
+```{r nbr_sexDE, echo=FALSE}
+nbr_sexDE_signif <- sum(results_pseudoBins$qvalue < qvalue_threshold)
+percent_sexDE_signif <- nbr_sexDE_signif/length(results_pseudoBins$gene_name)*100
+print(sprintf("Number of sex-DE genes = %s (representing %.3f %% of the genes)", nbr_sexDE_signif, percent_sexDE_signif))
+# male-biased genes
+nbr_maleBiased_signif <- length(results_pseudoBins$gene_name[which(results_pseudoBins$logFC < 0 & results_pseudoBins$qvalue < qvalue_threshold)])
+percent_maleBiased_signif <- nbr_maleBiased_signif/nbr_sexDE_signif*100
+print(sprintf("Number of male-biased genes = %s (%.3f %% of sex-DE genes)", nbr_maleBiased_signif, percent_maleBiased_signif))
+# female_biased genes
+nbr_femaleBiased_signif <- length(results_pseudoBins$gene_name[which(results_pseudoBins$logFC > 0 & results_pseudoBins$qvalue < qvalue_threshold)])
+percent_femaleBiased_signif <- nbr_femaleBiased_signif/nbr_sexDE_signif*100
+print(sprintf("Number of female-biased genes = %s (%.3f %% of sex-DE genes)", nbr_femaleBiased_signif, percent_femaleBiased_signif))
+```
+
+# Visualization of sex-DE results with pseudotime bins as covariates
+
+## Barplot
+
+Function for the barplot.
+
+```{r function_barplot, echo=FALSE}
+barplot <- function(data, legend = TRUE, nrowLegend = 4, myTitle = "Nbr sex-DE genes",
+                    colors = c("Male-other" = "#053061", "Male-sex" = "#99b3ff", 
+                               "Female-other" = "#B2182B", "Female-sex" = "#f3a5ae"),
+                    labels = c("Female-other" = "Female autosomal genes", "Female-sex" = "Female sex chr. genes",
+                               "Male-other" = "Male autosomal genes", "Male-sex" = "Male sex chr. genes")){
+  p <- ggplot(data, aes(x = variable, y = nbr_genes, fill = coloring))
+  p <- p + geom_bar(stat = "identity")
+  p <- p + scale_fill_manual(values = colors, labels = labels)
+  p <- p + theme_bw() + labs(x = "", y = "")
+  p <- p + ggtitle(myTitle)
+  p <- p + theme(legend.position="bottom", legend.title = element_blank()) 
+  p <- p + guides(fill = guide_legend(nrow=nrowLegend, byrow=TRUE))
+  if (!legend){
+    p <- p +  guides(fill = "none")
+  }
+  return(p)
+}
+```
+
+Prepare data for barplot.
+
+```{r prepare_data_barplot, echo=FALSE}
+barplot_data_sexDE <- data.frame(variable = c("Female", "Female", "Male", "Male"), 
+                           chr = c("other", "sex", "other", "sex"), 
+                           nbr_genes = c(length(results_pseudoBins_auto$gene_name[which(results_pseudoBins_auto$qvalue < qvalue_threshold &
+                                                                                        results_pseudoBins_auto$logFC > 0)]),
+                                         length(results_pseudoBins$gene_name[which((results_pseudoBins$chr %in% sexChr) &
+                                                                                   results_pseudoBins$qvalue < qvalue_threshold &
+                                                                                   results_pseudoBins$logFC > 0)]),
+                                         length(results_pseudoBins_auto$gene_name[which(results_pseudoBins_auto$qvalue < qvalue_threshold &
+                                                                                        results_pseudoBins_auto$logFC < 0)]),
+                                         length(results_pseudoBins$gene_name[which((results_pseudoBins$chr %in% sexChr) &
+                                                                                   results_pseudoBins$qvalue < qvalue_threshold &
+                                                                                   results_pseudoBins$logFC < 0)]))
+)
+
+barplot_data_sexDE$coloring <- paste(barplot_data_sexDE$variable, barplot_data_sexDE$chr, sep = "-")
+barplot_data_sexDE <- barplot_data_sexDE[order(barplot_data_sexDE$nbr_genes, decreasing = TRUE),] # order data
+barplot_data_sexDE$coloring <- factor(barplot_data_sexDE$coloring, levels = c("Male-sex", "Female-sex", "Male-other" , "Female-other"))
+barplot_data_sexDE$variable <- factor(barplot_data_sexDE$variable, levels = c("Male", "Female"))
+```
+
+Barplot
+
+```{r barplot, echo=FALSE}
+p <- barplot(barplot_data_sexDE, legend = FALSE, myTitle = "")
+p
+# save plot
+ggsave(plot = p, "barplot_nbr_sexDE_genes_noLegend.png", 
+       path = "images/3-DE/analysis_pseudotimeBins/barplot/", 
+       width = 4, height = 6, units = "cm", create.dir = TRUE)
+```
+
+
+
+## Volcanoplot
+
+```{r volcanoplot_sexDE, echo=FALSE}
+keyvals <- rep('grey75', nrow(results_pseudoBins))
+names(keyvals) <- rep('NS', nrow(results_pseudoBins))
+
+keyvals[which(results_pseudoBins$logFC < 0 & results_pseudoBins$qvalue < qvalue_threshold)] <- 'darkblue'
+names(keyvals)[which(results_pseudoBins$logFC < 0 & results_pseudoBins$qvalue < qvalue_threshold)] <- 'Signif. males'
+
+keyvals[which(results_pseudoBins$logFC > 0 & results_pseudoBins$qvalue < qvalue_threshold)] <- 'darkred'
+names(keyvals)[which(results_pseudoBins$logFC > 0 & results_pseudoBins$qvalue < qvalue_threshold)] <- 'Signif. females'
+
+unique(keyvals)
+unique(names(keyvals))
+
+p <- EnhancedVolcano(results_pseudoBins,
+                     lab = as.character(results_pseudoBins$gene_name),
+                     x = 'logFC',
+                     y = 'qvalue',
+                     xlim = c(-2.5, 2.5),
+                     ylim = c(0,20),
+                     FCcutoff = 2,
+                     pCutoff = 10E-15,
+                     cutoffLineType = 'blank',
+                     colCustom = keyvals,
+                     legendPosition = "none",
+                     ylab = expression('-Log'[10]*' q-value'),
+                     subtitle = "sex-DE analysis in HDBR - pseudotime bins as covariates",
+                     caption = "all genes")
+p
+
+# save plot
+ggsave('volcanoplot_colored_sexDE.png', 
+       path = "images/3-DE/analysis_pseudotimeBins/volcanoplot/", 
+       width = 12, height = 15, units = "cm", create.dir = TRUE)
+```
+
+
+# Compare the different analysis analyses
+
+## Comparison of original analysis with the one using pseudotime bins as covariate
+
+### Overlap & upset plot
+
+Merge of sex-DE results to use it with ComplexUpSet package.
+
+```{r merge_data, echo=FALSE}
+merged_data <- merge(results_pseudo, results_pseudoBins, 
+                     by = c("gene_id", "gene_name", "gene_type", "chr", "ensemblID"), suffixes = c("_pseudo", "_pseudoBins"))
+
+merged_data$femaleDE_pseudo <- ifelse(merged_data$qvalue_pseudo < qvalue_threshold & merged_data$logFC_pseudo > logFC_threshold, TRUE, FALSE)
+merged_data$maleDE_pseudo <- ifelse(merged_data$qvalue_pseudo < qvalue_threshold & merged_data$logFC_pseudo < logFC_threshold, TRUE, FALSE)
+merged_data$femaleDE_pseudoBins <- ifelse(merged_data$qvalue_pseudoBins < qvalue_threshold & merged_data$logFC_pseudoBins > logFC_threshold, TRUE, FALSE)
+merged_data$maleDE_pseudoBins <- ifelse(merged_data$qvalue_pseudoBins < qvalue_threshold & merged_data$logFC_pseudoBins < logFC_threshold, TRUE, FALSE)
+```
+
+Rename columns to improve upset plot.
+
+```{r rename_col, echo=FALSE}
+names(merged_data)[c(28, 29, 30, 31)] <- c("female\n pseudotime analysis", "male\n pseudotime analysis", "female\n pseudotimeBins analysis", "male\n pseudotimeBins analysis")
+```
+
+Format the data for the upset plot from the ComplexHeatmap package.
+
+```{r format_data_upset, echo=FALSE}
+combination_matrix <- make_comb_mat(merged_data[c(28, 29, 30, 31)])
+combination_matrix <- combination_matrix[comb_degree(combination_matrix) > 0]
+```
+
+
+```{r upset_plot, echo=FALSE}
+colorVal <- list(group = c("female" = "#B2182B", "male" = "#053061"))
+p <- UpSet(combination_matrix, set_order = c("female\n pseudotime analysis", "male\n pseudotime analysis", "female\n pseudotimeBins analysis", "male\n pseudotimeBins analysis"), 
+           comb_order = order(comb_size(combination_matrix), decreasing = TRUE),
+           row_names_gp = gpar(fontsize = 8),
+           row_names_side = "left",
+           top_annotation = upset_top_annotation(combination_matrix, 
+                                                 show_annotation_name = FALSE,
+                                                 add_numbers = TRUE,
+                                                 numbers_rot = 0,
+                                                 numbers_gp = gpar(fontsize = 8),
+                                                 height = unit(4, "cm")),
+           left_annotation = rowAnnotation(group = c("female", "male", "female", "male"), 
+                                            col = colorVal,
+                                            show_annotation_name = FALSE,
+                                            show_legend = FALSE)
+)
+p
+# save plot
+png(paste0(workDir, "images/3-DE/analysis_pseudotimeBins/UpsetPlot/complexUpsetPlot_sexDE_between_pseudotime_pseudotimeBins_analysis.png"),
+    width = 8, height = 8, units = "cm", res = 300)
+p
+dev.off()
+```
+
+
+### Test overlap
+
+```{r permutation_test_function, echo=FALSE}
+permutation_test <- function(listGeneset, universe, nperm = 1000, binwidth = 10){
+  observed <- length(purrr::reduce(listGeneset, intersect))
+  # permutation
+  simulated <- map_dbl(seq_len(nperm), function(x) {
+    sim <- map(lengths(listGeneset), ~sample(universe, .x))
+    sim <- length(purrr::reduce(sim, intersect))
+    return(sim)
+  })
+  # histogram of simulated values
+  p <- ggplot(as.data.frame(simulated), aes(simulated))
+  p <- p + geom_histogram(binwidth = binwidth)
+  p <- p + geom_vline(aes(xintercept = observed), color = "red")
+  p <- p + theme_minimal()
+  print(p)
+  # pvalue
+  pval <- (sum(simulated >= observed) + 1) / (nperm + 1)
+  return(pval)
+}
+```
+
+```{r permutation_test, echo=FALSE}
+signifGenes_pseudo <- results_pseudo[which(results_pseudo$qvalue < qvalue_threshold & 
+                                             abs(results_pseudo$logFC) > logFC_threshold), ]
+signifGenes_pseudoBins <- results_pseudoBins[which(results_pseudoBins$qvalue < qvalue_threshold & 
+                                                     abs(results_pseudoBins$logFC) > logFC_threshold), ]
+listData <- list(pseudotime = signifGenes_pseudo$gene_name, pseudotimeBins = signifGenes_pseudoBins$gene_name)
+
+permutation_test(listData, merged_data$gene_name, binwidth = 1)
+```
+
+
+### Replication rate
+
+We compute the replication rate (pi1).
+
+```{r function_pi1_score, echo=FALSE}
+pi1_score <- function(data1, data2, columnMerge = "ensemblID"){
+  # compute pi1 for second dataset compared to the first dataset
+  selected_pvalue <- data2$P.Value[which(data2[, columnMerge] %in% data1[, columnMerge])]
+  if (berryFunctions::is.error(qvalue::pi0est(p = selected_pvalue, lambda = 0.5, pi0.method = "smoother")) ) {
+    pi1 <- qvalue::qvalue(p = selected_pvalue, pi0 = 1)$pi0
+  }else{
+    pi1 <- 1-qvalue::pi0est(p = selected_pvalue, lambda = 0.5, pi0.method = "smoother")$pi0
+  }
+  
+  # continue only if the pi1 value was computed
+  if (is.numeric(pi1)){
+    return(pi1)
+  } else{
+    return("No pi1 analysis!")
+  }
+}
+```
+
+```{r function_pi1_normalized, echo=FALSE}
+pi1_normalized <- function(data1, data2, columnMerge = "ensemblID", qvalue_threshold = 0.01, logFC_threshold = 0, verbose = TRUE){
+  # get the significant genes in the first dataset
+  data1_signif <- data1[which(data1$qvalue < qvalue_threshold & abs(data1$logFC) > logFC_threshold), ]
+  
+  # pi1 replication rate for the significant genes
+  pi1_signif <- pi1_score(data1_signif, data2, columnMerge = "ensemblID")
+  if (verbose){
+    print(sprintf("pi1 for signif genes = %s", pi1_signif))
+  }
+  # pi1 replication rate for all genes
+  pi1_all <- pi1_score(data1, data2, columnMerge = "ensemblID")
+  if (verbose){
+    print(sprintf("pi1 for all genes = %s", pi1_all))
+  }
+  
+  # return the pi1 for significant genes normalized by the pi1 for all genes
+  return(pi1_signif/pi1_all)
+}
+```
+
+```{r pi1_score, echo=FALSE}
+print("Replication of prenatal pseudotime sex-DE results in prenatal pseudotime bins sex-DE analysis:")
+pi1_normalized(results_pseudo, results_pseudoBins, qvalue_threshold = qvalue_threshold)
+print("Replication of prenatal pseudotime bins sex-DE results in prenatal pseudotime sex-DE analysis:")
+pi1_normalized(results_pseudoBins, results_pseudo, qvalue_threshold = qvalue_threshold)
+```
+
+
+### Correlation of the logFC
+
+Scatter plot of the logFC between the 2 analyses with information about the correlation (r and p-value of cor.test).
+
+```{r function_scatter_plot_logFC, echo=FALSE}
+scatter_logFC <- function(data1, data2, nameData1, nameData2, pointColor, columnMerge = "ensemblID"){
+  # merge the 2 dataset
+  de_results_merged <- merge(data1, data2, by = columnMerge, suffixes = c(".data1", ".data2"))
+  # test correlation
+  res <- cor.test(de_results_merged$logFC.data1, de_results_merged$logFC.data2)
+  if (res$p.value == 0){
+    annotation_text <- sprintf("r = %.3f\nP < 2.2e-16", res$estimate)
+  } else{
+    annotation_text <- sprintf("r = %.3f\nP = %1.2e", res$estimate, res$p.value)
+  }
+  yrng <- range(de_results_merged$logFC.data1)
+  xrng <- range(de_results_merged$logFC.data2)
+  # plot
+  p <- ggplot(de_results_merged, aes(x = logFC.data1, y = logFC.data2))
+  p <- p + geom_abline(intercept = 0, slope = 1, col = "black")
+  p <- p + geom_hline(yintercept = 0, color = "grey")
+  p <- p + geom_vline(xintercept = 0, color = "grey")
+  p <- p + geom_point(color=pointColor, alpha = 0.3)
+  p <- p + theme_bw() + labs(title = "")
+  p <- p + theme(panel.grid = element_blank(), 
+                 plot.title = element_text(hjust = 0.5),
+                 plot.subtitle = element_text(hjust = 0.5))
+  p <- p + xlab(paste0("logFC (", nameData1, ")")) + ylab(paste0("logFC (", nameData2, ")"))
+  p <- p + annotate("text", xrng[1], yrng[2], hjust = 0, vjust = 1, 
+                    label = annotation_text)
+  return(p)
+}
+```
+
+
+Correlation plot only of pseudotime sex-DE genes.
+
+```{r corr_pseudo_sexDE, echo=FALSE}
+p <- scatter_logFC(results_pseudo[which(results_pseudo$qvalue < qvalue_threshold & abs(results_pseudo$logFC) > logFC_threshold),], results_pseudoBins, "pseudotime", "pseudotime bins", 
+                      pointColor = "black")
+p
+# save plot
+ggsave("correlation_logFC_sigPseudotime.png", plot = p, 
+       path = "images/3-DE/analysis_pseudotimeBins/comparison/", 
+       width = 10, height = 11, units = "cm", create.dir = TRUE)
+```
+
+Correlation plot only of autosomal pseudotime sex-DE genes.
+
+```{r corr_pseudo_sexDE_auto, echo=FALSE}
+p <- scatter_logFC(results_pseudo_auto[which(results_pseudo_auto$qvalue < qvalue_threshold & abs(results_pseudo_auto$logFC) > logFC_threshold),], results_pseudoBins, "pseudotime", "pseudotime bins", 
+                      pointColor = "black")
+p
+# save plot
+ggsave("correlation_logFC_sigPseudotime_auto.png", plot = p, 
+       path = "images/3-DE/analysis_pseudotimeBins/comparison/", 
+       width = 10, height = 11, units = "cm", create.dir = TRUE)
+```
+
+### Effect size consistency
+
+Test the consistency of the effect size.
+
+```{r _function_consistency, echo=FALSE}
+consistency_test <- function(data1, data2, columnMerge = "ensemblID", binomTestP = 0.5,
+                             qvalueThreshold = 0.01, logFCThreshold = 0, typeComparison = "1vs2"){
+  # merge the 2 datasets
+  de_results_merged <- merge(data1, data2, by = columnMerge, suffixes = c(".data1", ".data2"))
+  # Depending on the type of comparison choosen, get the observed consistency 
+  de_results_merged_filtered <- data.frame()
+  nbr_consistent <- 0
+  consistency <- 0
+  if (typeComparison == "1vs2"){
+    # keep only the genes/transcripts that are significant in the first data
+    de_results_merged_filtered <- de_results_merged[which(de_results_merged$qvalue.data1 < qvalueThreshold & abs(de_results_merged$logFC.data1) > logFCThreshold), ]
+    print(sprintf("Number of genes compared = %s", dim(de_results_merged_filtered)[1]))
+    # number of consistent genes/transcripts
+    nbr_consistent <- sum(sign(de_results_merged_filtered$t.data1) == sign(de_results_merged_filtered$t.data2))
+    consistency <- nbr_consistent/length(de_results_merged_filtered[, columnMerge])
+  } else if (typeComparison == "intersection"){
+    # keep only the genes/transcripts that are significant in the second data
+    de_results_merged_filtered <- de_results_merged[which(de_results_merged$qvalue.data1 < qvalueThreshold & abs(de_results_merged$logFC.data1) > logFCThreshold &
+                                                            de_results_merged$qvalue.data2 < qvalueThreshold & abs(de_results_merged$logFC.data2) > logFCThreshold), ]
+    print(sprintf("Number of genes compared = %s", dim(de_results_merged_filtered)[1]))
+    # number of consistent genes/transcripts
+    nbr_consistent <- sum(sign(de_results_merged_filtered$t.data1) == sign(de_results_merged_filtered$t.data2))
+    consistency <- nbr_consistent/length(de_results_merged_filtered[, columnMerge])
+  } else if (typeComparison == "union"){
+    # keep only the genes/transcripts that are significant in the second data
+    de_results_merged_filtered <- de_results_merged[which((de_results_merged$qvalue.data1 < qvalueThreshold & abs(de_results_merged$logFC.data1) > logFCThreshold) |
+                                                            (de_results_merged$qvalue.data2 < qvalueThreshold & abs(de_results_merged$logFC.data2) > logFCThreshold)), ]
+    print(sprintf("Number of genes compared = %s", dim(de_results_merged_filtered)[1]))
+    # number of consistent genes/transcripts
+    nbr_consistent <- sum(sign(de_results_merged_filtered$t.data1) == sign(de_results_merged_filtered$t.data2))
+    consistency <- nbr_consistent/length(de_results_merged_filtered[, columnMerge])
+  }
+  # compare this consistency score with the consistency of list of random genes
+  cons_values <- rep(NA, 1000)
+  # to do 1000 times
+  for (i in 1:1000){
+    # randomly select the same number of genes/transcripts in the data2 to test the overlap with the data1 signif genes
+    selection <- sample(de_results_merged[, columnMerge], length(de_results_merged_filtered[, columnMerge]))
+    nbr_consistent_th <- sum(sign(de_results_merged$logFC.data2[which(de_results_merged[, columnMerge] %in% selection)]) == sign(de_results_merged$logFC.data1[which(de_results_merged[, columnMerge] %in% selection)]))
+    cons_values[i] <- nbr_consistent_th/length(de_results_merged_filtered[, columnMerge])
+  }
+  cons_values <- as.data.frame(cons_values)
+  # plot the distribution of the predited consistency and the real value
+  p <- ggplot(cons_values, aes(cons_values))
+  p <- p + geom_histogram(binwidth=0.02, boundary = 0, fill="grey", color="black")
+  p <- p + theme_bw() + xlab("consistency") + ylab("Frequency")
+  p <- p + scale_x_continuous(limits = c(0, 1))
+  p <- p + geom_vline(xintercept = consistency, color = "red")
+  print(p)
+  # test this consistency with a permutation test
+  nsmaller <- sum(cons_values >= consistency)
+  permutation_test <- round((nsmaller+1)/(1000+1), 3)
+  # test this consistency with a binomial test
+  result_test <- binom.test(nbr_consistent, length(de_results_merged_filtered[, columnMerge]), p = binomTestP)
+  # print results
+  print(sprintf("number of consistent gene = %s", nbr_consistent))
+  print(sprintf("consistency = %s", consistency))
+  print(sprintf("permutation test p-value = %s", permutation_test))
+  print(sprintf("binomial test p-value = %s", result_test$p.value))
+  return(consistency)
+}
+```
+
+
+```{r consistency_score_pseudotimeVSpseudotimeBins, echo=FALSE}
+print("Consistency of the prenatal pseudotime sex-DE results in prenatal pseudotime bins sex-DE analysis:")
+consistency_all <- consistency_test(results_pseudo, results_pseudoBins, qvalueThreshold = qvalue_threshold, logFCThreshold = 0)
+```
+
+
+## Comparison of devStage analysis with the one using pseudotime bins as covariate
+
+### Overlap & upset plot
+
+Merge of sex-DE results to use it with ComplexUpSet package.
+
+```{r merge_data_devStage, echo=FALSE}
+merged_data <- merge(results_devStage, results_pseudoBins, 
+                     by = c("gene_id", "gene_name", "gene_type", "chr", "ensemblID"), suffixes = c("_devStage", "_pseudoBins"))
+
+merged_data$femaleDE_devStage <- ifelse(merged_data$qvalue_devStage < qvalue_threshold & merged_data$logFC_devStage > logFC_threshold, TRUE, FALSE)
+merged_data$maleDE_devStage <- ifelse(merged_data$qvalue_devStage < qvalue_threshold & merged_data$logFC_devStage < logFC_threshold, TRUE, FALSE)
+merged_data$femaleDE_pseudoBins <- ifelse(merged_data$qvalue_pseudoBins < qvalue_threshold & merged_data$logFC_pseudoBins > logFC_threshold, TRUE, FALSE)
+merged_data$maleDE_pseudoBins <- ifelse(merged_data$qvalue_pseudoBins < qvalue_threshold & merged_data$logFC_pseudoBins < logFC_threshold, TRUE, FALSE)
+```
+
+Rename columns to improve upset plot.
+
+```{r rename_col_devStage, echo=FALSE}
+names(merged_data)[c(28, 29, 30, 31)] <- c("female\n devStage analysis", "male\n devStage analysis", "female\n pseudotimeBins analysis", "male\n pseudotimeBins analysis")
+```
+
+Format the data for the upset plot from the ComplexHeatmap package.
+
+```{r format_data_upset_devStage, echo=FALSE}
+combination_matrix <- make_comb_mat(merged_data[c(28, 29, 30, 31)])
+combination_matrix <- combination_matrix[comb_degree(combination_matrix) > 0]
+```
+
+
+```{r upset_plot_devStage, echo=FALSE}
+colorVal <- list(group = c("female" = "#B2182B", "male" = "#053061"))
+p <- UpSet(combination_matrix, set_order = c("female\n devStage analysis", "male\n devStage analysis", "female\n pseudotimeBins analysis", "male\n pseudotimeBins analysis"), 
+           comb_order = order(comb_size(combination_matrix), decreasing = TRUE),
+           row_names_gp = gpar(fontsize = 8),
+           row_names_side = "left",
+           top_annotation = upset_top_annotation(combination_matrix, 
+                                                 show_annotation_name = FALSE,
+                                                 add_numbers = TRUE,
+                                                 numbers_rot = 0,
+                                                 numbers_gp = gpar(fontsize = 8),
+                                                 height = unit(4, "cm")),
+           left_annotation = rowAnnotation(group = c("female", "male", "female", "male"), 
+                                            col = colorVal,
+                                            show_annotation_name = FALSE,
+                                            show_legend = FALSE)
+)
+p
+# save plot
+png(paste0(workDir, "images/3-DE/analysis_pseudotimeBins/UpsetPlot/complexUpsetPlot_sexDE_between_devStage_pseudotimeBins_analysis.png"),
+    width = 8, height = 8, units = "cm", res = 300)
+p
+dev.off()
+```
+
+
+### Test overlap
+
+```{r permutation_test_devStage, echo=FALSE}
+signifGenes_devStage <- results_devStage[which(results_devStage$qvalue < qvalue_threshold & 
+                                                 abs(results_devStage$logFC) > logFC_threshold), ]
+signifGenes_pseudoBins <- results_pseudoBins[which(results_pseudoBins$qvalue < qvalue_threshold & 
+                                                     abs(results_pseudoBins$logFC) > logFC_threshold), ]
+listData <- list(pseudotime = signifGenes_devStage$gene_name, pseudotimeBins = signifGenes_pseudoBins$gene_name)
+
+permutation_test(listData, merged_data$gene_name, binwidth = 1)
+```
+
+
+### Replication rate
+
+We compute the replication rate (pi1).
+
+```{r pi1_score_devStage, echo=FALSE}
+print("Replication of prenatal devstage sex-DE results in prenatal pseudotime bins sex-DE analysis:")
+pi1_normalized(results_devStage, results_pseudoBins, qvalue_threshold = qvalue_threshold)
+print("Replication of prenatal pseudotime bins sex-DE results in prenatal devstage sex-DE analysis:")
+pi1_normalized(results_pseudoBins, results_devStage, qvalue_threshold = qvalue_threshold)
+```
+
+
+### Correlation of the logFC
+
+Scatter plot of the logFC between the 2 analyses with information about the correlation (r and p-value of cor.test).
+
+Correlation plot only of devStage sex-DE genes.
+
+```{r corr_devStage_sexDE, echo=FALSE}
+p <- scatter_logFC(results_devStage[which(results_devStage$qvalue < qvalue_threshold & abs(results_devStage$logFC) > logFC_threshold),], results_pseudoBins, "devStage", "pseudotime bins", 
+                      pointColor = "black")
+p
+# save plot
+ggsave("correlation_logFC_sigDevStage.png", plot = p, 
+       path = "images/3-DE/analysis_pseudotimeBins/comparison/", 
+       width = 10, height = 11, units = "cm", create.dir = TRUE)
+```
+
+
+### Effect size consistency
+
+Test the consistency of the effect size.
+
+```{r consistency_score_devStageVSpseudotimeBins, echo=FALSE}
+print("Consistency of the prenatal devStage sex-DE results in prenatal pseudotime bins sex-DE analysis:")
+consistency_all <- consistency_test(results_devStage, results_pseudoBins, qvalueThreshold = qvalue_threshold, logFCThreshold = 0)
+```
+
+
+# Session info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```
+

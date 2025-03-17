@@ -1,0 +1,314 @@
+---
+title: "Pseudotime analysis with different number of genes for inference"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r library, echo=FALSE}
+suppressPackageStartupMessages(library(GenomicFeatures))
+suppressPackageStartupMessages(library(edgeR))
+suppressPackageStartupMessages(library(limma))
+suppressPackageStartupMessages(library(SummarizedExperiment))
+suppressPackageStartupMessages(library(phenopath))
+suppressPackageStartupMessages(library(ade4))
+suppressPackageStartupMessages(library(factoextra))
+suppressPackageStartupMessages(library(ggplot2))
+```
+
+```{r setup, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+
+# Load and prepare data
+
+## Load the counts and the phenotype data
+
+```{r load_data, echo=FALSE}
+load("data/1-preprocessing/counts_forebrain_phenotypes.RData")
+```
+
+
+## Prepare metadata
+
+```{r prepare_metadata, echo=FALSE}
+Sex <- as.factor(phenotypes$assigned_sex)
+DevStage <- phenotypes$newDevStage
+Individual <- as.factor(phenotypes$ind)
+ForebrainRegion <- phenotypes$newBrainRegion
+Batch <- phenotypes$batch
+# metadata
+metadata <- data.frame(Sex = Sex, DevStage = DevStage, Individual = Individual, ForebrainRegion = ForebrainRegion, Batch = Batch)
+rownames(metadata) <- phenotypes$experiment_name
+```
+
+
+## Convert counts in TPM values
+
+Load the annotation file.
+
+```{r load_annotation, echo=FALSE}
+# First, import the GTF-file that you have also used as input for htseq-count
+txdb <- txdbmaker::makeTxDbFromGFF("data/0-input/gencode.v28.annotation.gff3",format="gff")
+
+# then collect the exons per gene id
+exons.list.per.gene <- exonsBy(txdb,by="gene")
+
+# then for each gene, reduce all the exons to a set of non overlapping exons, calculate their lengths (widths) and sum them
+exonic.gene.sizes <-  sum(width(reduce(exons.list.per.gene)))
+#names(exonic.gene.sizes)=matrix(unlist(strsplit(as.character(names(exonic.gene.sizes)),"\\.")),ncol=2,byrow=T)[,1]
+names(exonic.gene.sizes) <- names(exonic.gene.sizes)
+
+gtf.gene.length_df <- cbind(data.frame(names(exonic.gene.sizes)),as.numeric(exonic.gene.sizes))
+names(gtf.gene.length_df) <- c("gene_id","size")
+gtf.gene.length_df <- unique(gtf.gene.length_df)
+
+# Merge gene size with gene metadata
+gene_metadata <- merge(x$genes, gtf.gene.length_df)
+x$genes <- gene_metadata
+```
+
+Transform the counts data in log(TPM+1).
+
+```{r transform_counts, echo=FALSE}
+counts2tpm <- function(counts, genes){
+  # RPK = count/geneLength(kb)
+  counts <- counts/(genes$size*1e-3)
+  # Sum of RPK for each sample
+  library_depth <- colSums(counts)
+  # TPM = RPK/(sum(RPK)/1e6)
+  counts <- sweep(counts, 2, library_depth/1e6,`/`)
+  return(counts)
+}
+tpm <- counts2tpm(x$counts, x$genes)
+logTpm <- log2(tpm+1)
+rownames(logTpm) <- x$genes$gene_name
+```
+
+
+# Pseudotime analysis with a variable number of variable genes as input
+
+## Function
+
+A function that select the X most variable genes, and do the phenopath analysis.
+
+```{r phenopath_analysis_function, echo=FALSE}
+phenopath_analysis <- function(tpmData, metadata, nbrInputGenes = 2000){
+  # Select the genes to use in the phenopath analysis.
+  variance <- rowVars(tpmData)
+  ntop <- min(nbrInputGenes, dim(tpmData)[1])
+  selectntop <- order(variance, decreasing=TRUE)[seq_len(ntop)]
+  selectedCounts <- logTpm[selectntop,]
+  # Create the SummarizedExperiment object
+  sce <- SummarizedExperiment(assays = list(exprs = selectedCounts), 
+                              colData = metadata)
+  # Fit phenopath model
+  x_mat <- model.matrix(~ Sex)
+  fit <- phenopath(sce, x_mat, elbo_tol = 1e-6, thin = 20)
+  # elbo plot
+  p <- plot_elbo(fit)
+  p
+  # save plot
+  ggsave(sprintf("Elbo_plot_%igenes.png", nbrInputGenes),
+         path = "images/2-pseudotime/varInputGenes/",
+         plot = p, width = 12, height = 10, units = "cm")
+  # return the computed pseudotime
+  return(trajectory(fit))
+}
+```
+
+
+## Pseudotime analysis for variable number of input genes
+
+We do the analysis with a number of input genes ranging from 100 to 3000 by step increase of 100.
+
+```{r analysis_phenotype_100to3000, echo=FALSE}
+metadata_varInputGenes <- metadata
+for (nbrGenes in seq(100, 3000, by=100)){
+  print(sprintf("Number of input genes=%i",nbrGenes))
+  # do pseudotime analysis
+  pseudotime <- phenopath_analysis(logTpm, metadata, nbrInputGenes = nbrGenes)
+  # add pseudotime to metadata
+  colNamePseudotime <- sprintf("pseudotime%i", nbrGenes)
+  metadata_varInputGenes[, colNamePseudotime] <- pseudotime
+}
+```
+
+
+
+
+# Compare these different pseudotimes with the one from the main analysis
+
+We compare these new pseudotimes with the one used in the main analysis (with 2000 genes as input).
+
+## Load pseudotime main analysis
+
+Load the original pseudotime values.
+
+```{r load_metadata_mainAnalysis, echo=FALSE}
+loadRData <- function(fileName){
+  #loads an RData file, and returns it
+  load(fileName)
+  get(ls()[ls() != "fileName"])
+}
+metadata_main <- loadRData("data/2-pseudotime/forebrain_metadata_pseudotime.RData")
+```
+
+
+
+
+## Format the new pseudotimes
+
+Add the 2 new pseudotimes to the main pseudotime.
+
+```{r merge_pseudotimes, echo=FALSE}
+metadata_varInputGenes$pseudotimeOriginal <- metadata_main$pseudotime
+```
+
+
+## Check correlation between the different pseudotimes
+
+Compute the Pearson's correlation between the new pseudotimes and the orignial one
+
+```{r corr_pseudotime, echo=FALSE}
+corr_results <- data.frame(nbrInputGenes = seq(100, 3000, by=100), cor = NA, pvalue = NA)
+for (nbrGenes in seq(100, 3000, by=100)){
+  print(sprintf("Number of  input genes=%i",nbrGenes))
+  # compute the Pearson correlation
+  colNamePseudotime <- sprintf("pseudotime%i", nbrGenes)
+  cor_tmp <- cor.test(metadata_varInputGenes[, colNamePseudotime], metadata_varInputGenes$pseudotimeOriginal)
+  # add the correlation and its pvalue to the output data frame
+  corr_results[which(corr_results$nbrInputGenes == nbrGenes), ] <- c(nbrGenes, cor_tmp$estimate, cor_tmp$p.value)
+}
+```
+
+Then, we plot all correlation  against the number of input genes.
+
+```{r plot_correlation, echo=FALSE}
+p <- ggplot(corr_results, aes(x = nbrInputGenes, y = cor))
+p <- p + geom_point()
+p <- p + geom_line()
+p <- p + theme_minimal()
+p <- p + xlab("Number of input genes") + ylab("Pearson's correlation")
+p
+# save plot
+ggsave("correlation_withOriginalPseudotime.png",
+       path = "images/2-pseudotime/varInputGenes/",
+       plot = p, width = 12, height = 10, units = "cm")
+```
+
+
+## Check correlation of the new pseudotime with developmental stages
+
+Convert the developmental stages to a continuous variable.
+
+```{r convert2continuous, echo=FALSE}
+metadata_varInputGenes$DevStageCont <- as.integer(metadata_varInputGenes$DevStage)
+```
+
+Compute Kendall correlation between the new pseudotimes and the continuous developmental stage variable.
+
+```{r correlation_kendall_pseudotime3000, echo=FALSE}
+kendall_results <- data.frame(nbrInputGenes = seq(100, 3000, by=100), tau = NA, pvalue = NA)
+for (nbrGenes in seq(100, 3000, by=100)){
+  # compute the Pearson correlation
+  colNamePseudotime <- sprintf("pseudotime%i", nbrGenes)
+  kendall_tmp <- cor.test(metadata_varInputGenes$DevStageCont, metadata_varInputGenes[, colNamePseudotime], method = "kendall")
+  # add the correlation and its pvalue to the output data frame
+  kendall_results[which(kendall_results$nbrInputGenes == nbrGenes), ] <- c(nbrGenes, kendall_tmp$estimate, kendall_tmp$p.value)
+}
+```
+
+```{r plot_kendall_correlation, echo=FALSE}
+p <- ggplot(kendall_results, aes(x = nbrInputGenes, y = tau))
+p <- p + geom_point()
+p <- p + geom_line()
+p <- p + theme_minimal()
+p <- p + xlab("Number of input genes") + ylab("Kendall's tau")
+p
+# save plot
+ggsave("correlation_withDevStages.png",
+       path = "images/2-pseudotime/varInputGenes/",
+       plot = p, width = 12, height = 10, units = "cm")
+```
+
+# Pseusotime analysis with 100 choosen genes 
+
+We want to understand what changes when we go from the 601 most variable genes to the 700 most variable ones.
+For this, we take these different 100 genes between the analysis with 601 genes and 700 genes, and we run the pseudotime analysis with them.
+
+## Select genes
+
+```{r select_700-600genes, echo=FALSE}
+# Select the genes to use in the phenopath analysis.
+variance <- rowVars(logTpm)
+selectnGenes <- order(variance, decreasing=TRUE)[seq(601,700)]
+selectedCounts <- logTpm[selectnGenes,]
+# Create the SummarizedExperiment object
+sce <- SummarizedExperiment(assays = list(exprs = selectedCounts), 
+                            colData = metadata)
+```
+
+## Pseudotime analysis
+
+```{r pseudotime_700-600genes, echo=FALSE}
+# Fit phenopath model
+x_mat <- model.matrix(~ Sex)
+fit <- phenopath(sce, x_mat, elbo_tol = 1e-6, thin = 20)
+# elbo plot
+p <- plot_elbo(fit)
+p
+# save plot
+ggsave("Elbo_plot_700-600genes.png",
+       path = "images/2-pseudotime/varInputGenes/",
+       plot = p, width = 12, height = 10, units = "cm")
+```
+
+## Save the pseudotime results in a RData
+
+```{r save_pseudotime_res_700-600genes, echo=FALSE}
+metadata$pseudotime <- trajectory(fit)
+save(fit, sce, x_mat, selectedCounts, metadata, file = "data/2-pseudotime/varInputGenes/forebrain_pseudotime_analysis_700-600genes.RData")
+```
+
+```{r save_metadata_700-600genes, echo=FALSE}
+save(metadata, file = "data/2-pseudotime/varInputGenes/forebrain_metadata_pseudotime_700-600genes.RData")
+```
+
+Also output the list of genes used as input.
+
+```{r save_input_gene_list, echo=FALSE}
+write.table(rownames(selectedCounts), file = "data/2-pseudotime/varInputGenes/inputGeneList_pseudotime_700-600genes.txt")
+```
+
+
+## Correlation with original pseudotime and developmental stages
+
+Prepare metadata.
+
+```{r prepare_metadata_700-600genes, echo=FALSE}
+metadata_700_600genes <- metadata
+metadata_700_600genes$pseudotime_700_600genes <- pseudotime
+metadata_700_600genes$pseudotimeOriginal <- metadata_main$pseudotime
+```
+
+
+```{r corr_pseudotime_700-600genes, echo=FALSE}
+corr_result_700_600genes <- cor.test(metadata_700_600genes$pseudotime_700_600genes, metadata_700_600genes$pseudotimeOriginal)
+corr_result_700_600genes
+kendall_result_700_600genes <- cor.test(metadata_varInputGenes$DevStageCont, metadata_700_600genes$pseudotime_700_600genes, method = "kendall")
+kendall_result_700_600genes
+```
+
+
+
+
+# Session Info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```
+
+
+

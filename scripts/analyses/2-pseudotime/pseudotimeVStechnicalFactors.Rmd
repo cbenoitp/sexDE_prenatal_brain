@@ -1,0 +1,308 @@
+---
+title: "Factors that correlate with pseudotime"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r library, echo=FALSE}
+suppressPackageStartupMessages(library(edgeR))
+suppressPackageStartupMessages(library(limma))
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(SummarizedExperiment))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(tibble))
+suppressPackageStartupMessages(library(readxl))
+suppressPackageStartupMessages(library(naniar))
+```
+
+```{r setup, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+# Load data
+
+## Raw counts
+
+Load raw counts outputed by Salmon.
+
+```{r load_counts, echo=FALSE}
+counts <- fread(file="data/1-preprocessing/counts_PRJEB14594.txt", sep = "\t", fill = TRUE)
+# reformat
+rownames(counts) <- counts$Name
+counts <- setNames(data.frame(t(counts[,-1])), rownames(counts))
+```
+
+And compute a proxy for the library size using the total number of counts for each samples.
+
+```{r compute_library_size, echo=FALSE}
+totalCounts <- rowSums(counts, na.rm = TRUE)
+names(totalCounts) <- names(counts)
+```
+
+Load the phenotype file to match the sample names with the ones used in the metadata.
+
+```{r load_phenotypes, echo=FALSE}
+samples <- read.table("data/1-preprocessing/PRJEB14954_samples_with_counts_info.txt", 
+                      header = FALSE, sep = "\t", fill = TRUE)
+names(samples) <- c("experiment_name", "ind", "dev_stage", "brain_region", "karyotype", "batch", "sample_name")
+# order the df to match the counts df
+samples <- samples[match(names(totalCounts), samples$sample_name),]
+# rename the totalCounts names with the experiment_name to match the names used in the pseudotime metadata
+names(totalCounts) <- samples$experiment_name
+```
+
+Sum the samples coming from the same sample (same experiment name).
+
+```{r sum_technicalRep, echo=FALSE}
+totalCounts_merged <- data.frame(sampleName = names(totalCounts), totalCounts = totalCounts) %>%
+  group_by(sampleName) %>%
+  summarise(totalCounts = sum(totalCounts), .groups = "drop")
+```
+
+Then, to save memory, we delete the raw counts from the R session.
+
+```{r delete_counts_data, echo=FALSE}
+rm(counts)
+```
+
+
+## Pseudotime from original analysis
+
+Load the pseudotime 
+
+```{r load_pseudotime, echo=FALSE}
+load("data/2-pseudotime/forebrain_metadata_pseudotime.RData")
+```
+
+
+## Pseudotime from analysis using the developmental stages as covariate
+
+Load the pseudotime
+
+```{r load_pseudotime_devStage, echo=FALSE}
+loadRData <- function(fileName){
+  #loads an RData file, and returns it
+  load(fileName)
+  get(ls()[ls() != "fileName"])
+}
+metadata_devStage <- loadRData("data/2-pseudotime/analysis_withDevStage/forebrain_metadata_pseudotime_withDevStage.RData")
+```
+
+
+## SVA from pseudotime analysis
+
+Load only sva object.
+
+```{r load_sva_pseudotime, echo=FALSE}
+loadObject <- function(fileName, objectName){
+  #loads an RData file, and returns it
+  load(fileName)
+  get(ls()[ls() == objectName])
+}
+sva_pseudotime <- loadObject("data/3-DE/normCounts_dream_pseudotime_sva_ind_interaction_phenotypes.RData", "sva.obj")
+```
+
+## SVA from devStage analysis
+
+
+```{r load_sva_devStage, echo=FALSE}
+sva_devStage <- loadObject("data/3-DE/analysis_devStage/normCounts_dream_dev_sva_ind_interaction_phenotypes.RData", "sva.obj")
+```
+
+
+## Load other HDBR metadata
+
+Read excel file with the metadata contained in the article. This file contains one additional information called "time sample in transit".
+
+```{r load_hdbr_metadata, echo=FALSE}
+hdbr_add_metadata <- read_excel("data/0-input/HDBR_AmendedSupplementaryTable1.xlsx",
+                                 sheet = 1, skip = 6)
+# rename columns
+names(hdbr_add_metadata) <- c("Ind", "DevelopmentalStage", "Sample", "BrainRegion", "LeftRight", "Karyotype", "TimeInTransit")
+# replace "UNKNOWN" values by NA
+hdbr_add_metadata <- replace_with_na_all(hdbr_add_metadata, condition = ~.x == "UNKNOWN")
+# convert TimeInTransit to a numeric
+hdbr_add_metadata$TimeInTransit <- as.numeric(hdbr_add_metadata$TimeInTransit)
+```
+
+Merge this metadata with our original metadata and the metadata from the pseudotime with the devStage covariate analysis.
+
+```{r merge_metadata, echo=FALSE}
+metadata_merged <- merge(metadata, hdbr_add_metadata[, c(3,5,7)], by.x = 0, by.y = "Sample", all.x = TRUE)
+metadata_devStage_merged <- merge(metadata_devStage, hdbr_add_metadata[, c(3,5,7)], by.x = 0, by.y = "Sample", all.x = TRUE)
+```
+
+
+
+# Correlation between pseudotime and technical factors
+
+## For original pseudotime
+
+### Pseudotime vs library size
+
+Merge the library size with the metadata containing the pseudotime.
+
+```{r merge_librarySize_pseudotime, echo=FALSE}
+metadata_librarySize <- merge(metadata, totalCounts_merged, by.x = 0, by.y = 1)
+names(metadata_librarySize)[1] <- "sampleName"
+```
+
+Look at the correlation between the pseudotime and the library size.
+
+```{r cor_librarySize_pseudotime, echo=FALSE}
+cor.test(metadata_librarySize$pseudotime, metadata_librarySize$totalCounts)
+```
+
+```{r plot_cor_librarySize_pseudotime, echo=FALSE}
+p <- ggplot(metadata_librarySize, aes(x = pseudotime, y = totalCounts))
+p <- p + geom_point()
+p <- p + theme_minimal()
+p <- p + scale_y_log10()
+p <- p + ylab("Library size\nproxied by total count")
+p
+# save plot
+ggsave("pseudotime_vs_librarySize.png", 
+       path = "images/2-pseudotime/pseudotimeVStechnicalFactors/",
+       plot = p, width = 15, height = 10, units = "cm")
+```
+
+
+### Pseudotime vs Time in transit
+
+For this analysis some samples will be ignored as there is no information about the time in transit for the sample.
+
+```{r cor_TimeInTransit_pseudotime_devStage, echo=FALSE}
+cor.test(metadata_merged$pseudotime, metadata_merged$TimeInTransit)
+```
+
+```{r plot_cor_TimeInTransit_pseudotime_devStage, echo=FALSE}
+p <- ggplot(metadata_merged, aes(x = pseudotime, y = TimeInTransit))
+p <- p + geom_point()
+p <- p + theme_minimal()
+p <- p + ylab("Time in transit (in minutes)")
+p
+# save plot
+ggsave("pseudotime_vs_timeInTransit.png", 
+       path = "images/2-pseudotime/pseudotimeVStechnicalFactors/",
+       plot = p, width = 15, height = 10, units = "cm")
+```
+
+
+### Pseudotime vs sva from original analysis
+
+Look at the correlation of the 22 original svas with the pseudotime from the original analysis.
+
+```{r cor_svaOriginal_vs_pseudotime, echo=FALSE}
+for (i in 1:sva_pseudotime$n.sv){
+  print(sprintf("Pseudotime original vs SVAs original %i", i))
+  corTestRes <- cor.test(metadata$pseudotime, sva_pseudotime$sv[,i])
+  print(corTestRes)
+}
+```
+
+Only the second sva is significantly correlated with pseudotime (r=0.127 and p-value=0.037).
+
+
+### Pseudotime vs sva from devStage analysis
+
+Look at the correlation of the 22 svas from the devStage analysis with the pseudotime from the original analysis.
+
+```{r cor_svaDevStage_vs_pseudotime, echo=FALSE}
+for (i in 1:sva_devStage$n.sv){
+  print(sprintf("Pseudotime original vs SVAs from devStage analysis %i", i))
+  corTestRes <- cor.test(metadata$pseudotime, sva_devStage$sv[,i])
+  print(corTestRes)
+}
+```
+
+
+## For pseudotime with devStage covariate
+
+### Pseudotime vs library size
+
+Merge the library size with the metadata containing the pseudotime.
+
+```{r merge_librarySize_pseudotimeDevStage, echo=FALSE}
+metadata_devStage_librarySize <- merge(metadata_devStage, totalCounts_merged, by.x = 0, by.y = 1)
+names(metadata_devStage_librarySize)[1] <- "sampleName"
+```
+
+Look at the correlation between the pseudotime and the library size.
+
+```{r cor_librarySize_pseudotimeDevStage, echo=FALSE}
+cor.test(metadata_devStage_librarySize$pseudotime, metadata_devStage_librarySize$totalCounts)
+```
+
+
+```{r plot_cor_librarySize_pseudotimeDevStage, echo=FALSE}
+p <- ggplot(metadata_devStage_librarySize, aes(x = pseudotime, y = totalCounts))
+p <- p + geom_point()
+p <- p + theme_minimal()
+p <- p + scale_y_log10()
+p <- p + ylab("Library size\nproxied by total count") + xlab("Pseudotime (devStage cov.)")
+p
+# save plot
+ggsave("pseudotimeDevStage_vs_librarySize.png", 
+       path = "images/2-pseudotime/pseudotimeVStechnicalFactors/",
+       plot = p, width = 15, height = 10, units = "cm")
+```
+
+
+### Pseudotime vs Time in transit
+
+For this analysis some samples will be ignored as there is no information about the time in transit for the sample.
+
+```{r cor_TimeInTransit_pseudotime, echo=FALSE}
+cor.test(metadata_devStage_merged$pseudotime, metadata_devStage_merged$TimeInTransit)
+```
+
+```{r plot_cor_TimeInTransit_pseudotime, echo=FALSE}
+p <- ggplot(metadata_devStage_merged, aes(x = pseudotime, y = TimeInTransit))
+p <- p + geom_point()
+p <- p + theme_minimal()
+p <- p + ylab("Time in transit (in minutes)")
+p
+# save plot
+ggsave("pseudotimeDevStage_vs_timeInTransit.png", 
+       path = "images/2-pseudotime/pseudotimeVStechnicalFactors/",
+       plot = p, width = 15, height = 10, units = "cm")
+```
+
+
+### Pseudotime vs sva from original analysis
+
+Look at the correlation of the 22 original svas with the pseudotime from the original analysis.
+
+```{r cor_svaOriginal_vs_pseudotimeDevStage, echo=FALSE}
+for (i in 1:sva_pseudotime$n.sv){
+  print(sprintf("Pseudotime devStage vs SVAs original %i", i))
+  corTestRes <- cor.test(metadata_devStage$pseudotime, sva_pseudotime$sv[,i])
+  print(corTestRes)
+}
+```
+
+5 different SVAs from the original analysis have a significant correlation with the pseudotime with devStage as covariate.
+The maximum Pearson's correlation is r=0.22.
+
+
+### Pseudotime vs sva from devStage analysis
+
+Look at the correlation of the 22 svas from the devStage analysis with the pseudotime from the analysis with the devStage as covariates..
+
+```{r cor_svaDevStage_vs_pseudotimeDevStage, echo=FALSE}
+for (i in 1:sva_devStage$n.sv){
+  print(sprintf("Pseudotime original vs SVAs from devStage analysis %i", i))
+  corTestRes <- cor.test(metadata_devStage$pseudotime, sva_devStage$sv[,i])
+  print(corTestRes)
+}
+```
+
+
+# Session Info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```
+

@@ -1,0 +1,173 @@
+---
+title: "Sex-DE analysis using same pseudotime for each individuals and no individual information in the model"
+author: "Clara Benoit-Pilven"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r load_libraries, echo=FALSE}
+suppressPackageStartupMessages( library(edgeR) )
+suppressPackageStartupMessages( library(limma) )
+suppressPackageStartupMessages( library(qvalue) )
+suppressPackageStartupMessages( library(sva) )
+suppressPackageStartupMessages( library(doParallel) )
+suppressPackageStartupMessages( library(variancePartition) )
+```
+
+```{r parallel_processing_param, echo=FALSE}
+# Specify parallel processing parameters
+# this is used implicitly by dream() to run in parallel
+param <- SnowParam(4, "SOCK", progressbar=TRUE)
+register(param)
+```
+
+```{r setup, echo=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Workspace/HDBR/github-repo/sexDE_prenatal_brain/')
+```
+
+# Sex-DE analysis on genes with pseudotime covariate
+
+## Load the counts and the phenotype data
+
+```{r load_data, echo=FALSE}
+load("data/1-preprocessing/counts_forebrain_phenotypes.RData")
+load("data/2-pseudotime/analysis_1samplePerInd/forebrain_metadata_pseudotime.RData")
+metadata_subset <- metadata_subset[,c(1,6,3,2)]
+```
+
+Also load the metadata for the full data (without pseudotime) and add the pseudotime computed using 1 sample per individual for all samples of this individual.
+
+```{r load_metadata_mainAnalysis, echo=FALSE}
+loadRData <- function(fileName){
+  #loads an RData file, and returns it
+  load(fileName)
+  get(ls()[ls() != "fileName"])
+}
+metadata_main <- loadRData("data/2-pseudotime/forebrain_metadata_pseudotime.RData")
+```
+
+```{r merge_new_pseudotime, echo=FALSE}
+metadata_full <- metadata_main
+metadata_full$Sample <- rownames(metadata_full)
+metadata_full <- merge(metadata_full, metadata_subset[, c(3,2)], by = "Individual", suffixes = c("_original", ""))
+# order the data to match the samples from the count object
+metadata_full <- metadata_full[match(rownames(x$samples), metadata_full$Sample), ]
+metadata_full <- metadata_full[, c(7,2,8,1)]
+```
+
+
+## Prepare design
+
+```{r prepare_metadata, echo=FALSE}
+# design for voomDream (the variable to be tested must be a fixed effect)
+form <- ~ Sex + pseudotime + Sex:pseudotime
+# design for sva computation
+design <- model.matrix(~metadata_full$Sex + metadata_full$pseudotime + metadata_full$Sex:metadata_full$pseudotime)
+```
+
+## Prepare counts for DE analysis
+
+Estimate weights using linear mixed model of dream
+
+```{r voom_norm, echo=FALSE, warning=FALSE}
+png('images/3-DE/analysis_1samplePerInd/trendplot/trendplot_VoomDream_forebrain_pseudotime_1samplePerInd_interaction.png')
+suppressWarnings( vobjDream <- voomWithDreamWeights(x, form, metadata_full, plot = TRUE) )
+dev.off()
+```
+
+Estimate surrogates variables (svas) and add them to the model.
+
+```{r estimate_sva, echo=FALSE}
+n.sv <- num.sv(vobjDream$E, design, method = "be")
+sva.obj <- sva(vobjDream$E, design, method = "irw", n.sv = n.sv)
+# add svas to metadata
+metadata_full <- cbind(metadata_full, sva.obj$sv)
+names(metadata_full) <- c("Sample", "Sex", "pseudotime", "Individual", paste0("X", 1:n.sv))
+# include svas in formula
+form <- reformulate(c("Sex", "pseudotime", "Sex:pseudotime", paste0("X", 1:n.sv)))
+```
+
+Redo voom normalization with new design matrix (containing svas).
+
+```{r voom_norm_svas, echo=FALSE, warning=FALSE}
+suppressWarnings( y <- voomWithDreamWeights(x, form, metadata_full, plot = TRUE) )
+```
+
+Save the normalized counts and the phenotypes vectors in a RData file.
+
+```{r save_normCounts, echo=FALSE}
+save(y, phenotypes, form, sva.obj, metadata_full,
+     file = "data/3-DE/analysis_1samplePerInd/normCounts_dream_pseudotime_1samplePerInd_sva_interaction_phenotypes.RData")
+```
+
+
+## Sex-Differential Expression (sex-DE) analysis
+
+Fit the dream model on each gene.
+
+```{r sexDE_analysis, echo=FALSE}
+# By default, uses the Satterthwaite approximation for the hypothesis test
+suppressWarnings( fitmm <- dream(y, form, metadata_full) )
+fitmm <- eBayes(fitmm)
+fitmm2 <- topTable(fitmm, coef = 2, number = 30000, sort.by = "none") 
+fitmm2$qvalue <- qvalue(fitmm2$P.Value)$qvalues
+```
+
+Save the fitmm object.
+```{r save_fitmm, echo=FALSE}
+save(fitmm, file = "data/3-DE/analysis_1samplePerInd/fitmm_dream_pseudotime_1samplePerInd_sva_interaction_phenotypes.RData")
+```
+
+Compute the mean expression of each genes for male and female.
+
+```{r compute_mean_expr, echo=FALSE}
+fitmm2$Male <- rowMeans(y$E[,which(metadata_full$Sex==1)]) # for male samples
+fitmm2$VarMale <- rowVars(y$E[,which(metadata_full$Sex==1)])
+fitmm2$Female <- rowMeans(y$E[,which(metadata_full$Sex==2)]) # for female samples
+fitmm2$VarFemale <- rowVars(y$E[,which(metadata_full$Sex==2)])
+```
+
+Save results.
+
+```{r write_output, echo=FALSE}
+write.table(fitmm2, 
+            "data/3-DE/analysis_1samplePerInd/VoomDream_topTable_forebrain_pseudotime_1samplePerInd_sva_interaction.txt", 
+            col.names = TRUE, row.names = FALSE, quote = FALSE)
+```
+
+Extract the interaction results.
+
+```{r interaction_results, echo=FALSE}
+colnames(fitmm)
+fitmm_interaction <- topTable(fitmm, coef = "Sex2:pseudotime", number = 30000, sort.by = "none") 
+fitmm_interaction$qvalue <- qvalue(fitmm_interaction$P.Value)$qvalues
+```
+
+Save the interaction results.
+
+```{r save_interaction, echo=FALSE}
+write.table(fitmm_interaction, 
+            "data/3-DE/analysis_1samplePerInd/VoomDream_topTable_forebrain_pseudotime_1samplePerInd_sva_interaction_term.txt", 
+            col.names = TRUE, row.names = FALSE, quote = FALSE)
+```
+
+Extract the results of the pseudotime-DE genes.
+
+```{r ipseudotime_DE_results, echo=FALSE}
+fitmm_pseudotime <- topTable(fitmm, coef = "pseudotime", number = 30000, sort.by = "none") 
+fitmm_pseudotime$qvalue <- qvalue(fitmm_pseudotime$P.Value)$qvalues
+```
+
+Save the interaction results.
+
+```{r save_pseudotime, echo=FALSE}
+write.table(fitmm_pseudotime, 
+            "data/3-DE/analysis_1samplePerInd/VoomDream_topTable_forebrain_pseudotime_1samplePerInd_sva_interaction_pseudotime.txt", 
+            col.names = TRUE, row.names = FALSE, quote = FALSE)
+```
+
+# Session Info
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```
